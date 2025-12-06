@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>PDF Page Editor with Floating Bar</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#c128eb",
+              "background-light": "#f8f6f8",
+              "background-dark": "#1e1121",
+              "surface-light": "#ffffff",
+              "surface-dark": "#2c1c31",
+              "text-light": "#161118",
+              "text-dark": "#f0e8f2",
+              "text-muted-light": "#816189",
+              "text-muted-dark": "#a08da6",
+              "border-light": "#f3f0f4",
+              "border-dark": "#392a3e",
+            },
+            fontFamily: {
+              "display": ["Inter", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings:
+        'FILL' 0,
+        'wght' 400,
+        'GRAD' 0,
+        'opsz' 24
+      }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-text-light dark:text-text-dark">
+<div class="relative flex min-h-screen w-full flex-col group/design-root overflow-x-hidden">
+<div class="flex h-full grow flex-col">
+<div class="flex-1">
+<div class="flex flex-col mx-auto max-w-7xl">
+<header class="flex justify-between items-center gap-4 px-6 py-3 border-b border-border-light dark:border-border-dark">
+<div class="flex items-center gap-4">
+<button class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-xl h-10 px-4 bg-surface-light dark:bg-surface-dark border border-border-light dark:border-border-dark text-text-light dark:text-text-dark gap-2 text-sm font-bold leading-normal tracking-[0.015em] hover:bg-background-light/50 dark:hover:bg-background-dark/50">
+<span class="material-symbols-outlined text-xl">arrow_back_ios</span>
+<span class="truncate">Back to Merge</span>
+</button>
+<div class="flex-wrap gap-2 items-center hidden sm:flex">
+<a class="text-text-muted-light dark:text-text-muted-dark text-sm font-medium leading-normal hover:text-text-light dark:hover:text-text-dark" href="#">My Documents</a>
+<span class="text-text-muted-light dark:text-text-muted-dark text-sm font-medium leading-normal">/</span>
+<span class="text-text-light dark:text-text-dark text-sm font-medium leading-normal">Annual_Report_2023_Final.pdf</span>
+</div>
+</div>
+<button class="flex max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-xl h-10 bg-primary text-white gap-2 text-sm font-bold leading-normal tracking-[0.015em] min-w-0 px-4">
+<span class="material-symbols-outlined text-xl">ios_share</span>
+<span class="truncate">Export PDF</span>
+</button>
+</header>
+<main class="flex-1 p-6 pb-24">
+<div class="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-x-6 gap-y-10">
+<div class="group relative aspect-[7/9] cursor-pointer">
+<div class="relative w-full h-full p-2 rounded-lg bg-surface-light dark:bg-surface-dark shadow-sm border-2 border-primary ring-2 ring-primary/20">
+<img class="w-full h-full object-cover rounded-[3px]" data-alt="abstract gradient with purple and blue tones" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCtcGPSerwW1yuYi12VmUHztoEin7V-3DvD4YIVbYGy-Cdpn-ps0ILOZcbyi_JgWghvrv88pYm32m47_37qs-jIm69-SWdlmfDVH_af_JouO2H-Wenu8S_h5vWYOrfpf5PbuaccgpKLcQpPSboW4u3KLSD1qvkqEGxUZ7d-gLtblFTcHh1l8r8w1Shc1aCTApVgdfE8k_O7ZQLjSaJG9w667mvgFnbA5kwI0CLUGFbw9OaDg8Dc9MPeRV4t7YzIN3k1qWDv4KBkUs5K"/>
+<div class="absolute inset-0 flex items-center justify-center bg-black/20 opacity-100 transition-opacity">
+<div class="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-primary">
+<span class="material-symbols-outlined text-base text-white" style="font-variation-settings: 'FILL' 1, 'wght' 700;">check</span>
+</div>
+</div>
+</div>
+<span class="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs font-medium text-text-muted-light dark:text-text-muted-dark">1</span>
+</div>
+<div class="group relative aspect-[7/9] cursor-pointer">
+<div class="relative w-full h-full p-2 rounded-lg bg-surface-light dark:bg-surface-dark shadow-sm border-2 border-transparent group-hover:border-primary/50">
+<img class="w-full h-full object-cover rounded-[3px]" data-alt="abstract liquid texture in pink and white" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAKxTEs3Ql_fKMqsFIN0cQDTiV20m0TrilvpF5Socag1XRtXuVHF68_Ee2KofU-y725mz32M_Jw8UiKYYhWTXY2mq54q5HaFJasMJx2ycUbf6ygfzOxdAtwh-sDIq63cMommy2a2UpYRfkd_FBTviV_WNyZwESSimnWMUBF8gZbtMTwNy3fP9jtgV81IF5MlABAfe4O3rbLTyXUxv3qBac1RsX7OXOhJsiJhZOy-cCmbsMOBpI-Ar9Uu79H0yw7dbNDgMjhiSjiDaLn"/>
+<div class="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 transition-opacity group-hover:opacity-100">
+<div class="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-white/30 backdrop-blur-sm">
+</div>
+</div>
+</div>
+<span class="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs font-medium text-text-muted-light dark:text-text-muted-dark">2</span>
+</div>
+<div class="group relative aspect-[7/9] cursor-pointer">
+<div class="relative w-full h-full p-2 rounded-lg bg-surface-light dark:bg-surface-dark shadow-sm border-2 border-primary ring-2 ring-primary/20">
+<img class="w-full h-full object-cover rounded-[3px]" data-alt="vibrant gradient of blue, yellow and pink" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA7-Xazwaam4CSVd0Ay-x3iHkFH-wXa2bvtErd42bhBWB_HWIqZ3yioz8MHraqkVgwoz5uXGRsHWxglUswl7aTof8vXtgaobzUgt7xi8UJeVuyoH1gakGP2hNLuGYvQuSLChLPIGrbOPRYkdYvmcpqKhytBG4LnWnaXm_yZuGG2fHUParOqwu45S5Jh6hdlNhUitURcyPIXmzcZmjDeq85asVtekelJx6Is5CJdV46Tq1EM8LSmTCqxn75Sl71Ufa40jB-OmVrhCe-d"/>
+<div class="absolute inset-0 flex items-center justify-center bg-black/20 opacity-100 transition-opacity">
+<div class="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-primary">
+<span class="material-symbols-outlined text-base text-white" style="font-variation-settings: 'FILL' 1, 'wght' 700;">check</span>
+</div>
+</div>
+</div>
+<span class="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs font-medium text-text-muted-light dark:text-text-muted-dark">3</span>
+</div>
+<div class="group relative aspect-[7/9] cursor-pointer">
+<div class="relative w-full h-full p-2 rounded-lg bg-surface-light dark:bg-surface-dark shadow-sm border-2 border-transparent group-hover:border-primary/50">
+<img class="w-full h-full object-cover rounded-[3px]" data-alt="colorful abstract painting with swirls of color" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBYATIYH9f9PkRJK5RS8gueR5tkauYh7xAOtWlLuQcza8_Qiax-5BXdfWF1JpnFsM7hi2yuZl9T1Gv643N8ueNEUGu3CCP7wxeK_tkhvH5rTx7vZTO9baoteZwTx9m8mEqh_VHQCkz_eN_GjkC86hQqZUDVSASsQCh_uPVZLkF595Q4pfKvzqTSGS4j-Bso0SjmDyFq7_SLxsERyPyfXFvDcwF45BYEZDJzzlulV41mo4aBXzc20ydrHsJA9Ix0ZvvYfofxal0Hl6Xu"/>
+<div class="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 transition-opacity group-hover:opacity-100">
+<div class="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-white/30 backdrop-blur-sm">
+</div>
+</div>
+</div>
+<span class="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs font-medium text-text-muted-light dark:text-text-muted-dark">4</span>
+</div>
+<div class="group relative aspect-[7/9] cursor-pointer">
+<div class="relative w-full h-full p-2 rounded-lg bg-surface-light dark:bg-surface-dark shadow-sm border-2 border-transparent group-hover:border-primary/50">
+<img class="w-full h-full object-cover rounded-[3px]" data-alt="purple and blue holographic texture" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA3ZncT9fiwbButcD2VWTM2ymqUNFzGO-8VhAVjMsnb5whhVFFqoTfrMYOMpUqcJmOfv4zT82H2Jj0EYIFzLXn-aG9KTobcaFU02wHLqfShBglWKXMrKjINwCmmoLDRKbsm_VnJ9R5MQc1iN2BjEp25Mfj5zYLDGcB4bCKOuL8pkTeDDukTsQyIbZhdiCdGxml4QJ91ZGPGlPChsrXEF8xoK8tnZfQCTk_ZVQ4qVUAm8n6QOtIOQRISUM8Zj0U2Me0FEKWsOpEMonMT"/>
+<div class="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 transition-opacity group-hover:opacity-100">
+<div class="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-white/30 backdrop-blur-sm">
+</div>
+</div>
+</div>
+<span class="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs font-medium text-text-muted-light dark:text-text-muted-dark">5</span>
+</div>
+<div class="group relative aspect-[7/9] cursor-pointer">
+<div class="relative w-full h-full p-2 rounded-lg bg-surface-light dark:bg-surface-dark shadow-sm border-2 border-transparent group-hover:border-primary/50">
+<img class="w-full h-full object-cover rounded-[3px]" data-alt="soft pastel watercolor texture" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAa90gBJKTK57ahAf-Rbq2FxsD5MFRYP1kChoGGJSlc-5qPvu4uCqeHWBlrUcZc4MtFzxyh9cVPhobBM2DLti1_eNymjo7Pc7-BVxEJqFZsSUqyDjS1NaolJPPUY1wSak0k7GO4xEAi9Qku_bMv3eV11yD28eFaQkR-GSLAstq-QlLV4usMKDqBY4AizcFkfwapHh7BAZqSL1jz3lSzSq5Vck5yPl1rnRai-e3dsAlkZiFKzT4QWidFdLPasgr_JPGw8MT9qXJ292as"/>
+<div class="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 transition-opacity group-hover:opacity-100">
+<div class="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-white/30 backdrop-blur-sm">
+</div>
+</div>
+</div>
+<span class="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs font-medium text-text-muted-light dark:text-text-muted-dark">6</span>
+</div>
+<div class="group relative aspect-[7/9] cursor-pointer">
+<div class="relative w-full h-full p-2 rounded-lg bg-surface-light dark:bg-surface-dark shadow-sm border-2 border-primary ring-2 ring-primary/20">
+<img class="w-full h-full object-cover rounded-[3px]" data-alt="dark gradient from purple to blue" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAH_P1r50ZI94LAONIuGnyaf8q0iYR0_QPBhTqZL87gthEqViMnGMLcDnNxIAD84ePUWAV4s42Q_r5ZIbhCnPi1UvVV35ZlPa8sdJquqOsBQQ3Dr2rpvXzw8spfnpQ1P15e_JH9LIrPwNIk-FTpRWw5Ni9sxr_qkiQg67yox9kL7V1S5zfiG7AGeZBEvevfPLYYDE_qYc873D-mr6LgkC2hPIIsS-p1TqzOinGui44Erju0hTlhRgk3BjSQJC7_eDL5aFe3blNnXAma"/>
+<div class="absolute inset-0 flex items-center justify-center bg-black/20 opacity-100 transition-opacity">
+<div class="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-primary">
+<span class="material-symbols-outlined text-base text-white" style="font-variation-settings: 'FILL' 1, 'wght' 700;">check</span>
+</div>
+</div>
+</div>
+<span class="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs font-medium text-text-muted-light dark:text-text-muted-dark">7</span>
+</div>
+<div class="group relative aspect-[7/9] cursor-pointer">
+<div class="relative w-full h-full p-2 rounded-lg bg-surface-light dark:bg-surface-dark shadow-sm border-2 border-transparent group-hover:border-primary/50">
+<img class="w-full h-full object-cover rounded-[3px]" data-alt="smooth grey and white marble texture" src="https://lh3.googleusercontent.com/aida-public/AB6AXuACXyBJS1hfLYK6EsQOuzR2dnRCZy5UsV4qSXnWpn3pixF99OWulbnjkNfOyJqgzbljl78MUMxwkY0LTxv2hnc3KYibYqIH3fyTS_Bq3fda0lJOYF0H2xGlFI1sTXr2w9jAqJQZaIk9gfUIzrTuEcY5eOROyz36yaK3BudR2VgJZhzXOqYbZx0-quzWul0dVTTZkyzP8Cnjxy6iG4xBtFvYm26CPOE5aGkqp6mrx2AxU462BN8iqxvWz93DGaLruhVnAxu7we1rdcNF"/>
+<div class="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 transition-opacity group-hover:opacity-100">
+<div class="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-white/30 backdrop-blur-sm">
+</div>
+</div>
+</div>
+<span class="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs font-medium text-text-muted-light dark:text-text-muted-dark">8</span>
+</div>
+</div>
+</main>
+</div>
+</div>
+<div class="fixed bottom-14 left-1/2 -translate-x-1/2 w-[70vw] max-w-2xl">
+<div class="flex items-center justify-between gap-4 rounded-full bg-surface-light/70 dark:bg-surface-dark/70 p-2 pl-4 shadow-lg backdrop-blur-md border border-border-light dark:border-border-dark">
+<p class="text-sm font-semibold">3 Selected</p>
+<div class="flex items-center gap-1">
+<button class="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium hover:bg-black/5 dark:hover:bg-white/5">
+<span class="material-symbols-outlined text-lg">delete</span>
+<span>Delete</span>
+</button>
+<button class="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium hover:bg-black/5 dark:hover:bg-white/5">
+<span class="material-symbols-outlined text-lg">rotate_left</span>
+<span>Rotate Left</span>
+</button>
+<button class="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium hover:bg-black/5 dark:hover:bg-white/5">
+<span class="material-symbols-outlined text-lg">rotate_right</span>
+<span>Rotate Right</span>
+</button>
+<button class="flex items-center gap-1 rounded-full p-2 text-sm font-medium hover:bg-black/5 dark:hover:bg-white/5">
+<span class="material-symbols-outlined text-lg">more_horiz</span>
+</button>
+</div>
+</div>
+</div>
+<footer class="fixed bottom-0 left-0 right-0 z-10 flex justify-between items-center gap-4 px-6 py-2 border-t border-border-light dark:border-border-dark text-xs text-text-muted-light dark:text-text-muted-dark bg-background-light dark:bg-background-dark">
+<p>78 Pages</p>
+<p>3 Selected</p>
+<div class="flex items-center gap-2">
+<button class="p-1 rounded-md hover:bg-black/5 dark:hover:bg-white/5"><span class="material-symbols-outlined text-lg">zoom_out</span></button>
+<span>100%</span>
+<button class="p-1 rounded-md hover:bg-black/5 dark:hover:bg-white/5"><span class="material-symbols-outlined text-lg">zoom_in</span></button>
+</div>
+</footer>
+</div>
+</div>
+
+</body></html>

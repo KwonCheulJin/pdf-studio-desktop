@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Merge Main Screen - Empty State</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#c128eb",
+              "background-light": "#f8f6f8",
+              "background-dark": "#1e1121",
+            },
+            fontFamily: {
+              "display": ["Inter", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings:
+        'FILL' 0,
+        'wght' 400,
+        'GRAD' 0,
+        'opsz' 24
+      }
+    </style>
+</head>
+<body class="font-display bg-background-light dark:bg-background-dark text-[#161118] dark:text-gray-200">
+<div class="relative flex min-h-screen w-full flex-col group/design-root">
+<div class="layout-container flex h-full grow flex-col">
+<main class="flex flex-1 flex-col p-6">
+<div class="flex flex-col mx-auto max-w-5xl w-full flex-1">
+<!-- ToolBar -->
+<div class="flex justify-between items-center gap-4 py-3">
+<div class="flex gap-2 items-center">
+<button class="flex items-center justify-center gap-2 h-10 px-4 rounded-lg bg-primary text-white text-sm font-bold leading-normal tracking-wide">
+<span class="material-symbols-outlined text-xl">add</span>
+<span class="truncate">Add Files</span>
+</button>
+<button class="flex items-center justify-center gap-2 h-10 px-4 rounded-lg bg-gray-200 dark:bg-white/10 text-[#161118] dark:text-white text-sm font-bold leading-normal tracking-wide">
+<span class="material-symbols-outlined text-xl">create_new_folder</span>
+<span class="truncate">Add Folder</span>
+</button>
+</div>
+<button class="p-2 text-[#161118] dark:text-white rounded-full hover:bg-gray-200 dark:hover:bg-white/10">
+<span class="material-symbols-outlined">settings</span>
+</button>
+</div>
+<!-- Main Content Area -->
+<div class="flex-1 flex items-center justify-center my-6">
+<!-- EmptyState -->
+<div class="w-full max-w-3xl flex flex-col items-center gap-6 rounded-xl bg-white dark:bg-background-dark/50 shadow-sm p-8">
+<div class="flex flex-col items-center gap-6 rounded-xl border-2 border-dashed border-gray-200 dark:border-white/20 px-6 py-14 w-full">
+<div class="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
+<span class="material-symbols-outlined text-4xl">upload_file</span>
+</div>
+<div class="flex flex-col items-center gap-2 text-center">
+<p class="text-[#161118] dark:text-white text-lg font-bold leading-tight tracking-[-0.015em]">Drag &amp; Drop your PDF or TIFF files</p>
+<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Or click ‘Add Files’ to select documents</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Footer / Status Bar -->
+<div class="py-4">
+<div class="flex flex-col-reverse sm:flex-row items-center justify-between gap-4">
+<!-- DescriptionList -->
+<div class="flex justify-between w-full items-center">
+<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Total Files: 0 | Total Pages: 0</p>
+<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal text-right">Status: Ready</p>
+</div>
+<button class="flex w-full sm:w-auto min-w-[120px] cursor-not-allowed items-center justify-center overflow-hidden rounded-lg h-12 px-6 bg-gray-200 dark:bg-white/10 text-gray-400 dark:text-gray-500 text-base font-bold leading-normal tracking-[0.015em]">
+<span class="truncate">Merge</span>
+</button>
+</div>
+</div>
+</div>
+</main>
+</div>
+</div>
+</body></html>

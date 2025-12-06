@@ -11,8 +11,11 @@
     "allowJs": false,
     "noEmit": true,
     "isolatedModules": true,
-    "types": ["node", "electron"],
-    "baseUrl": "./src"
+    "types": ["node", "electron", "vite/client"],
+    "baseUrl": "./src",
+    "paths": {
+      "@/*": ["./*"]
+    }
   },
   "include": ["src"]
 }

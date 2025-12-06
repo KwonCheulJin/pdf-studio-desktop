@@ -1,13 +1,13 @@
 ---
 name: electron-fsd
-description: This skill should be used when developing Electron applications with Feature-Sliced Design (FSD) architecture. Triggers on requests to create components, features, entities, widgets, or pages following FSD layer structure. Also applies when setting up Electron main/preload/renderer process code organization.
+description: This skill should be used when developing Electron applications with Feature-Sliced Design (FSD) architecture and React 19. Triggers on requests to create components, features, entities, widgets, or pages following FSD layer structure. Also applies when setting up Electron main/preload/renderer process code organization.
 ---
 
-# Electron FSD Development
+# Electron FSD Development (React 19)
 
 ## Overview
 
-This skill provides guidance for developing Electron applications using Feature-Sliced Design (FSD) architecture. It covers the three-process model (Main, Preload, Renderer) and FSD layer organization for the Renderer process.
+This skill provides guidance for developing Electron applications using Feature-Sliced Design (FSD) architecture with React 19. It covers the three-process model (Main, Preload, Renderer) and FSD layer organization for the Renderer process.
 
 ## Architecture Patterns
 
@@ -119,6 +119,140 @@ export function MergeWorkspace() {
 | Types/interfaces | PascalCase | `MergeRequest` |
 | Services | PascalCase + Service | `PdfMergeService` |
 | Workers | kebab-case + worker | `merge-worker.ts` |
+
+## React 19 Component Patterns
+
+### No forwardRef (React 19)
+
+```typescript
+// ❌ React 18 (forwardRef)
+const Input = forwardRef<HTMLInputElement, InputProps>((props, ref) => (
+  <input ref={ref} {...props} />
+));
+
+// ✅ React 19 (ref as regular prop)
+interface InputProps {
+  ref?: React.Ref<HTMLInputElement>;
+  placeholder?: string;
+}
+function Input({ ref, ...props }: InputProps) {
+  return <input ref={ref} {...props} />;
+}
+```
+
+### Context as Provider (React 19)
+
+```typescript
+// ❌ React 18
+<ThemeContext.Provider value={theme}>
+  {children}
+</ThemeContext.Provider>
+
+// ✅ React 19
+<ThemeContext value={theme}>
+  {children}
+</ThemeContext>
+```
+
+### use() Hook for Promise/Context
+
+```typescript
+// ✅ React 19: use() for Promise (requires Suspense)
+import { use, Suspense } from 'react';
+
+function FileList({ filesPromise }: { filesPromise: Promise<PdfFile[]> }) {
+  const files = use(filesPromise);
+  return files.map(f => <FileCard key={f.id} file={f} />);
+}
+
+// Usage with Suspense
+<Suspense fallback={<Loading />}>
+  <FileList filesPromise={fetchFiles()} />
+</Suspense>
+
+// ✅ React 19: use() for Context (conditional allowed)
+function ConditionalTheme({ show }: { show: boolean }) {
+  if (show) {
+    const theme = use(ThemeContext);
+    return <div className={theme}>Themed</div>;
+  }
+  return null;
+}
+```
+
+### useActionState for Forms
+
+```typescript
+// ✅ React 19: Form action with state
+import { useActionState } from 'react';
+
+function MergeForm() {
+  const [state, submitAction, isPending] = useActionState(
+    async (prev, formData) => {
+      const files = formData.getAll('files');
+      const result = await window.api.merge(files);
+      return result;
+    },
+    null
+  );
+
+  return (
+    <form action={submitAction}>
+      <input type="file" name="files" multiple disabled={isPending} />
+      <button disabled={isPending}>
+        {isPending ? 'Merging...' : 'Merge PDFs'}
+      </button>
+    </form>
+  );
+}
+```
+
+### useOptimistic for Optimistic UI
+
+```typescript
+// ✅ React 19: Optimistic updates
+import { useOptimistic } from 'react';
+
+function FileList({ files }: { files: PdfFile[] }) {
+  const [optimisticFiles, addOptimistic] = useOptimistic(
+    files,
+    (state, newFile: PdfFile) => [...state, { ...newFile, pending: true }]
+  );
+
+  async function handleAdd(file: File) {
+    const tempFile = { id: 'temp', name: file.name, pending: true };
+    addOptimistic(tempFile);
+    await window.api.addFile(file);
+  }
+
+  return (
+    <div>
+      {optimisticFiles.map(f => (
+        <FileCard key={f.id} file={f} opacity={f.pending ? 0.5 : 1} />
+      ))}
+    </div>
+  );
+}
+```
+
+### ref Callback Cleanup
+
+```typescript
+// ✅ React 19: ref cleanup function
+function AutoFocusInput() {
+  return (
+    <input
+      ref={(el) => {
+        if (el) el.focus();
+        return () => {
+          // cleanup when element removed
+          console.log('Input unmounted');
+        };
+      }}
+    />
+  );
+}
+```
 
 ## Type Definition Rules
 

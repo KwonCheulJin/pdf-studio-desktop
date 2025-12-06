@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>TIFF Conversion Workspace</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#c128eb",
+              "background-light": "#f8f6f8",
+              "background-dark": "#1e1121",
+            },
+            fontFamily: {
+              "display": ["Inter", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="font-display">
+<div class="relative flex h-screen min-h-screen w-full flex-col bg-background-light dark:bg-background-dark group/design-root overflow-hidden" style='font-family: Inter, "Noto Sans", sans-serif;'>
+<div class="layout-container flex h-full grow flex-col">
+<div class="flex flex-1 justify-center">
+<div class="layout-content-container flex flex-col w-full max-w-[1280px] flex-1">
+<header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-slate-200 dark:border-slate-800 px-6 py-3">
+<div class="flex items-center gap-4 text-[#161118] dark:text-white">
+<div class="size-6 text-primary">
+<svg fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+<path d="M42.4379 44C42.4379 44 36.0744 33.9038 41.1692 24C46.8624 12.9336 42.2078 4 42.2078 4L7.01134 4C7.01134 4 11.6577 12.932 5.96912 23.9969C0.876273 33.9029 7.27094 44 7.27094 44L42.4379 44Z" fill="currentColor"></path>
+</svg>
+</div>
+<h2 class="text-[#161118] dark:text-white text-lg font-bold leading-tight tracking-[-0.015em]">TIFF Converter</h2>
+</div>
+<div class="flex flex-1 justify-center items-center gap-8">
+<div class="flex items-center gap-2 rounded-lg bg-slate-200/50 dark:bg-slate-800/50 p-1">
+<a class="text-slate-500 dark:text-slate-400 text-sm font-medium leading-normal px-3 py-1 rounded-md" href="#">PDF Merge</a>
+<a class="text-slate-500 dark:text-slate-400 text-sm font-medium leading-normal px-3 py-1 rounded-md" href="#">Page Edit</a>
+<a class="bg-white dark:bg-slate-700 text-primary dark:text-white text-sm font-medium leading-normal px-3 py-1 rounded-md shadow-sm" href="#">TIFF Conversion</a>
+</div>
+</div>
+<div class="flex gap-2">
+<button class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold leading-normal tracking-[0.015em]">
+<span class="truncate">Convert All</span>
+</button>
+<button class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-slate-200 dark:bg-slate-800 text-[#161118] dark:text-white text-sm font-bold leading-normal tracking-[0.015em]">
+<span class="truncate">Add TIFFs</span>
+</button>
+<button class="flex max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 bg-slate-200 dark:bg-slate-800 text-[#161118] dark:text-white gap-2 text-sm font-bold leading-normal tracking-[0.015em] min-w-0 px-2.5">
+<span class="material-symbols-outlined text-[#161118] dark:text-white" style="font-size: 20px;">settings</span>
+</button>
+</div>
+</header>
+<main class="flex-1 overflow-y-auto p-6">
+<div class="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-6">
+<div class="group flex flex-col gap-3 rounded-lg bg-white dark:bg-slate-900 border border-transparent p-3 transition-shadow hover:shadow-md hover:border-slate-200 dark:hover:border-slate-800 focus-within:ring-2 focus-within:ring-primary">
+<div class="w-full bg-center bg-no-repeat aspect-[4/3] bg-cover rounded-md bg-slate-100 dark:bg-slate-800" data-alt="Abstract gradient from purple to blue" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuDeIeOoG-aAGDAxdoMNtmFviifnqP7dZJJl_WxeDWfYi2F-u9NmLH-F22bvInM5XKDhdGyTcb78KuCyakox6kZqRCGFUe9dfIaQFDArUs5jydjVd8jjwbaUZhFqR9Huk8-7h2ysz_njg6xZKdkgBOCdMj-PdHoKy5SbvOhPYoa6ZE2EaRouGHxOgH-P2PwIltqzfQtf2v6K7zCHVAnBsELCO1t8ZjNRZ-Xz2DURKGFyA9w0NgvEgLBuMa-3t6p-6CKX9PXMe2_7MXoH");'></div>
+<div class="flex flex-col gap-4">
+<div class="flex flex-col">
+<p class="text-sm font-medium text-[#161118] dark:text-white leading-normal truncate">document_scan_01.tiff</p>
+<p class="text-xs text-slate-500 dark:text-slate-400 leading-normal">5 Pages</p>
+</div>
+<div class="flex gap-2 flex-wrap">
+<div class="flex h-7 shrink-0 items-center justify-center gap-x-2 rounded-full bg-primary/20 dark:bg-primary/30 px-2.5 cursor-pointer">
+<p class="text-primary dark:text-white text-xs font-medium leading-normal">Lossless</p>
+</div>
+<div class="flex h-7 shrink-0 items-center justify-center gap-x-2 rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700">
+<p class="text-slate-700 dark:text-slate-300 text-xs font-medium leading-normal">High Quality</p>
+</div>
+<div class="flex h-7 shrink-0 items-center justify-center gap-x-2 rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700">
+<p class="text-slate-700 dark:text-slate-300 text-xs font-medium leading-normal">Balanced</p>
+</div>
+</div>
+<button class="flex mt-1 w-full min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-md h-9 px-3 bg-primary text-white text-sm font-medium leading-normal tracking-[-0.01em]">
+<span class="truncate">Convert to PDF</span>
+</button>
+</div>
+</div>
+<div class="group flex flex-col gap-3 rounded-lg bg-white dark:bg-slate-900 border border-transparent p-3 transition-shadow hover:shadow-md hover:border-slate-200 dark:hover:border-slate-800 focus-within:ring-2 focus-within:ring-primary">
+<div class="w-full bg-center bg-no-repeat aspect-[4/3] bg-cover rounded-md bg-slate-100 dark:bg-slate-800" data-alt="Abstract gradient from green to yellow" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuDO6Pqpsci9VI6kEMqL0dLMaOCHJYbv-tEWgIUwAjNEPgGhjEUZmL2kkJMFqRoRjlZ72IZzdhLFNjnOdRtj4uEnbfC3MCPIHbJP0XSkRkft3Rq4ObOA0yv3DUMrv9G3uuKniVRwiabA1a1Ltzz00KQe3xysvwRHxJBzrH9qI6_GcncmQRaxKDd3wXXaplTwivM1gU-zRQWGrp-p-DoI281x_DVCLMmfPGizV0qvYABzrEO78evoviqZMfaN4CYnCB5v4wL7vLtuQBS_");'></div>
+<div class="flex flex-col gap-4">
+<div class="flex flex-col">
+<p class="text-sm font-medium text-[#161118] dark:text-white leading-normal truncate">invoice_september.tiff</p>
+<p class="text-xs text-slate-500 dark:text-slate-400 leading-normal">12 Pages</p>
+</div>
+<div class="flex gap-2 flex-wrap">
+<div class="flex h-7 shrink-0 items-center justify-center gap-x-2 rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700">
+<p class="text-slate-700 dark:text-slate-300 text-xs font-medium leading-normal">Lossless</p>
+</div>
+<div class="flex h-7 shrink-0 items-center justify-center gap-x-2 rounded-full bg-primary/20 dark:bg-primary/30 px-2.5 cursor-pointer">
+<p class="text-primary dark:text-white text-xs font-medium leading-normal">High Quality</p>
+</div>
+<div class="flex h-7 shrink-0 items-center justify-center gap-x-2 rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700">
+<p class="text-slate-700 dark:text-slate-300 text-xs font-medium leading-normal">Balanced</p>
+</div>
+</div>
+<button class="flex mt-1 w-full min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-md h-9 px-3 bg-primary text-white text-sm font-medium leading-normal tracking-[-0.01em]">
+<span class="truncate">Convert to PDF</span>
+</button>
+</div>
+</div>
+<div class="group flex flex-col gap-3 rounded-lg bg-white dark:bg-slate-900 border border-transparent p-3 transition-shadow hover:shadow-md hover:border-slate-200 dark:hover:border-slate-800 focus-within:ring-2 focus-within:ring-primary">
+<div class="w-full bg-center bg-no-repeat aspect-[4/3] bg-cover rounded-md bg-slate-100 dark:bg-slate-800" data-alt="Abstract gradient from red to orange" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuCR6Bw-MSCCxQ3n0aJW8BZGLeIyfXn0DrEbT756rky7_lplRWkSuLBCCG91pab5U1mmzCQZ42BOlBgS7nRkNI_A6-bxVukmo5dxLceDt_3tXl0ln2NgJQad2ja6zOjOiZwETre485q3MUNxi3aLq512nGwRsJW6bE7t7npPs250tYZTk--1eiSr8xv-45Okz6dblAmXHNqUN2eNtNEEgt1gNMyqlZGIA5CDPNhjaSqV0DcKtttJ36aitAy7z5kfUeWXJCk7wjPyU4BC");'></div>
+<div class="flex flex-col gap-4">
+<div class="flex flex-col">
+<p class="text-sm font-medium text-[#161118] dark:text-white leading-normal truncate">technical_drawing_v2.tiff</p>
+<p class="text-xs text-slate-500 dark:text-slate-400 leading-normal">1 Page</p>
+</div>
+<div class="flex gap-2 flex-wrap">
+<div class="flex h-7 shrink-0 items-center justify-center gap-x-2 rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700">
+<p class="text-slate-700 dark:text-slate-300 text-xs font-medium leading-normal">Lossless</p>
+</div>
+<div class="flex h-7 shrink-0 items-center justify-center gap-x-2 rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700">
+<p class="text-slate-700 dark:text-slate-300 text-xs font-medium leading-normal">High Quality</p>
+</div>
+<div class="flex h-7 shrink-0 items-center justify-center gap-x-2 rounded-full bg-primary/20 dark:bg-primary/30 px-2.5 cursor-pointer">
+<p class="text-primary dark:text-white text-xs font-medium leading-normal">Balanced</p>
+</div>
+</div>
+<button class="flex mt-1 w-full min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-md h-9 px-3 bg-primary text-white text-sm font-medium leading-normal tracking-[-0.01em]">
+<span class="truncate">Convert to PDF</span>
+</button>
+</div>
+</div>
+</div>
+</main>
+<footer class="flex items-center justify-between gap-2 px-6 py-2 border-t border-solid border-slate-200 dark:border-slate-800">
+<div class="flex items-center gap-4">
+<p class="text-sm text-slate-600 dark:text-slate-400">3 files loaded</p>
+<div class="w-px h-4 bg-slate-300 dark:bg-slate-700"></div>
+<p class="text-sm font-medium text-green-600 dark:text-green-400">Ready</p>
+</div>
+<div class="flex gap-2">
+<button class="p-2 rounded-md text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800">
+<span class="material-symbols-outlined" style="font-size: 20px;">grid_view</span>
+</button>
+<button class="p-2 rounded-md text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800">
+<span class="material-symbols-outlined" style="font-size: 20px;">view_list</span>
+</button>
+</div>
+</footer>
+</div>
+</div>
+</div>
+</div>
+</body></html>

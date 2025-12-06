@@ -11,7 +11,14 @@
     "allowJs": false,
     "noEmit": true,
     "isolatedModules": true,
-    "types": ["node", "electron", "vite/client"],
+    "skipLibCheck": true,
+    "types": [
+      "node",
+      "electron",
+      "vite/client",
+      "react",
+      "react-dom"
+    ],
     "baseUrl": "./src",
     "paths": {
       "@/*": ["./*"]

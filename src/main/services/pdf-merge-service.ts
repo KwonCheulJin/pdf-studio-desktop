@@ -1,8 +1,9 @@
-import { PDFDocument } from 'pdf-lib';
-import fse from 'fs-extra';
-import path from 'node:path';
-import { app } from 'electron';
-import type { FilePayload, MergeResult } from '../types/ipc-schema';
+import { PDFDocument } from "pdf-lib";
+import fse from "fs-extra";
+import path from "node:path";
+import { app } from "electron";
+import type { FilePayload, MergeResult } from "../types/ipc-schema";
+import { APP_CONFIG } from "../config/constants";
 
 export interface MergeOptions {
   files: FilePayload[];
@@ -15,7 +16,7 @@ export class PdfMergeService {
     const { files, outputPath, onProgress } = options;
 
     if (files.length === 0) {
-      throw new Error('No PDF files provided');
+      throw new Error("No PDF files provided");
     }
 
     const mergedPdf = await PDFDocument.create();
@@ -45,7 +46,7 @@ export class PdfMergeService {
 
     return {
       outputPath: finalPath,
-      totalPages: mergedPdf.getPageCount(),
+      totalPages: mergedPdf.getPageCount()
     };
   }
 
@@ -55,8 +56,11 @@ export class PdfMergeService {
   }
 
   private generateOutputPath(): string {
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const outputDir = path.join(app.getPath('documents'), 'PDF Studio');
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const outputDir = path.join(
+      app.getPath("documents"),
+      APP_CONFIG.OUTPUT_DIRECTORY_NAME
+    );
     return path.join(outputDir, `merged-${timestamp}.pdf`);
   }
 }

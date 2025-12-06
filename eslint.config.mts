@@ -34,8 +34,7 @@ export default [
     "plugin:@typescript-eslint/recommended",
     "plugin:react/recommended",
     "plugin:react-hooks/recommended",
-    "plugin:prettier/recommended",
-    "plugin:@tanstack/eslint-plugin-query/recommended"
+    "plugin:prettier/recommended"
   ),
 
   // 무시할 파일/폴더
@@ -109,10 +108,6 @@ export default [
       "prefer-arrow-callback": "error",
       "arrow-spacing": "error",
       "arrow-parens": ["error", "always"],
-
-      "@tanstack/query/exhaustive-deps": "error",
-      "@tanstack/query/no-rest-destructuring": "warn",
-      "@tanstack/query/stable-query-client": "error",
 
       // React 17+ JSX transform 대응
       "react/react-in-jsx-scope": "off",

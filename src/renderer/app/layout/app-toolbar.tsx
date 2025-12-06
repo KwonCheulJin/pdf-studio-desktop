@@ -1,41 +1,53 @@
-import { Plus, FolderPlus, Settings } from "lucide-react";
-import { Button } from "@/renderer/shared/ui";
-import { useMergeFiles, useMergeStore } from "@/renderer/shared/model/merge-store";
-import { createPdfDocument } from "@/renderer/shared/model/pdf-document";
+import { Plus } from "lucide-react";
+import { Button, Checkbox, Tooltip } from "@/renderer/shared/ui";
+import { useMergeFiles } from "@/renderer/shared/model/merge-store";
+import { useAddFiles } from "@/renderer/shared/hooks/use-add-files";
+import { useSelectAll } from "@/renderer/shared/hooks/use-select-all";
 
 export function AppToolbar() {
   const files = useMergeFiles();
-  const addFiles = useMergeStore((state) => state.addFiles);
   const hasFiles = files.length > 0;
 
-  const handleAddFiles = async () => {
-    // TODO: Implement file dialog via IPC
-    // For now, add mock data for testing
-    const mockDocument = createPdfDocument(
-      `/mock/document_${Date.now()}.pdf`,
-      Math.floor(Math.random() * 10) + 1
-    );
-    addFiles([mockDocument]);
-  };
+  const { handleAddFiles } = useAddFiles();
+  const { isAllSelected, handleSelectAll } = useSelectAll();
 
   return (
-    <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-card px-6">
-      <div className="flex items-center gap-2">
+    <header className="border-border bg-card flex h-16 shrink-0 items-center justify-between border-b px-6">
+      {/* 좌측: Select All */}
+      <div className="flex w-40 items-center">
+        {hasFiles && (
+          <Tooltip content="전체 선택">
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={handleSelectAll}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  handleSelectAll();
+                }
+              }}
+              className="hover:bg-accent inline-flex cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 text-sm"
+            >
+              <Checkbox checked={isAllSelected} />
+            </div>
+          </Tooltip>
+        )}
+      </div>
+
+      {/* 중앙: 파일 추가 */}
+      <Tooltip content="PDF 또는 이미지 파일 추가">
         <Button onClick={handleAddFiles}>
           <Plus size={18} />
           <span>파일 추가</span>
         </Button>
-        <Button variant="outline">
-          <FolderPlus size={18} />
-          <span>폴더 추가</span>
-        </Button>
-      </div>
+      </Tooltip>
 
-      <div className="flex items-center gap-2">
-        <Button variant="ghost" size="icon">
-          <Settings size={20} />
-        </Button>
-        <Button disabled={!hasFiles}>병합</Button>
+      {/* 우측: 병합 */}
+      <div className="flex w-40 items-center justify-end">
+        <Tooltip content="선택한 파일을 하나의 PDF로 병합">
+          <Button disabled={!hasFiles}>병합</Button>
+        </Tooltip>
       </div>
     </header>
   );

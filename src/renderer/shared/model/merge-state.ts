@@ -1,15 +1,15 @@
-import type { PdfDocument } from './pdf-document';
+import type { PdfDocument } from "./pdf-document";
+import type { ValueOf } from "@/renderer/shared/types/common";
 
 // Merge 상태 타입
 
 export const MERGE_STATUS = {
-  IDLE: 'idle',
-  MERGING: 'merging',
-  COMPLETE: 'complete',
-  ERROR: 'error',
+  IDLE: "idle",
+  MERGING: "merging",
+  COMPLETE: "complete",
+  ERROR: "error"
 } as const;
 
-type ValueOf<T> = T[keyof T];
 export type MergeStatus = ValueOf<typeof MERGE_STATUS>;
 
 export interface MergeState {
@@ -24,5 +24,5 @@ export const INITIAL_MERGE_STATE: MergeState = {
   files: [],
   totalPages: 0,
   status: MERGE_STATUS.IDLE,
-  progress: 0,
+  progress: 0
 };

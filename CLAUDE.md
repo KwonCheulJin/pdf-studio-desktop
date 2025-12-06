@@ -436,6 +436,41 @@ const sorted = [...array].sort((a, b) => a.sort - b.sort);
 
 **아키텍처**: Feature-Sliced Design (FSD)
 
+**코드 스타일 (Prettier + ESLint)**:
+
+| 규칙 | 설정 | 예시 |
+|------|------|------|
+| 따옴표 | 큰따옴표 (`"`) | `"hello"`, `import { foo } from "bar"` |
+| 세미콜론 | 필수 | `const x = 1;` |
+| 들여쓰기 | 2칸 스페이스 | - |
+| 후행 쉼표 | 없음 | `{ a: 1, b: 2 }` (마지막에 쉼표 없음) |
+| 화살표 함수 괄호 | 항상 | `(x) => x * 2` |
+| 줄 길이 | 80자 | - |
+
+```typescript
+// ✅ 올바른 스타일
+import { useState } from "react";
+
+const handleClick = (event) => {
+  console.log("clicked");
+};
+
+// ❌ 잘못된 스타일
+import { useState } from 'react';  // 작은따옴표 금지
+
+const handleClick = event => {     // 괄호 필수
+  console.log('clicked')           // 세미콜론 필수
+};
+```
+
+**린트/포맷 명령어**:
+```bash
+pnpm lint          # ESLint 검사
+pnpm lint:fix      # ESLint 자동 수정
+pnpm format        # Prettier 포맷팅
+pnpm format:check  # Prettier 검사만
+```
+
 **언어 & 스크립트**:
 
 - TypeScript ^5 필수 (프로젝트 설정 파일 제외)
@@ -511,6 +546,28 @@ const status: MergeStatus = MERGE_STATUS.PENDING;
 ```
 
 **상수 객체 위치**: `src/renderer/shared/constants/` 또는 해당 feature 폴더 내 `constants.ts`
+
+### 유틸리티 함수 매개변수 규칙 (필수!)
+
+**위치 기반 매개변수 금지** - 항상 객체 형식(Named Parameters)으로 받기:
+
+```typescript
+// ❌ 금지: 위치 기반 매개변수
+function calculatePosition(x: number, y: number, offset: number): Position;
+
+// ✅ 필수: 객체 형식 매개변수
+interface CalculatePositionParams {
+  x: number;
+  y: number;
+  offset: number;
+}
+function calculatePosition({ x, y, offset }: CalculatePositionParams): Position;
+```
+
+**장점**:
+- 호출 시 매개변수 의미가 명확함
+- 매개변수 순서 변경에 안전
+- 선택적 매개변수 추가가 용이
 
 ### 컴포넌트 & 스타일링
 
@@ -616,9 +673,13 @@ src/
 
 ⚠️ **KISS** - 요구사항 직결 최소 구현, 단순한 흐름 유지
 
+⚠️ **코드 스타일** - 큰따옴표(`"`), 세미콜론 필수, 후행 쉼표 없음, 화살표 함수 괄호 필수
+
 ⚠️ **Import** - `@/` 별칭, `import type { }` | **TypeScript** - `any` 금지, 인라인 객체 타입 금지, 명시적 타입
 
 ⚠️ **상수** - 매직 스트링/넘버 금지, 상수 객체 + `as const` + `ValueOf<T>` 사용
+
+⚠️ **유틸리티 함수** - 위치 기반 매개변수 금지, 객체 형식(Named Parameters) 필수
 
 ⚠️ **React 19** - `forwardRef` 제거 (ref는 일반 prop) | `use()` (Promise/Context) | `useActionState` (폼) | `useOptimistic` (낙관적 UI)
 

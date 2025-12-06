@@ -1,4 +1,8 @@
-import { useMergeFiles, useTotalPages, useMergeStatus } from "@/renderer/shared/model/merge-store";
+import {
+  useMergeFiles,
+  useTotalPages,
+  useMergeStatus
+} from "@/renderer/shared/model/merge-store";
 import { MERGE_STATUS } from "@/renderer/shared/model/merge-state";
 import { APP_STATUS } from "@/renderer/shared/constants";
 
@@ -21,13 +25,13 @@ export function AppStatusBar() {
   })();
 
   return (
-    <footer className="flex h-10 shrink-0 items-center justify-between border-t border-border bg-background px-6">
-      <p className="text-sm text-muted-foreground">
+    <footer className="border-border bg-background flex h-10 shrink-0 items-center justify-between border-t px-6">
+      <p className="text-muted-foreground text-sm">
         전체 파일: {files.length}
         <span className="mx-2">|</span>
         전체 페이지: {totalPages}
       </p>
-      <p className="text-sm text-muted-foreground">상태: {statusText}</p>
+      <p className="text-muted-foreground text-sm">상태: {statusText}</p>
     </footer>
   );
 }

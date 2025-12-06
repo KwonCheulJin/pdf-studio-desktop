@@ -1,9 +1,10 @@
-import { PDFDocument } from 'pdf-lib';
-import sharp from 'sharp';
-import fse from 'fs-extra';
-import path from 'node:path';
-import { app } from 'electron';
-import type { ConvertResult } from '../types/ipc-schema';
+import { PDFDocument } from "pdf-lib";
+import sharp from "sharp";
+import fse from "fs-extra";
+import path from "node:path";
+import { app } from "electron";
+import type { ConvertResult } from "../types/ipc-schema";
+import { APP_CONFIG } from "../config/constants";
 
 export interface ConvertOptions {
   tiffPath: string;
@@ -34,7 +35,7 @@ export class FileConverterService {
 
     return {
       outputPdfPath: outputPath,
-      pageCount: pdf.getPageCount(),
+      pageCount: pdf.getPageCount()
     };
   }
 
@@ -46,7 +47,10 @@ export class FileConverterService {
     return sharp(tiffPath, { page: pageIndex }).png().toBuffer();
   }
 
-  private async addImageToPdf(pdf: PDFDocument, imageBuffer: Buffer): Promise<void> {
+  private async addImageToPdf(
+    pdf: PDFDocument,
+    imageBuffer: Buffer
+  ): Promise<void> {
     const image = await pdf.embedPng(imageBuffer);
     const { width, height } = image.scale(1);
 
@@ -55,13 +59,15 @@ export class FileConverterService {
       x: 0,
       y: 0,
       width,
-      height,
+      height
     });
   }
 
   private generateOutputPath(tiffPath: string, outputDir?: string): string {
     const baseName = path.basename(tiffPath, path.extname(tiffPath));
-    const dir = outputDir ?? path.join(app.getPath('documents'), 'PDF Studio');
+    const dir =
+      outputDir ??
+      path.join(app.getPath("documents"), APP_CONFIG.OUTPUT_DIRECTORY_NAME);
     return path.join(dir, `${baseName}.pdf`);
   }
 }

@@ -1,1 +1,1 @@
-export { EmptyState, FileGrid } from "./ui";
+export { EmptyState, FileGrid, FloatingActionBar } from "./ui";

@@ -1,25 +1,25 @@
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
-import path from 'node:path';
-import fse from 'fs-extra';
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import path from "node:path";
+import fse from "fs-extra";
 import {
   createTestPdf,
   cleanupTestFixtures,
   getPageCount,
-  getOutputDir,
-} from './test-helpers';
-import { PdfMergeService } from '../pdf-merge-service';
+  getOutputDir
+} from "./test-helpers";
+import { PdfMergeService } from "../pdf-merge-service";
 
 // Electron app mock
-vi.mock('electron', () => ({
+vi.mock("electron", () => ({
   app: {
     getPath: (name: string) => {
-      if (name === 'documents') return '/tmp/pdf-studio-test';
-      return '/tmp';
-    },
-  },
+      if (name === "documents") return "/tmp/pdf-studio-test";
+      return "/tmp";
+    }
+  }
 }));
 
-describe('PdfMergeService', () => {
+describe("PdfMergeService", () => {
   let service: PdfMergeService;
   let testPdf1: string;
   let testPdf2: string;
@@ -38,13 +38,13 @@ describe('PdfMergeService', () => {
     await cleanupTestFixtures();
   });
 
-  describe('merge', () => {
-    it('두 PDF 파일을 병합하면 페이지 수가 합쳐진다', async () => {
-      const outputPath = path.join(outputDir, 'merged-two.pdf');
+  describe("merge", () => {
+    it("두 PDF 파일을 병합하면 페이지 수가 합쳐진다", async () => {
+      const outputPath = path.join(outputDir, "merged-two.pdf");
 
       const result = await service.merge({
         files: [{ path: testPdf1 }, { path: testPdf2 }],
-        outputPath,
+        outputPath
       });
 
       expect(result.outputPath).toBe(outputPath);
@@ -53,44 +53,44 @@ describe('PdfMergeService', () => {
       expect(await getPageCount(outputPath)).toBe(8);
     });
 
-    it('세 개 이상의 PDF 파일을 병합할 수 있다', async () => {
-      const outputPath = path.join(outputDir, 'merged-three.pdf');
+    it("세 개 이상의 PDF 파일을 병합할 수 있다", async () => {
+      const outputPath = path.join(outputDir, "merged-three.pdf");
 
       const result = await service.merge({
         files: [{ path: testPdf1 }, { path: testPdf2 }, { path: testPdf3 }],
-        outputPath,
+        outputPath
       });
 
       expect(result.totalPages).toBe(10); // 3 + 5 + 2
       expect(await getPageCount(outputPath)).toBe(10);
     });
 
-    it('특정 페이지만 선택하여 병합할 수 있다', async () => {
-      const outputPath = path.join(outputDir, 'merged-partial.pdf');
+    it("특정 페이지만 선택하여 병합할 수 있다", async () => {
+      const outputPath = path.join(outputDir, "merged-partial.pdf");
 
       const result = await service.merge({
         files: [
           { path: testPdf1, pages: [0, 2] }, // 1, 3번 페이지만
-          { path: testPdf2, pages: [0] }, // 1번 페이지만
+          { path: testPdf2, pages: [0] } // 1번 페이지만
         ],
-        outputPath,
+        outputPath
       });
 
       expect(result.totalPages).toBe(3); // 2 + 1
       expect(await getPageCount(outputPath)).toBe(3);
     });
 
-    it('빈 파일 배열로 병합하면 에러가 발생한다', async () => {
+    it("빈 파일 배열로 병합하면 에러가 발생한다", async () => {
       await expect(
         service.merge({
           files: [],
-          outputPath: path.join(outputDir, 'empty.pdf'),
+          outputPath: path.join(outputDir, "empty.pdf")
         })
-      ).rejects.toThrow('No PDF files provided');
+      ).rejects.toThrow("No PDF files provided");
     });
 
-    it('진행률 콜백이 호출된다', async () => {
-      const outputPath = path.join(outputDir, 'merged-progress.pdf');
+    it("진행률 콜백이 호출된다", async () => {
+      const outputPath = path.join(outputDir, "merged-progress.pdf");
       const progressCalls: Array<{ current: number; total: number }> = [];
 
       await service.merge({
@@ -98,7 +98,7 @@ describe('PdfMergeService', () => {
         outputPath,
         onProgress: (current, total) => {
           progressCalls.push({ current, total });
-        },
+        }
       });
 
       expect(progressCalls).toHaveLength(3);
@@ -107,13 +107,13 @@ describe('PdfMergeService', () => {
       expect(progressCalls[2]).toEqual({ current: 3, total: 3 });
     });
 
-    it('outputPath가 없으면 기본 경로에 저장된다', async () => {
+    it("outputPath가 없으면 기본 경로에 저장된다", async () => {
       const result = await service.merge({
-        files: [{ path: testPdf1 }],
+        files: [{ path: testPdf1 }]
       });
 
-      expect(result.outputPath).toContain('merged-');
-      expect(result.outputPath).toContain('.pdf');
+      expect(result.outputPath).toContain("merged-");
+      expect(result.outputPath).toContain(".pdf");
       expect(await fse.pathExists(result.outputPath)).toBe(true);
 
       // cleanup

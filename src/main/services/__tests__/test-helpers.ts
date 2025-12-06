@@ -1,9 +1,9 @@
-import { PDFDocument, rgb } from 'pdf-lib';
-import fse from 'fs-extra';
-import path from 'node:path';
-import os from 'node:os';
+import { PDFDocument, rgb } from "pdf-lib";
+import fse from "fs-extra";
+import path from "node:path";
+import os from "node:os";
 
-const TEST_FIXTURES_DIR = path.join(os.tmpdir(), 'pdf-studio-test-fixtures');
+const TEST_FIXTURES_DIR = path.join(os.tmpdir(), "pdf-studio-test-fixtures");
 
 export async function ensureTestFixturesDir(): Promise<string> {
   await fse.ensureDir(TEST_FIXTURES_DIR);
@@ -18,7 +18,10 @@ export async function cleanupTestFixtures(): Promise<void> {
   }
 }
 
-export async function createTestPdf(pageCount: number, filename?: string): Promise<string> {
+export async function createTestPdf(
+  pageCount: number,
+  filename?: string
+): Promise<string> {
   const dir = await ensureTestFixturesDir();
   const pdf = await PDFDocument.create();
 
@@ -28,12 +31,15 @@ export async function createTestPdf(pageCount: number, filename?: string): Promi
       x: 50,
       y: 800,
       size: 24,
-      color: rgb(0, 0, 0),
+      color: rgb(0, 0, 0)
     });
   }
 
   const pdfBytes = await pdf.save();
-  const filePath = path.join(dir, filename ?? `test-${Date.now()}-${pageCount}pages.pdf`);
+  const filePath = path.join(
+    dir,
+    filename ?? `test-${Date.now()}-${pageCount}pages.pdf`
+  );
   await fse.writeFile(filePath, pdfBytes);
 
   return filePath;
@@ -53,7 +59,7 @@ export async function createTestPdfWithTitle(
       x: 50,
       y: 800,
       size: 24,
-      color: rgb(0, 0, 0),
+      color: rgb(0, 0, 0)
     });
   }
 
@@ -71,7 +77,7 @@ export async function getPageCount(filePath: string): Promise<number> {
 }
 
 export async function getOutputDir(): Promise<string> {
-  const dir = path.join(TEST_FIXTURES_DIR, 'output');
+  const dir = path.join(TEST_FIXTURES_DIR, "output");
   await fse.ensureDir(dir);
   return dir;
 }

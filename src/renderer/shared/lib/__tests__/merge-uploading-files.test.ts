@@ -35,7 +35,9 @@ function createFileCard(
     fileIndex,
     flatIndex,
     groupPageCount: 1,
-    firstPageId: `page-${id}-0`
+    firstPageId: `page-${id}-0`,
+    groupId: `group-${id}`,
+    groupPageIds: [`page-${id}-0`]
   };
 }
 

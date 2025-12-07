@@ -68,14 +68,20 @@ jobs:
           name: pdf-studio-ubuntu-latest
           path: artifacts/linux
 
+      - name: List artifacts
+        run: find artifacts -type f -name "*.dmg" -o -name "*.exe" -o -name "*.deb" -o -name "*.zip" | head -20
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
           files: |
-            artifacts/macos/**
-            artifacts/windows/**
-            artifacts/linux/**
+            artifacts/**/*.dmg
+            artifacts/**/*.exe
+            artifacts/**/*.deb
+            artifacts/**/*.zip
+            artifacts/**/*.rpm
           token: ${{ secrets.GH_TOKEN }}
           fail_on_unmatched_files: false
+          make_latest: true

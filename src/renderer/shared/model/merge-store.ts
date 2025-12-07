@@ -1,14 +1,22 @@
 import { create } from "zustand";
 import type { PdfDocument, PdfPage, MergeOrderItem } from "./pdf-document";
-import { MERGE_STATUS, type MergeStatus } from "./merge-state";
+import {
+  MERGE_STATUS,
+  MERGE_VIEW,
+  type MergeStatus,
+  type MergeView
+} from "./merge-state";
 import { type PageRotation, PAGE_ROTATION } from "../constants/page-state";
 
 interface MergeStoreState {
   files: PdfDocument[];
   mergeOrder: MergeOrderItem[]; // 병합 순서 (페이지 레벨)
+  collapsedGroups: Set<string>; // 접힌 그룹 ID 집합
   status: MergeStatus;
   progress: number;
   errorMessage: string | null;
+  view: MergeView;
+  mergedDocument: PdfDocument | null;
 }
 
 /**
@@ -31,9 +39,12 @@ interface MergeStoreActions {
   insertFileAtPosition: (params: InsertFileAtPositionParams) => void;
 
   // 파일 확장/축소
-  toggleExpand: (fileId: string) => void;
   expandAll: () => void;
   collapseAll: () => void;
+
+  // 그룹 확장/축소 (연속된 같은 파일 페이지 그룹)
+  toggleGroupExpand: (groupId: string) => void;
+  expandGroup: (groupId: string) => void;
 
   // 페이지 레벨 액션
   rotatePage: (fileId: string, pageId: string, degrees?: number) => void;
@@ -60,6 +71,8 @@ interface MergeStoreActions {
   setStatus: (status: MergeStatus) => void;
   setProgress: (progress: number) => void;
   setError: (message: string | null) => void;
+  setView: (view: MergeView) => void;
+  setMergedDocument: (document: PdfDocument | null) => void;
   reset: () => void;
 }
 
@@ -68,9 +81,12 @@ type MergeStore = MergeStoreState & MergeStoreActions;
 const initialState: MergeStoreState = {
   files: [],
   mergeOrder: [],
+  collapsedGroups: new Set(),
   status: MERGE_STATUS.IDLE,
   progress: 0,
-  errorMessage: null
+  errorMessage: null,
+  view: MERGE_VIEW.WORKSPACE,
+  mergedDocument: null
 };
 
 /**
@@ -103,9 +119,23 @@ export const useMergeStore = create<MergeStore>((set) => ({
             pageId: page.id
           }))
       );
+
+      // 새 파일들의 그룹 ID 생성 (각 파일의 첫 페이지 ID 기준)
+      const newGroupIds = documents
+        .map((doc) => {
+          const firstPage = doc.pages.find((p) => !p.isDeleted);
+          return firstPage ? `group_${firstPage.id}` : null;
+        })
+        .filter((id): id is string => id !== null);
+
+      // 새 그룹들을 접힌 상태로 추가
+      const newCollapsedGroups = new Set(state.collapsedGroups);
+      newGroupIds.forEach((id) => newCollapsedGroups.add(id));
+
       return {
         files: newFiles,
-        mergeOrder: [...state.mergeOrder, ...newMergeOrderItems]
+        mergeOrder: [...state.mergeOrder, ...newMergeOrderItems],
+        collapsedGroups: newCollapsedGroups
       };
     }),
 
@@ -149,9 +179,12 @@ export const useMergeStore = create<MergeStore>((set) => ({
     set({
       files: [],
       mergeOrder: [],
+      collapsedGroups: new Set(),
       status: MERGE_STATUS.IDLE,
       progress: 0,
-      errorMessage: null
+      errorMessage: null,
+      view: MERGE_VIEW.WORKSPACE,
+      mergedDocument: null
     }),
 
   reorderFiles: (fromIndex, toIndex) =>
@@ -230,22 +263,50 @@ export const useMergeStore = create<MergeStore>((set) => ({
     }),
 
   // 파일 확장/축소
-  toggleExpand: (fileId) =>
-    set((state) => ({
-      files: state.files.map((file) =>
-        file.id === fileId ? { ...file, isExpanded: !file.isExpanded } : file
-      )
-    })),
-
-  expandAll: () =>
-    set((state) => ({
-      files: state.files.map((file) => ({ ...file, isExpanded: true }))
-    })),
+  expandAll: () => set({ collapsedGroups: new Set() }),
 
   collapseAll: () =>
-    set((state) => ({
-      files: state.files.map((file) => ({ ...file, isExpanded: false }))
-    })),
+    set((state) => {
+      // mergeOrder를 그룹화하여 모든 그룹 ID 수집
+      const groups: { groupId: string }[] = [];
+      let currentFileId: string | null = null;
+      let currentGroupId: string | null = null;
+
+      for (const item of state.mergeOrder) {
+        if (currentFileId !== item.fileId) {
+          // 새 그룹 시작
+          currentFileId = item.fileId;
+          currentGroupId = `group_${item.pageId}`;
+          groups.push({ groupId: currentGroupId });
+        }
+      }
+
+      const allGroupIds = new Set(groups.map((g) => g.groupId));
+      return { collapsedGroups: allGroupIds };
+    }),
+
+  // 그룹 확장/축소 토글
+  toggleGroupExpand: (groupId) =>
+    set((state) => {
+      const newCollapsedGroups = new Set(state.collapsedGroups);
+      if (newCollapsedGroups.has(groupId)) {
+        newCollapsedGroups.delete(groupId);
+      } else {
+        newCollapsedGroups.add(groupId);
+      }
+      return { collapsedGroups: newCollapsedGroups };
+    }),
+
+  // 그룹 명시적 펼침 (collapsedGroups에서 제거)
+  expandGroup: (groupId) =>
+    set((state) => {
+      if (!state.collapsedGroups.has(groupId)) {
+        return state;
+      }
+      const newCollapsedGroups = new Set(state.collapsedGroups);
+      newCollapsedGroups.delete(groupId);
+      return { collapsedGroups: newCollapsedGroups };
+    }),
 
   // 페이지 회전 (기본: 90도 시계 방향, 또는 지정된 각도 추가)
   rotatePage: (fileId, pageId, degrees = PAGE_ROTATION.DEG_90) =>
@@ -386,10 +447,14 @@ export const useMergeStore = create<MergeStore>((set) => ({
   setProgress: (progress) => set({ progress }),
 
   setError: (message) =>
-    set({
+    set((state) => ({
       errorMessage: message,
-      status: message ? MERGE_STATUS.ERROR : MERGE_STATUS.IDLE
-    }),
+      status: message ? MERGE_STATUS.ERROR : state.status
+    })),
+
+  setView: (view) => set({ view }),
+
+  setMergedDocument: (document) => set({ mergedDocument: document }),
 
   reset: () => set(initialState)
 }));
@@ -397,8 +462,13 @@ export const useMergeStore = create<MergeStore>((set) => ({
 // Selector hooks
 export const useMergeFiles = () => useMergeStore((state) => state.files);
 export const useMergeOrder = () => useMergeStore((state) => state.mergeOrder);
+export const useCollapsedGroups = () =>
+  useMergeStore((state) => state.collapsedGroups);
 export const useMergeStatus = () => useMergeStore((state) => state.status);
 export const useMergeProgress = () => useMergeStore((state) => state.progress);
+export const useMergeView = () => useMergeStore((state) => state.view);
+export const useMergedDocument = () =>
+  useMergeStore((state) => state.mergedDocument);
 
 // 전체 페이지 수 (삭제된 것 포함)
 export const useTotalPages = () =>

@@ -27,5 +27,6 @@ export { Icon } from "./icon";
 export { InsertionLine } from "./insertion-line";
 export { ReorderDropZone } from "./reorder-drop-zone";
 export { Slider } from "./slider";
+export { MergeProgressOverlay } from "./merge-progress-overlay";
 export { ThemeToggleButton } from "./theme-toggle-button";
 export { Tooltip } from "./tooltip";

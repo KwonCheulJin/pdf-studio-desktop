@@ -116,6 +116,13 @@ export interface DialogSaveOptions {
   defaultPath?: string;
 }
 
+// --- File Save ---
+
+export interface CopyFileRequest {
+  sourcePath: string;
+  destinationPath: string;
+}
+
 // --- Logging ---
 
 export const LOG_LEVEL = {

@@ -19,7 +19,7 @@ export function Tooltip({
 }: TooltipProps) {
   return (
     <TooltipPrimitive.Provider delayDuration={300} skipDelayDuration={100}>
-      <TooltipPrimitive.Root delayDuration={300} disableHoverableContent={closeDelay === 0}>
+      <TooltipPrimitive.Root delayDuration={300} disableHoverableContent={true}>
         <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
         <TooltipPrimitive.Portal>
           <TooltipPrimitive.Content

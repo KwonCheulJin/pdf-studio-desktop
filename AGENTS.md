@@ -10,7 +10,7 @@ This file provides guidance to CODEX when working with code in this repository.
 
 PDF Studio Desktop은 PDF 조작(병합, 편집, TIFF 변환)을 위한 Electron 기반 데스크톱 애플리케이션입니다.
 
-**기술 스택**: Electron Forge + Vite + React + TypeScript + Tailwind CSS 4
+**기술 스택**: Electron Forge + Vite + React 19 + TypeScript + Tailwind CSS 4
 
 ## 개발 명령어
 
@@ -92,7 +92,7 @@ scope.action:detail
 // 핵심 요청/응답 타입 (src/main/types/ipc-schema.ts)
 interface FilePayload {
   path: string;
-  pages?: number[];
+  pages?: number[]
 }
 
 interface MergeRequest {
@@ -180,9 +180,142 @@ AppShell
 
 **예:** `useBom()`, `useBomDetail()`, `useBomForm()`
 
-### 4. React 핵심 규칙
+### 4. React 19 핵심 규칙
 
-**forwardRef**: ref가 필수일 때만 사용 (입력 포커스, 메서드 호출 등)
+#### React 19 주요 변경사항
+
+**forwardRef 제거**: React 19에서 `forwardRef` 불필요. `ref`를 일반 prop으로 전달
+
+```typescript
+// ❌ React 18 (forwardRef 사용)
+const Input = forwardRef<HTMLInputElement, InputProps>((props, ref) => (
+  <input ref={ref} {...props} />
+));
+
+// ✅ React 19 (ref를 일반 prop으로)
+interface InputProps {
+  ref?: React.Ref<HTMLInputElement>;
+  // ... other props
+}
+function Input({ ref, ...props }: InputProps) {
+  return <input ref={ref} {...props} />;
+}
+```
+
+**use() 훅**: Promise와 Context를 직접 읽기
+
+```typescript
+// ✅ React 19: use()로 Promise 읽기 (Suspense 필요)
+import { use } from 'react';
+
+function Comments({ commentsPromise }: { commentsPromise: Promise<Comment[]> }) {
+  const comments = use(commentsPromise); // Suspense가 처리
+  return comments.map(c => <p key={c.id}>{c.text}</p>);
+}
+
+// ✅ React 19: use()로 Context 읽기 (조건부 가능)
+function ThemeText({ show }: { show: boolean }) {
+  if (show) {
+    const theme = use(ThemeContext); // 조건부 호출 가능
+    return <span className={theme}>{theme}</span>;
+  }
+  return null;
+}
+```
+
+**useActionState**: 폼 액션 상태 관리 (useFormState 대체)
+
+```typescript
+// ✅ React 19: useActionState
+import { useActionState } from 'react';
+
+function Form() {
+  const [state, submitAction, isPending] = useActionState(
+    async (prevState, formData) => {
+      const result = await saveData(formData);
+      return result;
+    },
+    null
+  );
+
+  return (
+    <form action={submitAction}>
+      <input name="title" disabled={isPending} />
+      <button disabled={isPending}>{isPending ? '저장 중...' : '저장'}</button>
+      {state?.error && <p>{state.error}</p>}
+    </form>
+  );
+}
+```
+
+**useOptimistic**: 낙관적 UI 업데이트
+
+```typescript
+// ✅ React 19: useOptimistic
+import { useOptimistic } from 'react';
+
+function MessageList({ messages }: { messages: Message[] }) {
+  const [optimisticMessages, addOptimistic] = useOptimistic(
+    messages,
+    (state, newMessage: string) => [
+      ...state,
+      { id: 'temp', text: newMessage, sending: true }
+    ]
+  );
+
+  async function sendMessage(formData: FormData) {
+    const text = formData.get('text') as string;
+    addOptimistic(text); // 즉시 UI 업데이트
+    await saveMessage(text); // 서버 저장
+  }
+
+  return (
+    <form action={sendMessage}>
+      {optimisticMessages.map(msg => (
+        <div key={msg.id} style={{ opacity: msg.sending ? 0.5 : 1 }}>
+          {msg.text}
+        </div>
+      ))}
+      <input name="text" />
+    </form>
+  );
+}
+```
+
+**ref 콜백 cleanup**: ref 콜백에서 cleanup 함수 반환 가능
+
+```typescript
+// ✅ React 19: ref cleanup
+function Component() {
+  return (
+    <input
+      ref={(el) => {
+        if (el) {
+          el.focus();
+        }
+        // cleanup 함수 반환
+        return () => {
+          console.log('element removed');
+        };
+      }}
+    />
+  );
+}
+```
+
+**Context as Provider**: `Context.Provider` 대신 `Context` 직접 사용
+
+```typescript
+// ❌ React 18
+const ThemeContext = createContext('light');
+<ThemeContext.Provider value="dark">...</ThemeContext.Provider>
+
+// ✅ React 19
+const ThemeContext = createContext('light');
+<ThemeContext value="dark">...</ThemeContext>
+```
+
+#### 기존 Hook 규칙 (여전히 유효)
 
 **useCallback**:
 
@@ -273,6 +406,9 @@ if (entity && entity.id !== prevEntityId) {
 
 **규칙 요약**:
 
+- React 19: `forwardRef` 제거, `ref`를 일반 prop으로 전달
+- React 19: `use()`, `useActionState`, `useOptimistic` 새 훅 활용
+- React 19: `Context`를 Provider 없이 직접 사용
 - 상태 업데이트는 **이벤트 핸들러**에서 수행
 - useEffect는 **외부 시스템 동기화**에만 사용 (DOM, 외부 라이브러리, Zustand 스토어 등)
 - props → state 초기화는 **key prop** 또는 **렌더링 중 조정** 패턴 사용
@@ -299,6 +435,41 @@ const sorted = [...array].sort((a, b) => a.sort - b.sort);
 ### 코딩 표준
 
 **아키텍처**: Feature-Sliced Design (FSD)
+
+**코드 스타일 (Prettier + ESLint)**:
+
+| 규칙 | 설정 | 예시 |
+|------|------|------|
+| 따옴표 | 큰따옴표 (`"`) | `"hello"`, `import { foo } from "bar"` |
+| 세미콜론 | 필수 | `const x = 1;` |
+| 들여쓰기 | 2칸 스페이스 | - |
+| 후행 쉼표 | 없음 | `{ a: 1, b: 2 }` (마지막에 쉼표 없음) |
+| 화살표 함수 괄호 | 항상 | `(x) => x * 2` |
+| 줄 길이 | 80자 | - |
+
+```typescript
+// ✅ 올바른 스타일
+import { useState } from "react";
+
+const handleClick = (event) => {
+  console.log("clicked");
+};
+
+// ❌ 잘못된 스타일
+import { useState } from 'react';  // 작은따옴표 금지
+
+const handleClick = event => {     // 괄호 필수
+  console.log('clicked')           // 세미콜론 필수
+};
+```
+
+**린트/포맷 명령어**:
+```bash
+pnpm lint          # ESLint 검사
+pnpm lint:fix      # ESLint 자동 수정
+pnpm format        # Prettier 포맷팅
+pnpm format:check  # Prettier 검사만
+```
 
 **언어 & 스크립트**:
 
@@ -333,11 +504,7 @@ const sorted = [...array].sort((a, b) => a.sort - b.sort);
 
 ```typescript
 // ❌ 금지: 인라인 객체 타입
-function process(data: {
-  id: string;
-  name: string;
-  status: 'active' | 'inactive';
-}) {}
+function process(data: { id: string; name: string; status: 'active' | 'inactive' }) {}
 
 // ✅ 필수: 명시적 타입 정의
 interface ProcessData {
@@ -380,6 +547,28 @@ const status: MergeStatus = MERGE_STATUS.PENDING;
 
 **상수 객체 위치**: `src/renderer/shared/constants/` 또는 해당 feature 폴더 내 `constants.ts`
 
+### 유틸리티 함수 매개변수 규칙 (필수!)
+
+**위치 기반 매개변수 금지** - 항상 객체 형식(Named Parameters)으로 받기:
+
+```typescript
+// ❌ 금지: 위치 기반 매개변수
+function calculatePosition(x: number, y: number, offset: number): Position;
+
+// ✅ 필수: 객체 형식 매개변수
+interface CalculatePositionParams {
+  x: number;
+  y: number;
+  offset: number;
+}
+function calculatePosition({ x, y, offset }: CalculatePositionParams): Position;
+```
+
+**장점**:
+- 호출 시 매개변수 의미가 명확함
+- 매개변수 순서 변경에 안전
+- 선택적 매개변수 추가가 용이
+
 ### 컴포넌트 & 스타일링
 
 **UI 기반**:
@@ -401,7 +590,82 @@ const status: MergeStatus = MERGE_STATUS.PENDING;
 
 ## 테스트
 
-- **Vitest** - 단위 테스트
+### TDD 필수 규칙 (핵심 로직)
+
+**핵심 로직 함수는 반드시 TDD로 개발**:
+1. 테스트 먼저 작성 (Red)
+2. 테스트 통과하는 최소 구현 (Green)
+3. 리팩토링 (Refactor)
+
+**TDD 대상 (필수)**:
+- `src/main/services/` - PDF 병합, 편집, 변환 서비스
+- `src/main/workers/` - CPU 집약적 작업 로직
+- `src/renderer/shared/lib/` - 유틸리티 함수
+- `src/renderer/**/model/` - 비즈니스 로직 훅 내 순수 함수
+
+**TDD 제외 (UI 테스트 불필요)**:
+- React 컴포넌트 (`*.tsx`)
+- 스타일링 관련 코드
+- IPC 핸들러 (통합 테스트로 대체 가능)
+
+### TDD 워크플로우
+
+```typescript
+// 1. 테스트 먼저 작성 (src/main/services/__tests__/pdf-merge-service.test.ts)
+import { describe, it, expect } from 'vitest';
+import { mergePdfBuffers } from '../pdf-merge-service';
+
+describe('mergePdfBuffers', () => {
+  it('두 PDF 버퍼를 병합하여 하나의 버퍼 반환', async () => {
+    const pdf1 = await loadTestPdf('sample1.pdf');
+    const pdf2 = await loadTestPdf('sample2.pdf');
+
+    const result = await mergePdfBuffers([pdf1, pdf2]);
+
+    expect(result).toBeInstanceOf(Uint8Array);
+    expect(result.length).toBeGreaterThan(0);
+  });
+
+  it('빈 배열 입력 시 에러 발생', async () => {
+    await expect(mergePdfBuffers([])).rejects.toThrow('No PDF files provided');
+  });
+});
+
+// 2. 테스트 실행 → 실패 확인 (Red)
+// pnpm test
+
+// 3. 최소 구현 작성 (src/main/services/pdf-merge-service.ts)
+export async function mergePdfBuffers(buffers: Uint8Array[]): Promise<Uint8Array> {
+  if (buffers.length === 0) {
+    throw new Error('No PDF files provided');
+  }
+  // 구현...
+}
+
+// 4. 테스트 실행 → 통과 확인 (Green)
+// 5. 리팩토링 (Refactor)
+```
+
+### 테스트 파일 위치
+
+```
+src/
+├─ main/
+│  └─ services/
+│     ├─ pdf-merge-service.ts
+│     └─ __tests__/
+│        └─ pdf-merge-service.test.ts
+├─ renderer/
+│  └─ shared/
+│     └─ lib/
+│        ├─ utils.ts
+│        └─ __tests__/
+│           └─ utils.test.ts
+```
+
+### 테스트 도구
+
+- **Vitest** - 단위 테스트 프레임워크
 
 ## 빠른 참조
 
@@ -409,13 +673,20 @@ const status: MergeStatus = MERGE_STATUS.PENDING;
 
 ⚠️ **KISS** - 요구사항 직결 최소 구현, 단순한 흐름 유지
 
+⚠️ **코드 스타일** - 큰따옴표(`"`), 세미콜론 필수, 후행 쉼표 없음, 화살표 함수 괄호 필수
+
 ⚠️ **Import** - `@/` 별칭, `import type { }` | **TypeScript** - `any` 금지, 인라인 객체 타입 금지, 명시적 타입
 
 ⚠️ **상수** - 매직 스트링/넘버 금지, 상수 객체 + `as const` + `ValueOf<T>` 사용
 
-⚠️ **React Hooks** - `forwardRef` (ref만) | `useCallback` (함수 props) | `useMemo` (데이터 변환) | `useEffect` (완전
-의존성)
+⚠️ **유틸리티 함수** - 위치 기반 매개변수 금지, 객체 형식(Named Parameters) 필수
+
+⚠️ **React 19** - `forwardRef` 제거 (ref는 일반 prop) | `use()` (Promise/Context) | `useActionState` (폼) | `useOptimistic` (낙관적 UI)
+
+⚠️ **React Hooks** - `useCallback` (함수 props) | `useMemo` (데이터 변환) | `useEffect` (외부 시스템 동기화만)
 
 ⚠️ **함수형** - `const` 객체 변경 금지, `Object.fromEntries/map/reduce` 사용
 
 ⚠️ **패키지 매니저** - `pnpm` 필수 (npm/yarn 금지)
+
+⚠️ **TDD** - 핵심 로직(services, workers, lib, model 순수함수)은 테스트 먼저 작성 | UI 테스트 불필요

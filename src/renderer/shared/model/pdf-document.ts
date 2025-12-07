@@ -27,7 +27,6 @@ export interface PdfDocument {
   pageCount: number; // 원본 페이지 수 (삭제된 것 포함)
   pages: PdfPage[];
   title?: string;
-  isExpanded: boolean; // 펼침/접힘 상태
 }
 
 // 새 PdfDocument 생성 헬퍼
@@ -52,7 +51,6 @@ export function createPdfDocument(
     name,
     pageCount,
     pages,
-    title,
-    isExpanded: false
+    title
   };
 }

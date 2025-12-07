@@ -37,7 +37,7 @@ export function PreviewPageItem({
   }, [pageIndex, pageData.dataUrl, pageData.isLoading, onLoadPage]);
 
   return (
-    <div className="flex flex-col items-center py-4 pr-4">
+    <div className="flex flex-col items-center py-6">
       {/* 페이지 컨테이너 */}
       <div className="bg-muted relative flex h-full w-full items-center justify-center overflow-hidden shadow-md">
         {/* 로딩 상태 */}
@@ -53,7 +53,7 @@ export function PreviewPageItem({
           <img
             src={pageData.dataUrl}
             alt={`페이지 ${pageIndex + 1}`}
-            className="max-h-[70vh] max-w-full object-contain"
+            className="w-full max-w-none object-contain"
           />
         )}
 

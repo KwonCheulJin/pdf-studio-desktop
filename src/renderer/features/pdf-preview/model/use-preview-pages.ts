@@ -85,7 +85,8 @@ export function usePreviewPages({
         const pdf = await loadingTask.promise;
 
         pdfDocRef.current = pdf;
-        setTotalPages(pdf.numPages);
+        // 필터링된 document.pages 배열의 길이 사용
+        setTotalPages(pdfDocument.pages.length);
       } catch {
         setError("PDF를 불러올 수 없습니다.");
       } finally {
@@ -116,13 +117,20 @@ export function usePreviewPages({
   const renderPage = useCallback(
     async (pageIndex: number): Promise<PageData | null> => {
       const pdf = pdfDocRef.current;
-      if (!pdf) return null;
+      if (!pdf || !pdfDocument) return null;
 
-      let page: PDFPageProxy | null = null;
+      // 필터링된 document.pages 배열에서 실제 페이지 번호 가져오기
+      const page = pdfDocument.pages[pageIndex];
+      if (!page) return null;
+
+      // sourcePageIndex는 0-based, PDF는 1-based
+      const actualPageNumber = page.sourcePageIndex + 1;
+
+      let pdfPage: PDFPageProxy | null = null;
 
       try {
-        page = await pdf.getPage(pageIndex + 1); // 1-based
-        const viewport = page.getViewport({ scale: PREVIEW_CONFIG.SCALE });
+        pdfPage = await pdf.getPage(actualPageNumber);
+        const viewport = pdfPage.getViewport({ scale: PREVIEW_CONFIG.SCALE });
 
         const canvas = document.createElement("canvas");
         const context = canvas.getContext("2d");
@@ -134,7 +142,7 @@ export function usePreviewPages({
         canvas.width = viewport.width;
         canvas.height = viewport.height;
 
-        await page.render({
+        await pdfPage.render({
           canvasContext: context,
           viewport,
           canvas
@@ -150,10 +158,10 @@ export function usePreviewPages({
       } catch {
         return null;
       } finally {
-        page?.cleanup();
+        pdfPage?.cleanup();
       }
     },
-    []
+    [pdfDocument]
   );
 
   // 페이지 로드 요청

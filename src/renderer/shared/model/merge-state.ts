@@ -11,6 +11,12 @@ export const MERGE_STATUS = {
 } as const;
 
 export type MergeStatus = ValueOf<typeof MERGE_STATUS>;
+export const MERGE_VIEW = {
+  WORKSPACE: "workspace",
+  PREVIEW: "preview"
+} as const;
+
+export type MergeView = ValueOf<typeof MERGE_VIEW>;
 
 export interface MergeState {
   files: PdfDocument[];

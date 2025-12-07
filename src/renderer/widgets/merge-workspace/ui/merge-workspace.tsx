@@ -50,13 +50,17 @@ export function MergeWorkspace() {
   } = useDroppedFiles();
 
   // 미리보기 열기/닫기
-  const handlePreviewFile = useCallback((document: PdfDocument) => {
-    setPreviewTarget({
-      mode: PREVIEW_MODE.DOCUMENT,
-      document
-    });
-    setIsPreviewOpen(true);
-  }, []);
+  const handlePreviewFile = useCallback(
+    (document: PdfDocument, groupPageIds: string[]) => {
+      setPreviewTarget({
+        mode: PREVIEW_MODE.DOCUMENT,
+        document,
+        groupPageIds
+      });
+      setIsPreviewOpen(true);
+    },
+    []
+  );
 
   const handlePreviewPage = useCallback(
     (fileId: string, pageIndex: number) => {

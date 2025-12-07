@@ -9,7 +9,8 @@ import { DocumentCard } from "@/renderer/entities/pdf-document";
 import { ExpandedPageCard } from "@/renderer/entities/pdf-page";
 import {
   useMergeStore,
-  useMergeOrder
+  useMergeOrder,
+  useCollapsedGroups
 } from "@/renderer/shared/model/merge-store";
 import { useUnifiedDrag } from "@/renderer/shared/hooks/use-unified-drag";
 import { usePdfThumbnails } from "@/renderer/shared/hooks/use-pdf-thumbnails";
@@ -40,19 +41,19 @@ import { UploadingCard } from "./uploading-card";
 
 interface FileGridProps {
   files: PdfDocument[];
-  onPreviewFile: (document: PdfDocument) => void;
+  onPreviewFile: (document: PdfDocument, groupPageIds: string[]) => void;
   onPreviewPage: (fileId: string, pageIndex: number) => void;
 }
 
 /**
- * 펼쳐진 파일의 썸네일을 생성하는 컴포넌트
+ * 파일의 썸네일을 생성하는 컴포넌트
  */
-function ExpandedFileThumbnails({ file }: { file: PdfDocument }) {
+function FileThumbnails({ file }: { file: PdfDocument }) {
   usePdfThumbnails({
     fileId: file.id,
     filePath: file.path,
     pageCount: file.pageCount,
-    enabled: file.isExpanded
+    enabled: true
   });
   return null;
 }
@@ -66,6 +67,7 @@ export function FileGrid({
   const [containerWidth, setContainerWidth] = useState(0);
 
   const mergeOrder = useMergeOrder();
+  const collapsedGroups = useCollapsedGroups();
   const insertFileAtPosition = useMergeStore(
     (state) => state.insertFileAtPosition
   );
@@ -93,8 +95,8 @@ export function FileGrid({
 
   // 모든 카드를 평면화 (펼침 상태 페이지 포함, mergeOrder 기반)
   const flatCards = useMemo<FlatCard[]>(
-    () => flattenFileGrid({ files, mergeOrder }),
-    [files, mergeOrder]
+    () => flattenFileGrid({ files, mergeOrder, collapsedGroups }),
+    [files, mergeOrder, collapsedGroups]
   );
 
   // 통합 드래그 훅
@@ -158,8 +160,7 @@ export function FileGrid({
     userCardSize
   });
 
-  // 펼쳐진 파일들의 썸네일 생성
-  const expandedFiles = files.filter((file) => file.isExpanded);
+  // 모든 파일의 썸네일 생성 (펼침/접힘 상태 무관)
 
   // ReorderDropZone 위치 계산 함수 (gap + 카드 왼쪽 절반 영역)
   const getDropZonePosition = useCallback(
@@ -257,9 +258,9 @@ export function FileGrid({
 
   return (
     <>
-      {/* 펼쳐진 파일들의 썸네일 생성 */}
-      {expandedFiles.map((file) => (
-        <ExpandedFileThumbnails key={`thumbnails-${file.id}`} file={file} />
+      {/* 모든 파일의 썸네일 생성 */}
+      {files.map((file) => (
+        <FileThumbnails key={`thumbnails-${file.id}`} file={file} />
       ))}
 
       {/* 절대 좌표 기반 그리드 컨테이너 */}
@@ -371,6 +372,8 @@ export function FileGrid({
               {card.type === FLAT_CARD_TYPE.FILE ? (
                 <DocumentCard
                   document={card.file}
+                  groupId={card.groupId}
+                  groupPageIds={card.groupPageIds}
                   imageSize={imageSize}
                   flatIndex={card.flatIndex}
                   isStacked={true}
@@ -389,7 +392,9 @@ export function FileGrid({
                   fileName={card.file.name}
                   imageSize={imageSize}
                   groupColor={groupColor}
-                  showCollapseButton={card.isFirstPage}
+                  groupId={card.groupId}
+                  showCollapseButton={card.isFirstOfGroup}
+                  isStacked={card.isFirstOfGroup}
                   isDragging={dragState.draggedFileId === card.file.id}
                   onDragStart={handleCardDragStart}
                   onDragEnd={handleCardDragEnd}

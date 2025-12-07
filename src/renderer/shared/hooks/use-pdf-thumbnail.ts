@@ -3,6 +3,8 @@ import { generateThumbnail } from "@/renderer/shared/lib/pdf-thumbnail";
 
 interface UsePdfThumbnailOptions {
   filePath: string;
+  /** 페이지 번호 (1-based, 기본값: 1) */
+  pageNumber?: number;
   enabled?: boolean;
 }
 
@@ -14,6 +16,7 @@ interface UsePdfThumbnailResult {
 
 export function usePdfThumbnail({
   filePath,
+  pageNumber = 1,
   enabled = true
 }: UsePdfThumbnailOptions): UsePdfThumbnailResult {
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
@@ -38,7 +41,7 @@ export function usePdfThumbnail({
       setError(null);
 
       try {
-        const result = await generateThumbnail({ filePath });
+        const result = await generateThumbnail({ filePath, pageNumber });
         if (!isCancelled) {
           setThumbnailUrl(result.dataUrl);
         }
@@ -58,7 +61,7 @@ export function usePdfThumbnail({
     return () => {
       isCancelled = true;
     };
-  }, [filePath, enabled]);
+  }, [filePath, pageNumber, enabled]);
 
   return { thumbnailUrl, isLoading, error };
 }

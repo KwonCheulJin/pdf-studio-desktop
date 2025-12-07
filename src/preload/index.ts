@@ -11,7 +11,8 @@ import type {
   ReadPdfRequest,
   ReadPdfResult,
   DialogOpenOptions,
-  DialogSaveOptions
+  DialogSaveOptions,
+  CopyFileRequest
 } from "../main/types/ipc-schema";
 
 const api = {
@@ -40,6 +41,8 @@ const api = {
 
   showSaveDialog: (options?: DialogSaveOptions): Promise<string | undefined> =>
     ipcRenderer.invoke("dialog.show-save", options),
+  saveFile: (request: CopyFileRequest): Promise<void> =>
+    ipcRenderer.invoke("file.save.copy", request),
 
   // Events (Main → Renderer)
   onMergeProgress: (callback: (progress: MergeProgress) => void): void => {

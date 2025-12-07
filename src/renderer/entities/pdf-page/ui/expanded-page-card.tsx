@@ -31,6 +31,8 @@ interface ExpandedPageCardProps {
   /** 이미지 고정 크기 (정사각형) */
   imageSize?: number;
   groupColor?: GroupColor; // 파일 그룹 구분 테두리 색상
+  /** 그룹 고유 ID (연속된 같은 파일 페이지 그룹) */
+  groupId: string;
   showCollapseButton?: boolean; // 첫 카드에만 접기 버튼 표시
   isStacked?: boolean; // 스택 효과 표시 여부 (펼침 상태의 첫 페이지만)
   // 드래그 상태
@@ -61,6 +63,7 @@ export function ExpandedPageCard({
   fileName,
   imageSize,
   groupColor,
+  groupId,
   showCollapseButton = false,
   isStacked = false,
   isDragging = false,
@@ -74,10 +77,14 @@ export function ExpandedPageCard({
   const { select, toggle, setSelectionType } = useSelectionStore();
   const rotatePage = useMergeStore((state) => state.rotatePage);
   const deletePage = useMergeStore((state) => state.deletePage);
-  const toggleExpand = useMergeStore((state) => state.toggleExpand);
+  const toggleGroupExpand = useMergeStore((state) => state.toggleGroupExpand);
 
-  const isSelected =
+  // 파일 선택 모드에서도 해당 파일의 페이지가 선택 표시되도록
+  const isFileSelected =
+    selectedIds.has(fileId) && selectionType === SELECTION_TYPE.FILE;
+  const isPageSelected =
     selectedIds.has(page.id) && selectionType === SELECTION_TYPE.PAGE;
+  const isSelected = isFileSelected || isPageSelected;
 
   // 체크박스 클릭 핸들러 (selectionType 변경 포함)
   const handleCheckboxChange = useCallback(() => {
@@ -92,13 +99,13 @@ export function ExpandedPageCard({
     }
   }, [selectionType, setSelectionType, select, toggle, page.id]);
 
-  // 접기 핸들러
+  // 그룹 접기 핸들러
   const handleCollapse = useCallback(
     (event: React.MouseEvent) => {
       event.stopPropagation();
-      toggleExpand(fileId);
+      toggleGroupExpand(groupId);
     },
-    [fileId, toggleExpand]
+    [groupId, toggleGroupExpand]
   );
 
   // 시계 방향 회전 핸들러
@@ -174,7 +181,7 @@ export function ExpandedPageCard({
       {/* 카드 본문 - 스택 효과 포함, flex-1로 남은 공간 채우기 */}
       <div className="relative flex-1">
         {/* 스택 효과 (펼침 상태의 첫 페이지만) - Adobe thumbnailBorder 스타일 */}
-        {!isStacked && pageNumber === 1 && (
+        {isStacked && (
           <div className="border-border bg-card absolute -top-1.5 right-1.5 bottom-1.5 -left-1.5 rounded-[4px] border" />
         )}
 
@@ -293,7 +300,7 @@ export function ExpandedPageCard({
       </div>
 
       {/* 푸터 (파일명 + 단일 페이지 번호) */}
-      <div className="mt-3 text-center">
+      <div className="mt-3 flex flex-col gap-0.5 text-center">
         <p
           className="text-foreground truncate text-sm font-medium"
           title={fileName}

@@ -6,6 +6,7 @@ import {
   pdfMetadataService,
   fileReaderService
 } from "../services";
+import fse from "fs-extra";
 import type {
   MergeRequest,
   MergeResult,
@@ -18,6 +19,7 @@ import type {
   ReadPdfResult,
   DialogOpenOptions,
   DialogSaveOptions,
+  CopyFileRequest,
   LogPayload
 } from "../types/ipc-schema";
 
@@ -125,6 +127,14 @@ export function registerIpcHandlers(): void {
         filters: [{ name: "PDF Files", extensions: ["pdf"] }]
       });
       return result.filePath;
+    }
+  );
+
+  // File Save (copy)
+  ipcMain.handle(
+    "file.save.copy",
+    async (_event, request: CopyFileRequest): Promise<void> => {
+      await fse.copy(request.sourcePath, request.destinationPath);
     }
   );
 

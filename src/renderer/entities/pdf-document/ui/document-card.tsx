@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import {
   Trash2,
   FileText,
@@ -21,6 +21,10 @@ import type { PdfDocument } from "@/renderer/shared/model/pdf-document";
 
 interface DocumentCardProps {
   document: PdfDocument;
+  /** 그룹 고유 ID (펼치기/접기용) */
+  groupId: string;
+  /** 그룹에 속한 페이지 ID 목록 (페이지 범위 표시용) */
+  groupPageIds: string[];
   /** 이미지 고정 크기 (정사각형) */
   imageSize?: number;
   /** flatCards 배열에서의 인덱스 */
@@ -36,7 +40,7 @@ interface DocumentCardProps {
   ) => void;
   onDragEnd?: () => void;
   // Preview 모달 상태는 외부(MergeWorkspace)에서 관리
-  onPreview?: (document: PdfDocument) => void;
+  onPreview?: (document: PdfDocument, groupPageIds: string[]) => void;
 }
 
 /**
@@ -48,6 +52,8 @@ interface DocumentCardProps {
  */
 export function DocumentCard({
   document,
+  groupId,
+  groupPageIds,
   imageSize,
   flatIndex,
   isStacked = true,
@@ -60,19 +66,36 @@ export function DocumentCard({
   const selectedIds = useSelectedIds();
   const selectionType = useSelectionType();
   const { toggleFileWithPages, setSelectionType } = useSelectionStore();
-  const toggleExpand = useMergeStore((state) => state.toggleExpand);
+  const expandGroup = useMergeStore((state) => state.expandGroup);
   const removeFile = useMergeStore((state) => state.removeFile);
 
   const isSelected =
     selectedIds.has(document.id) && selectionType === SELECTION_TYPE.FILE;
-  const { thumbnailUrl, isLoading } = usePdfThumbnail({
-    filePath: document.path
-  });
 
   // 활성 페이지 ID 목록 (삭제되지 않은 것만)
   const activePageIds = document.pages
     .filter((page) => !page.isDeleted)
     .map((page) => page.id);
+
+  // 그룹의 첫 페이지 찾기 (groupPageIds 기준)
+  const groupPageIdSet = new Set(groupPageIds);
+  const firstGroupPage = document.pages.find(
+    (page) => groupPageIdSet.has(page.id) && !page.isDeleted
+  );
+
+  // 그룹 첫 페이지의 sourcePageIndex (1-based로 변환)
+  const thumbnailPageNumber = firstGroupPage
+    ? firstGroupPage.sourcePageIndex + 1
+    : 1;
+
+  const { thumbnailUrl, isLoading } = usePdfThumbnail({
+    filePath: document.path,
+    pageNumber: thumbnailPageNumber
+  });
+
+  // 첫 페이지 회전 상태 (썸네일에 적용)
+  const firstPageRotation = firstGroupPage?.rotation ?? 0;
+  const rotationStyle = { transform: `rotate(${firstPageRotation}deg)` };
 
   // 체크박스 클릭 핸들러 (파일 + 페이지 함께 선택/해제)
   const handleCheckboxChange = useCallback(() => {
@@ -90,11 +113,14 @@ export function DocumentCard({
     activePageIds
   ]);
 
-  // 활성 페이지 번호 목록 (삭제되지 않은 것만)
-  const activePageNumbers = document.pages
-    .filter((page) => !page.isDeleted)
-    .map((page) => page.sourcePageIndex + 1);
-  const pageRangeText = formatPageRange(activePageNumbers);
+  // 그룹 내 페이지 번호 목록 (분리된 그룹의 경우 해당 그룹만)
+  const groupPageNumbers = useMemo(() => {
+    const pageIdSet = new Set(groupPageIds);
+    return document.pages
+      .filter((page) => pageIdSet.has(page.id) && !page.isDeleted)
+      .map((page) => page.sourcePageIndex + 1);
+  }, [document.pages, groupPageIds]);
+  const pageRangeText = formatPageRange(groupPageNumbers);
 
   // 파일 삭제 핸들러
   const handleRemove = useCallback(
@@ -109,18 +135,19 @@ export function DocumentCard({
   const handlePreview = useCallback(
     (event: React.MouseEvent) => {
       event.stopPropagation();
-      onPreview?.(document);
+      onPreview?.(document, groupPageIds);
     },
-    [document, onPreview]
+    [document, groupPageIds, onPreview]
   );
 
-  // 펼치기 핸들러
+  // 펼치기 핸들러 (그룹만 펼침)
   const handleExpand = useCallback(
     (event: React.MouseEvent) => {
       event.stopPropagation();
-      toggleExpand(document.id);
+      // 그룹 명시적 펼침 (collapsedGroups에서 제거)
+      expandGroup(groupId);
     },
-    [document.id, toggleExpand]
+    [groupId, expandGroup]
   );
 
   return (
@@ -207,6 +234,7 @@ export function DocumentCard({
                   src={thumbnailUrl}
                   alt={`${document.name} 미리보기`}
                   className="max-h-full max-w-full object-contain"
+                  style={rotationStyle}
                 />
               )}
 
@@ -231,7 +259,7 @@ export function DocumentCard({
       </div>
 
       {/* 푸터 (파일명 + 페이지 범위) */}
-      <div className="mt-3 text-center">
+      <div className="mt-3 flex flex-col gap-0.5 text-center">
         <p
           className="text-foreground truncate text-sm font-medium"
           title={document.name}

@@ -10,7 +10,8 @@ import type {
   ReadPdfRequest,
   ReadPdfResult,
   DialogOpenOptions,
-  DialogSaveOptions
+  DialogSaveOptions,
+  CopyFileRequest
 } from "../../../main/types/ipc-schema";
 
 // window.api 타입 정의
@@ -27,6 +28,7 @@ declare global {
       showSaveDialog: (
         options?: DialogSaveOptions
       ) => Promise<string | undefined>;
+      saveFile: (request: CopyFileRequest) => Promise<void>;
       onMergeProgress: (callback: (progress: MergeProgress) => void) => void;
       onMergeComplete: (callback: (result: MergeResult) => void) => void;
       removeAllListeners: (channel: string) => void;
@@ -80,6 +82,8 @@ export const ipcClient = {
       window.api.onThemeChanged(callback)
   },
   file: {
+    copy: (request: CopyFileRequest): Promise<void> =>
+      window.api.saveFile(request),
     getPath: (file: File): string | null => window.api.getFilePath(file),
     readPdf: (filePath: string): Promise<ReadPdfResult> =>
       window.api.readPdf({ filePath })

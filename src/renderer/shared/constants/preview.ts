@@ -21,6 +21,8 @@ export interface PreviewTarget {
   document: PdfDocument;
   /** PAGE 모드에서 표시할 페이지 인덱스 (0-based) */
   initialPageIndex?: number;
+  /** DOCUMENT 모드에서 표시할 그룹 페이지 ID 목록 (그룹 분리 시) */
+  groupPageIds?: string[];
 }
 
 /**

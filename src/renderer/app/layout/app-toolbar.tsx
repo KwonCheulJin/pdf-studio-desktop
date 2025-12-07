@@ -1,15 +1,23 @@
 import { Plus } from "lucide-react";
 import { Button, Checkbox, Tooltip } from "@/renderer/shared/ui";
-import { useMergeFiles } from "@/renderer/shared/model/merge-store";
+import {
+  useMergeFiles,
+  useMergeStatus
+} from "@/renderer/shared/model/merge-store";
+import { MERGE_STATUS } from "@/renderer/shared/model/merge-state";
 import { useAddFiles } from "@/renderer/shared/hooks/use-add-files";
 import { useSelectAll } from "@/renderer/shared/hooks/use-select-all";
+import { useMergeExecution } from "@/renderer/shared/hooks/use-merge-execution";
 
 export function AppToolbar() {
   const files = useMergeFiles();
   const hasFiles = files.length > 0;
+  const status = useMergeStatus();
 
   const { handleAddFiles } = useAddFiles();
   const { isAllSelected, handleSelectAll } = useSelectAll();
+  const { startMerge } = useMergeExecution();
+  const isMerging = status === MERGE_STATUS.MERGING;
 
   return (
     <header className="border-border bg-card flex h-16 shrink-0 items-center justify-between border-b px-6">
@@ -46,7 +54,9 @@ export function AppToolbar() {
       {/* 우측: 병합 */}
       <div className="flex w-40 items-center justify-end">
         <Tooltip content="선택한 파일을 하나의 PDF로 병합">
-          <Button disabled={!hasFiles}>병합</Button>
+          <Button disabled={!hasFiles || isMerging} onClick={startMerge}>
+            {isMerging ? "병합 중..." : "병합"}
+          </Button>
         </Tooltip>
       </div>
     </header>

@@ -30,6 +30,7 @@ export function PreviewModal({ isOpen, onClose, target }: PreviewModalProps) {
   const documentId = target?.document.id ?? "";
   const initialPageIndex = target?.initialPageIndex ?? 0;
   const mode = target?.mode ?? PREVIEW_MODE.DOCUMENT;
+  const groupPageIds = target?.groupPageIds;
 
   // merge-store에서 최신 파일 상태 구독 (회전 등 실시간 반영)
   const liveDocument = useFile(documentId);
@@ -40,7 +41,17 @@ export function PreviewModal({ isOpen, onClose, target }: PreviewModalProps) {
   }
 
   // 실시간 document 사용
-  const document = liveDocument;
+  let document = liveDocument;
+
+  // 그룹 페이지 ID가 있으면 해당 페이지만 필터링
+  if (groupPageIds && groupPageIds.length > 0) {
+    const groupPageIdSet = new Set(groupPageIds);
+    document = {
+      ...liveDocument,
+      pages: liveDocument.pages.filter((page) => groupPageIdSet.has(page.id)),
+      pageCount: groupPageIds.length
+    };
+  }
 
   // 모달 타이틀 생성
   const getTitle = () => {

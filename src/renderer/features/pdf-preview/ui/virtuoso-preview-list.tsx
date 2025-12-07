@@ -79,7 +79,7 @@ export function VirtuosoPreviewList({
 
   return (
     <Virtuoso
-      style={{ height: "100%" }}
+      style={{ height: "100%", width: "100%" }}
       totalCount={totalPages}
       overscan={PREVIEW_CONFIG.OVERSCAN}
       itemContent={renderItem}

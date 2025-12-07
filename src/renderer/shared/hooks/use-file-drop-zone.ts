@@ -21,7 +21,9 @@ function getFilesFromDataTransfer(dataTransfer: DataTransfer): File[] {
  * 드래그 데이터가 외부 파일인지 확인
  */
 function isExternalFileDrag(dataTransfer: DataTransfer): boolean {
-  return dataTransfer.types.includes("Files");
+  return (
+    dataTransfer.types.includes("Files") && dataTransfer.files.length > 0
+  );
 }
 
 export interface UploadingFile {

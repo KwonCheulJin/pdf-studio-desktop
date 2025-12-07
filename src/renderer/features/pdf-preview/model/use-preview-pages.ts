@@ -44,12 +44,17 @@ export function usePreviewPages({
   pdfDocument,
   isOpen
 }: UsePreviewPagesOptions): UsePreviewPagesResult {
+  const documentKey = `${pdfDocument?.id ?? ""}:${pdfDocument?.path ?? ""}:${
+    pdfDocument?.pages.length ?? 0
+  }`;
+
   const [totalPages, setTotalPages] = useState(0);
   const [isDocumentLoading, setIsDocumentLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pageDataMap, setPageDataMap] = useState<Map<number, PageData>>(
-    new Map()
-  );
+  // 페이지 데이터를 ref로 관리하여 loadPage 함수 안정성 확보
+  const pageDataMapRef = useRef<Map<number, PageData>>(new Map());
+  // 강제 리렌더링을 위한 상태 (Map 변경 시 트리거)
+  const [, forceUpdate] = useState(0);
 
   // PDF 문서 객체 참조
   const pdfDocRef = useRef<PDFDocumentProxy | null>(null);
@@ -67,7 +72,7 @@ export function usePreviewPages({
     const loadDocument = async () => {
       setIsDocumentLoading(true);
       setError(null);
-      setPageDataMap(new Map());
+      pageDataMapRef.current = new Map();
 
       // 이전 AbortController 정리
       abortControllerRef.current?.abort();
@@ -100,14 +105,14 @@ export function usePreviewPages({
       abortControllerRef.current?.abort();
       loadingPagesRef.current.clear();
     };
-  }, [isOpen, pdfDocument]);
+  }, [isOpen, documentKey]);
 
   // 모달 닫힐 때 리소스 정리
   useEffect(() => {
     if (!isOpen && pdfDocRef.current) {
       pdfDocRef.current.destroy();
       pdfDocRef.current = null;
-      setPageDataMap(new Map());
+      pageDataMapRef.current = new Map();
       setTotalPages(0);
       loadingPagesRef.current.clear();
     }
@@ -164,56 +169,47 @@ export function usePreviewPages({
     [pdfDocument]
   );
 
-  // 페이지 로드 요청
+  // 페이지 로드 요청 - ref 기반으로 의존성 최소화
   const loadPage = useCallback(
     (pageIndex: number) => {
       // 이미 로드되었거나 로드 중이면 스킵
-      const existingData = pageDataMap.get(pageIndex);
+      const existingData = pageDataMapRef.current.get(pageIndex);
       if (existingData?.dataUrl || loadingPagesRef.current.has(pageIndex)) {
         return;
       }
 
       // 로딩 상태 설정
       loadingPagesRef.current.add(pageIndex);
-      setPageDataMap((prev) => {
-        const next = new Map(prev);
-        next.set(pageIndex, {
-          dataUrl: null,
-          dimensions: null,
-          isLoading: true
-        });
-        return next;
+      pageDataMapRef.current.set(pageIndex, {
+        dataUrl: null,
+        dimensions: null,
+        isLoading: true
       });
+      forceUpdate((n) => n + 1);
 
       // 비동기 렌더링
       renderPage(pageIndex).then((result) => {
         loadingPagesRef.current.delete(pageIndex);
 
         if (result) {
-          setPageDataMap((prev) => {
-            const next = new Map(prev);
-            next.set(pageIndex, result);
-            return next;
-          });
+          pageDataMapRef.current.set(pageIndex, result);
+          forceUpdate((n) => n + 1);
         }
       });
     },
-    [pageDataMap, renderPage]
+    [renderPage]
   );
 
-  // 페이지 데이터 가져오기
-  const getPageData = useCallback(
-    (pageIndex: number): PageData => {
-      return (
-        pageDataMap.get(pageIndex) ?? {
-          dataUrl: null,
-          dimensions: null,
-          isLoading: false
-        }
-      );
-    },
-    [pageDataMap]
-  );
+  // 페이지 데이터 가져오기 - ref 직접 접근으로 의존성 제거
+  const getPageData = useCallback((pageIndex: number): PageData => {
+    return (
+      pageDataMapRef.current.get(pageIndex) ?? {
+        dataUrl: null,
+        dimensions: null,
+        isLoading: false
+      }
+    );
+  }, []);
 
   return {
     totalPages,

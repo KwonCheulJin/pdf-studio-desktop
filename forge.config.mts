@@ -6,7 +6,9 @@ import { FuseV1Options, FuseVersion } from "@electron/fuses";
 
 const config: ForgeConfig = {
   packagerConfig: {
-    asar: true,
+    asar: {
+      unpack: "**/node_modules/sharp/**"
+    },
     icon: "./icon"
   },
   rebuildConfig: {},
@@ -46,7 +48,7 @@ const config: ForgeConfig = {
         }
       ]
     }),
-    new AutoUnpackNativesPlugin(),
+    new AutoUnpackNativesPlugin({}),
     new FusesPlugin({
       version: FuseVersion.V1,
       [FuseV1Options.RunAsNode]: false,

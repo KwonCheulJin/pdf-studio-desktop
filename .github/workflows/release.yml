@@ -75,3 +75,4 @@ jobs:
             artifacts/macos/**
             artifacts/windows/**
             artifacts/linux/**
+          token: ${{ secrets.GH_PAT }}

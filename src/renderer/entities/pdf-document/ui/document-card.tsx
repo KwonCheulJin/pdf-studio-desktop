@@ -35,10 +35,7 @@ interface DocumentCardProps {
   isStacked?: boolean;
   // 드래그 상태
   isDragging?: boolean;
-  onDragStart?: (
-    event: React.DragEvent,
-    params: DragStartParams
-  ) => void;
+  onDragStart?: (event: React.DragEvent, params: DragStartParams) => void;
   onDragEnd?: () => void;
   // Preview 모달 상태는 외부(MergeWorkspace)에서 관리
   onPreview?: (document: PdfDocument, groupPageIds: string[]) => void;

@@ -27,8 +27,7 @@ function createFileCard(
         rotation: 0,
         isDeleted: false
       }
-    ],
-    isExpanded: false
+    ]
   };
   return {
     type: FLAT_CARD_TYPE.FILE,

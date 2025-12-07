@@ -83,7 +83,10 @@ export function useResponsiveGridLayout({
     // 실제 그리드 폭 계산 (카드들 + 간격)
     const actualGridWidth = columns * cardSize + (columns - 1) * GAP;
     // 남는 공간을 양쪽에 균등 분배하여 중앙 정렬
-    const horizontalOffset = Math.max(PADDING, (viewportWidth - actualGridWidth) / 2);
+    const horizontalOffset = Math.max(
+      PADDING,
+      (viewportWidth - actualGridWidth) / 2
+    );
 
     // 기본 위치 계산 (중앙 정렬)
     let positions: GridPosition[] = Array.from(

@@ -39,7 +39,7 @@ export function PreviewPageItem({
   return (
     <div className="flex flex-col items-center py-6">
       {/* 페이지 컨테이너 */}
-      <div className="bg-muted relative flex h-full w-full items-center justify-center overflow-hidden shadow-md">
+      <div className="bg-muted relative flex h-full w-full items-center justify-center overflow-hidden px-4 py-6 shadow-md">
         {/* 로딩 상태 */}
         {pageData.isLoading && (
           <div className="text-muted-foreground flex flex-col items-center gap-2">

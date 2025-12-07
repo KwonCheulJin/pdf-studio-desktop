@@ -1,10 +1,11 @@
-import { useCallback } from "react";
+import { useCallback, type HTMLAttributes, type Ref } from "react";
 import { Virtuoso } from "react-virtuoso";
 import { Loader2 } from "lucide-react";
 import { PreviewPageItem } from "./preview-page-item";
 import { usePreviewPages } from "../model/use-preview-pages";
 import { PREVIEW_CONFIG } from "@/renderer/shared/constants/preview";
 import type { PdfDocument } from "@/renderer/shared/model/pdf-document";
+import { cn } from "@/renderer/shared/lib/utils";
 
 interface VirtuosoPreviewListProps {
   document: PdfDocument;
@@ -77,13 +78,33 @@ export function VirtuosoPreviewList({
     );
   }
 
+  type ScrollerProps = HTMLAttributes<HTMLDivElement> & {
+    ref?: Ref<HTMLDivElement>;
+  };
+
+  const Scroller = ({ className, style, ...props }: ScrollerProps) => (
+    <div
+      {...props}
+      className={cn(
+        "scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent pr-4",
+        className
+      )}
+      style={{
+        ...style,
+        // 스크롤바를 우측 여백에 고정해 PDF와 겹치지 않도록 공간 확보
+        scrollbarGutter: "stable both-edges"
+      }}
+    />
+  );
+
   return (
     <Virtuoso
       style={{ height: "100%", width: "100%" }}
       totalCount={totalPages}
       overscan={PREVIEW_CONFIG.OVERSCAN}
       itemContent={renderItem}
-      className="scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent"
+      className="left-1/2 max-w-5xl -translate-x-1/2"
+      components={{ Scroller }}
     />
   );
 }

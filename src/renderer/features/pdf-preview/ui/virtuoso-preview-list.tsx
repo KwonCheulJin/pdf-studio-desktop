@@ -1,9 +1,4 @@
-import {
-  forwardRef,
-  useCallback,
-  useRef,
-  type HTMLAttributes
-} from "react";
+import { forwardRef, useCallback, useRef, type HTMLAttributes } from "react";
 import { Virtuoso } from "react-virtuoso";
 import { Loader2 } from "lucide-react";
 import { PreviewPageItem } from "./preview-page-item";

@@ -1,61 +1,55 @@
 # PDF Studio Desktop
 
-Electron Forge로 부트스트랩된 PDF Studio Desktop의 데스크톱 클라이언트입니다. Vite + React + Tailwind v4 베이스이며, 멀티 플랫폼(Windows/macOS/Linux) 빌드를 지원하도록 설정되어 있습니다.
+Electron Forge + Vite로 만든 PDF 조작 데스크톱 앱입니다. PDF 병합·편집·TIFF 변환을 지원하며 React 19 + Tailwind CSS 4 기반 UI를 제공합니다.
 
-## 주요 특징
+## 주요 기능
 
-- Electron Forge 7 + Vite로 빠른 HMR 개발 환경
-- React + Tailwind v4 테마 변수 사전 정의
-- Squirrel(Win), zip(macOS), deb/rpm(Linux) 패키징 설정 포함
-- Preload 스크립트 분리로 보안 기본값 유지
+- PDF 병합/순서 편집, 페이지 회전·삭제, TIFF → PDF 변환
+- 페이지/파일 단위 드래그 앤 드롭 정렬, 그룹 접기/펼치기
+- 병합 결과 미리보기 및 다운로드, 완료 후 임시 파일 정리
 
 ## 기술 스택
 
-- Electron 39
-- Vite 5
-- React 19 (현재 기본 renderer는 빈 화면 로그만 출력)
-- Tailwind CSS 4 (테마 토큰 정의)
-- TypeScript 5
+- Electron 39, Electron Forge 7, Vite 5
+- React 19, TypeScript 5, Tailwind CSS 4
+- Zustand 상태 관리, pdf-lib/pdf.js/sharp
 
-## 시작하기
+## 개발 시작
 
-사전 요구 사항: Node 18+ 권장, [pnpm](https://pnpm.io/) 설치.
+사전 요구: Node 18+, pnpm.
 
 ```bash
-# 의존성 설치
 pnpm install
-
-# 개발 모드 (HMR)
-pnpm start
+pnpm start          # HMR 포함 개발 모드
 ```
 
-## 빌드 & 패키징
+## 빌드/패키징
+
+macOS/Windows/리눅스용 패키지를 생성합니다. (macOS: zip/dmg, Windows: Squirrel exe, Linux: deb/rpm)
 
 ```bash
-# 플랫폼별 패키지 생성 (dist/)
-pnpm make
-
-# 플랫폼 공용 패키징 (다국적 포맷 생성 없이)
-pnpm package
+pnpm make           # 각 OS 별 배포 아티팩트 생성
+pnpm package        # 압축된 앱 패키지 생성
 ```
 
-## 프로젝트 구조
+## 프로젝트 구조 (요약)
 
-```
-src/
-  main.ts       # 메인 프로세스
-  preload.ts    # 브라우저 <-> Node 브리지
-  renderer.ts   # 렌더러 엔트리 (React/Tailwind 사용 가능)
-  index.css     # Tailwind v4 테마 토큰 및 기본 스타일
-forge.config.mts          # Electron Forge 빌드/패키징 설정
-vite.*.config.mts         # Vite 설정 (main/preload/renderer)
-```
+- `src/main/` : 메인 프로세스, IPC 핸들러, 서비스
+- `src/preload/` : `window.api` 브리지
+- `src/renderer/` : React FSD 레이아웃 (entities/features/widgets/pages)
+- `forge.config.mts` : Forge 패키징 설정 (mac dmg/zip, win squirrel, deb/rpm)
 
-## 개발 메모
+## 주요 워크플로우
 
-- 현재 renderer는 기본 로그만 출력합니다. `src/renderer.ts`를 React 엔트리로 교체해 UI를 추가하세요.
-- Tailwind v4는 가상 테마 토큰을 정의해둔 상태입니다. 필요 시 `src/index.css`에서 컬러/폰트 토큰을 수정하세요.
-- 린트 스크립트가 미구성되어 있습니다. 필요 시 ESLint/Prettier를 추가하면 됩니다.
+- 병합 실행: UI → IPC `pdf.merge:start` → worker에서 처리 → 완료 시 미리보기 전환
+- 미리보기: 다운로드 후 또는 돌아가기 시 임시 병합 파일 삭제
+
+## 스크립트
+
+- `pnpm start` : 개발 서버
+- `pnpm make` : 플랫폼별 배포물 생성
+- `pnpm package` : 패키징
+- `pnpm lint` / `pnpm test` / `pnpm typecheck` : 품질 도구
 
 ## 라이선스
 

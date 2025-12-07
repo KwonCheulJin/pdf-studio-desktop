@@ -1,15 +1,8 @@
-import { ArrowLeft } from "lucide-react";
 import { VirtuosoPreviewList } from "@/renderer/features/pdf-preview/ui/virtuoso-preview-list";
-import {
-  useMergeStore,
-  useMergedDocument
-} from "@/renderer/shared/model/merge-store";
-import { MERGE_VIEW } from "@/renderer/shared/model/merge-state";
-import { Button } from "@/renderer/shared/ui";
+import { useMergedDocument } from "@/renderer/shared/model/merge-store";
 
 export function MergedPreviewPage() {
   const mergedDocument = useMergedDocument();
-  const setView = useMergeStore((state) => state.setView);
 
   if (!mergedDocument) {
     return (
@@ -19,22 +12,10 @@ export function MergedPreviewPage() {
     );
   }
 
-  const handleBack = () => {
-    setView(MERGE_VIEW.WORKSPACE);
-  };
-
   return (
-    <div className="flex h-full flex-col">
-      <header className="border-border bg-card flex items-center justify-between border-b px-6 py-4">
-        <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleBack}
-            aria-label="작업 공간으로 돌아가기"
-          >
-            <ArrowLeft size={18} />
-          </Button>
+    <div className="flex h-full w-full flex-col">
+      <header className="border-border bg-card flex items-center justify-between border-b px-8 py-4">
+        <div className="flex items-center gap-2">
           <div className="flex flex-col">
             <span className="text-foreground text-sm font-semibold">
               {mergedDocument.name}
@@ -45,11 +26,11 @@ export function MergedPreviewPage() {
           </div>
         </div>
         <p className="text-muted-foreground text-right text-xs">
-          {mergedDocument.path}
+          임시 저장 위치: {mergedDocument.path}
         </p>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-hidden">
+      <div className="min-h-0 flex-1 overflow-hidden px-6">
         <VirtuosoPreviewList document={mergedDocument} isOpen />
       </div>
     </div>

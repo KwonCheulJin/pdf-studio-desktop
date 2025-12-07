@@ -20,6 +20,7 @@ import type {
   DialogOpenOptions,
   DialogSaveOptions,
   CopyFileRequest,
+  DeleteFileRequest,
   LogPayload
 } from "../types/ipc-schema";
 
@@ -135,6 +136,14 @@ export function registerIpcHandlers(): void {
     "file.save.copy",
     async (_event, request: CopyFileRequest): Promise<void> => {
       await fse.copy(request.sourcePath, request.destinationPath);
+    }
+  );
+
+  ipcMain.handle(
+    "file.delete",
+    async (_event, request: DeleteFileRequest): Promise<void> => {
+      if (!request.path) return;
+      await fse.remove(request.path);
     }
   );
 

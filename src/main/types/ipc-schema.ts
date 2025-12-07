@@ -123,6 +123,10 @@ export interface CopyFileRequest {
   destinationPath: string;
 }
 
+export interface DeleteFileRequest {
+  path: string;
+}
+
 // --- Logging ---
 
 export const LOG_LEVEL = {

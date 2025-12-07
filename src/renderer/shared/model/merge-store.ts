@@ -27,6 +27,14 @@ interface InsertFileAtPositionParams {
   targetPageId: string | null; // 삽입 위치 (이 페이지 앞에 삽입, null이면 끝에 삽입)
 }
 
+/**
+ * mergeOrder 내에서 단일 페이지를 이동하기 위한 파라미터
+ */
+interface MovePageInMergeOrderParams {
+  pageId: string; // 이동할 페이지 ID
+  targetPageId: string | null; // 삽입 위치 (이 페이지 앞에 삽입, null이면 끝에 삽입)
+}
+
 interface MergeStoreActions {
   // 파일 레벨 액션
   addFiles: (documents: PdfDocument[]) => void;
@@ -37,6 +45,7 @@ interface MergeStoreActions {
 
   // 병합 순서 액션
   insertFileAtPosition: (params: InsertFileAtPositionParams) => void;
+  movePageInMergeOrder: (params: MovePageInMergeOrderParams) => void;
 
   // 파일 확장/축소
   expandAll: () => void;
@@ -258,6 +267,50 @@ export const useMergeStore = create<MergeStore>((set) => ({
       // 새 mergeOrder 생성
       const newMergeOrder = [...orderWithoutMovingFile];
       newMergeOrder.splice(insertIndex, 0, ...itemsToInsert);
+
+      return { mergeOrder: newMergeOrder };
+    }),
+
+  // mergeOrder 내 단일 페이지 이동
+  movePageInMergeOrder: ({ pageId, targetPageId }) =>
+    set((state) => {
+      // 현재 위치 확인
+      const currentIndex = state.mergeOrder.findIndex(
+        (item) => item.pageId === pageId
+      );
+      if (currentIndex === -1) return state;
+
+      // 자기 자신 앞에 드롭한 경우 무시
+      if (targetPageId === pageId) {
+        return state;
+      }
+
+      // 이동 대상 아이템 분리
+      const movingItem = state.mergeOrder[currentIndex];
+      const orderWithoutPage = state.mergeOrder.filter(
+        (item) => item.pageId !== pageId
+      );
+
+      // 삽입 위치 계산
+      let insertIndex: number;
+      if (targetPageId === null) {
+        insertIndex = orderWithoutPage.length;
+      } else {
+        insertIndex = orderWithoutPage.findIndex(
+          (item) => item.pageId === targetPageId
+        );
+        if (insertIndex === -1) {
+          insertIndex = orderWithoutPage.length;
+        }
+      }
+
+      // 이동 결과가 동일한 순서라면 스킵
+      if (currentIndex === insertIndex) {
+        return state;
+      }
+
+      const newMergeOrder = [...orderWithoutPage];
+      newMergeOrder.splice(insertIndex, 0, movingItem);
 
       return { mergeOrder: newMergeOrder };
     }),

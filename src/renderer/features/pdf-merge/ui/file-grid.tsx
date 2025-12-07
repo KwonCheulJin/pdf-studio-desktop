@@ -71,6 +71,9 @@ export function FileGrid({
   const insertFileAtPosition = useMergeStore(
     (state) => state.insertFileAtPosition
   );
+  const movePageInMergeOrder = useMergeStore(
+    (state) => state.movePageInMergeOrder
+  );
   const userCardSize = useCardSize();
 
   // ResizeObserver로 컨테이너 너비 감지
@@ -109,8 +112,8 @@ export function FileGrid({
     handleDropZoneDrop
   } = useUnifiedDrag({
     flatCards,
-    files,
-    onInsertFileAtPosition: insertFileAtPosition
+    onInsertFileAtPosition: insertFileAtPosition,
+    onMovePageInMergeOrder: movePageInMergeOrder
   });
 
   // 드래그 상태
@@ -361,6 +364,11 @@ export function FileGrid({
           const key =
             card.type === FLAT_CARD_TYPE.FILE ? card.file.id : card.page.id;
           const groupColor = getGroupColor(card.fileIndex);
+          const isDragging =
+            dragState.draggedCardType === FLAT_CARD_TYPE.FILE
+              ? dragState.draggedFileId === card.file.id
+              : card.type === FLAT_CARD_TYPE.PAGE &&
+                dragState.draggedPageId === card.page.id;
 
           return (
             <GridItemWrapper

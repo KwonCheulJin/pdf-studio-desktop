@@ -17,6 +17,8 @@ import {
 } from "@/renderer/shared/model/selection-store";
 import { SELECTION_TYPE } from "@/renderer/shared/constants/page-state";
 import { formatPageRange } from "@/renderer/shared/lib/page-range-format";
+import { FLAT_CARD_TYPE } from "@/renderer/shared/constants/flat-card";
+import type { DragStartParams } from "@/renderer/shared/hooks/use-unified-drag";
 import type { PdfDocument } from "@/renderer/shared/model/pdf-document";
 
 interface DocumentCardProps {
@@ -35,8 +37,7 @@ interface DocumentCardProps {
   isDragging?: boolean;
   onDragStart?: (
     event: React.DragEvent,
-    fileId: string,
-    flatIndex: number
+    params: DragStartParams
   ) => void;
   onDragEnd?: () => void;
   // Preview 모달 상태는 외부(MergeWorkspace)에서 관리
@@ -163,7 +164,14 @@ export function DocumentCard({
         {/* 썸네일 영역 - 절대 좌표 기반으로 flex-1 사용 */}
         <div
           draggable
-          onDragStart={(e) => onDragStart?.(e, document.id, flatIndex)}
+          onDragStart={(e) =>
+            onDragStart?.(e, {
+              cardType: FLAT_CARD_TYPE.FILE,
+              fileId: document.id,
+              pageId: null,
+              flatIndex
+            })
+          }
           onDragEnd={onDragEnd}
           className={cn(
             "bg-card relative h-full w-full cursor-grab rounded-[4px] border transition-all hover:shadow-lg",

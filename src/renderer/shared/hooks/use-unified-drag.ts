@@ -1,14 +1,18 @@
 import { useState, useCallback, useRef } from "react";
 import type { FlatCard } from "@/renderer/shared/lib/flatten-file-grid";
-import type { PdfDocument } from "@/renderer/shared/model/pdf-document";
-import { FLAT_CARD_TYPE } from "@/renderer/shared/constants/flat-card";
+import {
+  FLAT_CARD_TYPE,
+  type FlatCardType
+} from "@/renderer/shared/constants/flat-card";
 
 /**
  * 통합 드래그 상태
  */
 interface UnifiedDragState {
   isDragging: boolean;
+  draggedCardType: FlatCardType | null;
   draggedFileId: string | null;
+  draggedPageId: string | null;
   draggedFlatIndex: number | null;
   dropTargetFlatIndex: number | null;
 }
@@ -22,12 +26,27 @@ interface InsertFileAtPositionParams {
 }
 
 /**
+ * mergeOrder 내 단일 페이지 이동 파라미터
+ */
+interface MovePageInMergeOrderParams {
+  pageId: string;
+  targetPageId: string | null;
+}
+
+export interface DragStartParams {
+  cardType: FlatCardType;
+  fileId: string;
+  pageId?: string | null;
+  flatIndex: number;
+}
+
+/**
  * useUnifiedDrag 훅의 매개변수
  */
 interface UseUnifiedDragParams {
   flatCards: FlatCard[];
-  files: PdfDocument[];
   onInsertFileAtPosition: (params: InsertFileAtPositionParams) => void;
+  onMovePageInMergeOrder: (params: MovePageInMergeOrderParams) => void;
 }
 
 /**
@@ -37,8 +56,7 @@ interface UseUnifiedDragResult {
   dragState: UnifiedDragState;
   handleCardDragStart: (
     event: React.DragEvent,
-    fileId: string,
-    flatIndex: number
+    params: DragStartParams
   ) => void;
   handleCardDragEnd: () => void;
   handleDropZoneDragOver: (
@@ -51,27 +69,32 @@ interface UseUnifiedDragResult {
 
 const initialDragState: UnifiedDragState = {
   isDragging: false,
+  draggedCardType: null,
   draggedFileId: null,
+  draggedPageId: null,
   draggedFlatIndex: null,
   dropTargetFlatIndex: null
 };
 
 /**
  * 파일과 페이지를 통합 처리하는 드래그 훅
- * - 어떤 카드를 드래그하든 해당 파일 전체가 이동
- * - 드롭 위치의 페이지 ID를 기반으로 insertFileAtPosition 호출
+ * - 파일 카드는 파일 단위 이동
+ * - 펼쳐진 페이지 카드는 해당 페이지만 이동
+ * - 드롭 위치의 페이지 ID를 기반으로 mergeOrder 업데이트
  */
 export function useUnifiedDrag({
   flatCards,
-  files,
-  onInsertFileAtPosition
+  onInsertFileAtPosition,
+  onMovePageInMergeOrder
 }: UseUnifiedDragParams): UseUnifiedDragResult {
   const [dragState, setDragState] =
     useState<UnifiedDragState>(initialDragState);
   const dragLeaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleCardDragStart = useCallback(
-    (event: React.DragEvent, fileId: string, flatIndex: number) => {
+    (event: React.DragEvent, params: DragStartParams) => {
+      const { cardType, fileId, pageId = null, flatIndex } = params;
+
       event.dataTransfer.effectAllowed = "move";
       event.dataTransfer.setData("text/plain", fileId);
 
@@ -81,7 +104,9 @@ export function useUnifiedDrag({
 
       setDragState({
         isDragging: true,
+        draggedCardType: cardType,
         draggedFileId: fileId,
+        draggedPageId: pageId,
         draggedFlatIndex: flatIndex,
         dropTargetFlatIndex: null
       });
@@ -130,9 +155,9 @@ export function useUnifiedDrag({
     (event: React.DragEvent, targetFlatIndex: number) => {
       event.preventDefault();
 
-      const { draggedFileId } = dragState;
+      const { draggedCardType, draggedFileId, draggedPageId } = dragState;
 
-      if (!draggedFileId) {
+      if (!draggedCardType) {
         setDragState(initialDragState);
         return;
       }
@@ -152,21 +177,37 @@ export function useUnifiedDrag({
         targetPageId = targetCard.page.id;
       }
 
-      // 같은 파일의 페이지 앞에 드롭하면 무시
-      // (자기 자신의 위치에 드롭)
-      if (targetCard && targetCard.file.id === draggedFileId) {
-        setDragState(initialDragState);
-        return;
-      }
+      if (draggedCardType === FLAT_CARD_TYPE.FILE) {
+        if (!draggedFileId) {
+          setDragState(initialDragState);
+          return;
+        }
 
-      onInsertFileAtPosition({
-        fileId: draggedFileId,
-        targetPageId
-      });
+        // 같은 파일의 페이지 앞에 드롭하면 무시
+        if (targetCard && targetCard.file.id === draggedFileId) {
+          setDragState(initialDragState);
+          return;
+        }
+
+        onInsertFileAtPosition({
+          fileId: draggedFileId,
+          targetPageId
+        });
+      } else if (draggedCardType === FLAT_CARD_TYPE.PAGE) {
+        if (!draggedPageId) {
+          setDragState(initialDragState);
+          return;
+        }
+
+        onMovePageInMergeOrder({
+          pageId: draggedPageId,
+          targetPageId
+        });
+      }
 
       setDragState(initialDragState);
     },
-    [dragState, flatCards, onInsertFileAtPosition]
+    [dragState, flatCards, onInsertFileAtPosition, onMovePageInMergeOrder]
   );
 
   return {

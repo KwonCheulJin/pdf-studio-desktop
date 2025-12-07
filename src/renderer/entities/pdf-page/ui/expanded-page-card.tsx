@@ -16,10 +16,12 @@ import {
   useSelectionType
 } from "@/renderer/shared/model/selection-store";
 import { SELECTION_TYPE } from "@/renderer/shared/constants/page-state";
+import { FLAT_CARD_TYPE } from "@/renderer/shared/constants/flat-card";
 import { ipcClient } from "@/renderer/shared/lib/ipc-client";
 import { ROTATION_DEGREES } from "@/main/types/ipc-schema";
 import type { PdfPage } from "@/renderer/shared/model/pdf-document";
 import type { GroupColor } from "@/renderer/shared/constants/group-colors";
+import type { DragStartParams } from "@/renderer/shared/hooks/use-unified-drag";
 
 interface ExpandedPageCardProps {
   fileId: string;
@@ -37,11 +39,7 @@ interface ExpandedPageCardProps {
   isStacked?: boolean; // 스택 효과 표시 여부 (펼침 상태의 첫 페이지만)
   // 드래그 상태
   isDragging?: boolean;
-  onDragStart?: (
-    event: React.DragEvent,
-    fileId: string,
-    flatIndex: number
-  ) => void;
+  onDragStart?: (event: React.DragEvent, params: DragStartParams) => void;
   onDragEnd?: () => void;
   /** 미리보기 콜백 (fileId, pageIndex) */
   onPreview?: (fileId: string, pageIndex: number) => void;
@@ -188,7 +186,14 @@ export function ExpandedPageCard({
         {/* 썸네일 영역 - 절대 좌표 기반으로 h-full 사용 */}
         <div
           draggable
-          onDragStart={(e) => onDragStart?.(e, fileId, flatIndex)}
+          onDragStart={(e) =>
+            onDragStart?.(e, {
+              cardType: FLAT_CARD_TYPE.PAGE,
+              fileId,
+              pageId: page.id,
+              flatIndex
+            })
+          }
           onDragEnd={onDragEnd}
           className={cn(
             "bg-card relative h-full w-full cursor-grab rounded-[4px] border p-3 transition-all hover:shadow-lg",

@@ -24,7 +24,6 @@ function createTestPage(
 function createTestDocument(
   id: string,
   pageCount: number,
-  isExpanded: boolean,
   deletedPageIndices: number[] = []
 ): PdfDocument {
   const pages = Array.from({ length: pageCount }, (_, i) =>
@@ -36,8 +35,7 @@ function createTestDocument(
     path: `/test/${id}.pdf`,
     name: `${id}.pdf`,
     pageCount,
-    pages,
-    isExpanded
+    pages
   };
 }
 
@@ -48,8 +46,12 @@ describe("flattenFileGrid", () => {
   });
 
   it("접힌 파일 하나 → 파일 카드 하나 생성", () => {
-    const doc = createTestDocument("doc1", 3, false);
-    const result = flattenFileGrid({ files: [doc], mergeOrder: [] });
+    const doc = createTestDocument("doc1", 3);
+    const result = flattenFileGrid({
+      files: [doc],
+      mergeOrder: [],
+      collapsedGroups: new Set(["group_doc1"])
+    });
 
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({
@@ -62,7 +64,7 @@ describe("flattenFileGrid", () => {
   });
 
   it("펼친 파일 하나 → 페이지별 카드 생성", () => {
-    const doc = createTestDocument("doc1", 3, true);
+    const doc = createTestDocument("doc1", 3);
     const result = flattenFileGrid({ files: [doc], mergeOrder: [] });
 
     expect(result).toHaveLength(3);
@@ -99,7 +101,7 @@ describe("flattenFileGrid", () => {
   });
 
   it("삭제된 페이지는 필터링", () => {
-    const doc = createTestDocument("doc1", 3, true, [1]); // 두 번째 페이지 삭제
+    const doc = createTestDocument("doc1", 3, [1]); // 두 번째 페이지 삭제
     const result = flattenFileGrid({ files: [doc], mergeOrder: [] });
 
     expect(result).toHaveLength(2);
@@ -112,13 +114,14 @@ describe("flattenFileGrid", () => {
   });
 
   it("여러 파일 혼합 (접힌 파일 + 펼친 파일)", () => {
-    const doc1 = createTestDocument("doc1", 2, false); // 접힘
-    const doc2 = createTestDocument("doc2", 3, true); // 펼침
-    const doc3 = createTestDocument("doc3", 1, false); // 접힘
+    const doc1 = createTestDocument("doc1", 2);
+    const doc2 = createTestDocument("doc2", 3);
+    const doc3 = createTestDocument("doc3", 1);
 
     const result = flattenFileGrid({
       files: [doc1, doc2, doc3],
-      mergeOrder: []
+      mergeOrder: [],
+      collapsedGroups: new Set(["group_doc1", "group_doc3"])
     });
 
     expect(result).toHaveLength(5); // 1 + 3 + 1
@@ -162,13 +165,14 @@ describe("flattenFileGrid", () => {
   });
 
   it("flatIndex가 연속적으로 증가", () => {
-    const doc1 = createTestDocument("doc1", 2, true);
-    const doc2 = createTestDocument("doc2", 1, false);
-    const doc3 = createTestDocument("doc3", 2, true);
+    const doc1 = createTestDocument("doc1", 2);
+    const doc2 = createTestDocument("doc2", 1);
+    const doc3 = createTestDocument("doc3", 2);
 
     const result = flattenFileGrid({
       files: [doc1, doc2, doc3],
-      mergeOrder: []
+      mergeOrder: [],
+      collapsedGroups: new Set(["group_doc2"])
     });
 
     // flatIndex가 0부터 연속적으로 증가하는지 확인
@@ -178,7 +182,7 @@ describe("flattenFileGrid", () => {
   });
 
   it("모든 페이지가 삭제된 펼친 파일 → 빈 결과", () => {
-    const doc = createTestDocument("doc1", 2, true, [0, 1]); // 모든 페이지 삭제
+    const doc = createTestDocument("doc1", 2, [0, 1]); // 모든 페이지 삭제
     const result = flattenFileGrid({ files: [doc], mergeOrder: [] });
 
     expect(result).toHaveLength(0);
@@ -186,8 +190,8 @@ describe("flattenFileGrid", () => {
 
   describe("mergeOrder 기반 순서", () => {
     it("mergeOrder 순서대로 카드 생성", () => {
-      const doc1 = createTestDocument("doc1", 2, false);
-      const doc2 = createTestDocument("doc2", 2, false);
+      const doc1 = createTestDocument("doc1", 2);
+      const doc2 = createTestDocument("doc2", 2);
 
       // doc2 -> doc1 순서로 mergeOrder 설정
       const mergeOrder = [
@@ -199,7 +203,8 @@ describe("flattenFileGrid", () => {
 
       const result = flattenFileGrid({
         files: [doc1, doc2],
-        mergeOrder
+        mergeOrder,
+        collapsedGroups: new Set(["group_page-doc2-0", "group_page-doc1-0"])
       });
 
       expect(result).toHaveLength(2); // 둘 다 접힌 상태
@@ -208,8 +213,8 @@ describe("flattenFileGrid", () => {
     });
 
     it("파일이 분리된 경우 각 그룹이 별도 카드로 표시", () => {
-      const doc1 = createTestDocument("doc1", 3, false);
-      const doc2 = createTestDocument("doc2", 3, true); // 펼침
+      const doc1 = createTestDocument("doc1", 3);
+      const doc2 = createTestDocument("doc2", 3);
 
       // doc2의 첫 페이지 -> doc1 전체 -> doc2의 나머지 페이지
       const mergeOrder = [
@@ -223,7 +228,8 @@ describe("flattenFileGrid", () => {
 
       const result = flattenFileGrid({
         files: [doc1, doc2],
-        mergeOrder
+        mergeOrder,
+        collapsedGroups: new Set(["group_page-doc1-0"])
       });
 
       // doc2(펼침): page-0 -> doc1(접힘): 3p -> doc2(펼침): page-1, page-2

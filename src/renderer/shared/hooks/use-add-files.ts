@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { useMergeStore } from "@/renderer/shared/model/merge-store";
 import { createPdfDocument } from "@/renderer/shared/model/pdf-document";
 import { ipcClient } from "@/renderer/shared/lib/ipc-client";
+import { isTiffFile, getFileBaseName } from "@/renderer/shared/lib/file-utils";
 
 interface UseAddFilesResult {
   handleAddFiles: () => Promise<void>;
@@ -10,6 +11,7 @@ interface UseAddFilesResult {
 /**
  * 파일 다이얼로그를 통한 파일 추가를 관리하는 훅
  * - AppToolbar와 MergeWorkspace에서 공통으로 사용
+ * - TIF/TIFF 파일은 추가 시점에 PDF로 변환 후 저장
  */
 export function useAddFiles(): UseAddFilesResult {
   const addFiles = useMergeStore((state) => state.addFiles);
@@ -21,6 +23,14 @@ export function useAddFiles(): UseAddFilesResult {
     const documents = await Promise.all(
       filePaths.map(async (filePath) => {
         try {
+          if (isTiffFile(filePath)) {
+            const result = await ipcClient.convert.tiff({ tiffPath: filePath });
+            return createPdfDocument(
+              result.outputPdfPath,
+              result.pageCount,
+              getFileBaseName(filePath)
+            );
+          }
           const pdfInfo = await ipcClient.meta.getPdfInfo(filePath);
           return createPdfDocument(filePath, pdfInfo.pageCount, pdfInfo.title);
         } catch {

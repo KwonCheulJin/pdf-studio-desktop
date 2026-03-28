@@ -3,7 +3,8 @@ import { Download } from "lucide-react";
 import {
   EmptyState,
   FileGrid,
-  FloatingActionBar
+  FloatingActionBar,
+  MergePreviewModal
 } from "@/renderer/features/pdf-merge";
 import { PreviewModal } from "@/renderer/features/pdf-preview";
 import { useMergeFiles } from "@/renderer/shared/model/merge-store";
@@ -19,6 +20,7 @@ import {
 } from "@/renderer/shared/constants/preview";
 import { usePageRotation } from "@/renderer/shared/hooks/use-page-rotation";
 import { useSelectionActions } from "@/renderer/shared/hooks/use-selection-actions";
+import { useSelectedMerge } from "@/renderer/shared/hooks/use-selected-merge";
 import { useDroppedFiles } from "../model/use-dropped-files";
 
 export function MergeWorkspace() {
@@ -40,6 +42,25 @@ export function MergeWorkspace() {
   const { handleRotateSelectedCw, handleRotateSelectedCcw } =
     usePageRotation(files);
   const { handleDeleteSelected } = useSelectionActions(files);
+
+  // 선택 파일 병합
+  const [isMergePreviewOpen, setIsMergePreviewOpen] = useState(false);
+  const {
+    startSelectedMerge,
+    isSelectedMerging,
+    selectedMergedDocument,
+    clearSelectedMerge
+  } = useSelectedMerge();
+
+  const handleMergeSelected = useCallback(async () => {
+    setIsMergePreviewOpen(true);
+    await startSelectedMerge();
+  }, [startSelectedMerge]);
+
+  const handleCloseMergePreview = useCallback(() => {
+    setIsMergePreviewOpen(false);
+    clearSelectedMerge();
+  }, [clearSelectedMerge]);
 
   // EmptyState용 드래그 앤 드롭 (파일이 없을 때만 사용)
   const {
@@ -128,6 +149,7 @@ export function MergeWorkspace() {
         onRotateCw={handleRotateSelectedCw}
         onRotateCcw={handleRotateSelectedCcw}
         onClearSelection={clearSelection}
+        onMergeSelected={handleMergeSelected}
       />
 
       {/* 미리보기 모달 */}
@@ -135,6 +157,14 @@ export function MergeWorkspace() {
         isOpen={isPreviewOpen}
         onClose={handleClosePreview}
         target={previewTarget}
+      />
+
+      {/* 선택 파일 병합 미리보기 모달 */}
+      <MergePreviewModal
+        isOpen={isMergePreviewOpen}
+        onClose={handleCloseMergePreview}
+        mergedDocument={selectedMergedDocument}
+        isLoading={isSelectedMerging}
       />
     </div>
   );

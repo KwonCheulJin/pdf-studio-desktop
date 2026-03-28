@@ -667,6 +667,66 @@ src/
 
 - **Vitest** - 단위 테스트 프레임워크
 
+## Git 커밋 규칙
+
+- 자동 커밋 금지 — 반드시 사용자 검토 후 커밋
+- `Co-Authored-By: Claude` 등 **AI 기여자 표시 절대 금지**
+- 커밋 메시지에 AI/Claude 관련 언급 금지
+
+## 코드 품질 규칙
+
+작업 완료 시 반드시 제거:
+
+- `console.log` 디버깅 코드
+- 미사용 변수 및 import 구문
+- 불필요한 주석 및 주석 처리된 코드
+- `eslint-disable` 남용 금지
+
+## 코드 복잡도 제한
+
+| 규칙 | 기준 |
+|------|------|
+| Cognitive Complexity | 함수당 ≤ 15 |
+| 중첩 깊이 | ≤ 4단계 |
+
+**절대 금지 패턴**:
+
+| 금지 | 대안 |
+|------|------|
+| 중첩 삼항 `a ? b : c ? d : e` | if-else 또는 함수 분리 |
+| `!condition ? A : B` | `condition ? B : A` |
+| `replace(/pattern/g, ...)` | `replaceAll()` 사용 |
+| 중첩 템플릿 리터럴 | 변수로 분리 후 조합 |
+
+## React list key 규칙
+
+- `key={index}` 금지 → `key={item.id}` 사용
+- 고유 ID 없으면 `crypto.randomUUID()` 부여
+
+## Import 순서 규칙
+
+1. React / 외부 라이브러리
+2. `@/` alias 내부 모듈
+3. 상대 경로
+
+동일 모듈 중복 import 금지 — 하나의 구문으로 병합.
+
+## 네이밍 축약 금지
+
+- `col` → `column`, `num` → `number`, `btn` → `button`
+- 주석 없이 의미 파악 가능해야 함
+
+## 컨텍스트 최적화
+
+**필수**:
+- 코드베이스 탐색/조사는 서브 에이전트 사용
+- 관련 파일 읽기는 가능한 한 번에 배치 처리
+
+**금지**:
+- 명시적 요청 없이 전체 디렉토리 읽기
+- `node_modules/`, `dist/`, `build/`, `coverage/` 파일 로드
+- 이미 컨텍스트에 있는 파일 다시 읽기
+
 ## 빠른 참조
 
 ⚠️ **YAGNI** - 사용되지 않는 코드 금지 | **명시적 작업** - 사용자 요청만 | **빌드** - 요청 시만
@@ -675,7 +735,7 @@ src/
 
 ⚠️ **코드 스타일** - 큰따옴표(`"`), 세미콜론 필수, 후행 쉼표 없음, 화살표 함수 괄호 필수
 
-⚠️ **Import** - `@/` 별칭, `import type { }` | **TypeScript** - `any` 금지, 인라인 객체 타입 금지, 명시적 타입
+⚠️ **Import** - `@/` 별칭, `import type { }`, 순서 준수 | **TypeScript** - `any` 금지, 인라인 객체 타입 금지, 명시적 타입
 
 ⚠️ **상수** - 매직 스트링/넘버 금지, 상수 객체 + `as const` + `ValueOf<T>` 사용
 
@@ -685,7 +745,13 @@ src/
 
 ⚠️ **React Hooks** - `useCallback` (함수 props) | `useMemo` (데이터 변환) | `useEffect` (외부 시스템 동기화만)
 
+⚠️ **React key** - `key={index}` 금지, 고유 ID 필수
+
 ⚠️ **함수형** - `const` 객체 변경 금지, `Object.fromEntries/map/reduce` 사용
+
+⚠️ **복잡도** - Cognitive Complexity ≤ 15, 중첩 ≤ 4단계, 중첩 삼항 금지
+
+⚠️ **코드 품질** - `console.log` 제거, 미사용 import 제거, AI 기여자 표시 금지
 
 ⚠️ **패키지 매니저** - `pnpm` 필수 (npm/yarn 금지)
 

@@ -1,1 +1,6 @@
-export { EmptyState, FileGrid, FloatingActionBar } from "./ui";
+export {
+  EmptyState,
+  FileGrid,
+  FloatingActionBar,
+  MergePreviewModal
+} from "./ui";

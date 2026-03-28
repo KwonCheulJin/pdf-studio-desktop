@@ -16,6 +16,7 @@ interface SelectionStoreActions {
   clearSelection: () => void;
   selectAll: (ids: string[]) => void;
   removeFromSelection: (idOrIds: string | string[]) => void;
+  ensurePagesSelected: (pageIds: string[]) => void;
 }
 
 type SelectionStore = SelectionStoreState & SelectionStoreActions;
@@ -130,6 +131,13 @@ export const useSelectionStore = create<SelectionStore>((set, get) => ({
           ? null
           : state.lastSelectedId
       };
+    }),
+
+  ensurePagesSelected: (pageIds: string[]) =>
+    set((state) => {
+      const newSelectedIds = new Set(state.selectedIds);
+      pageIds.forEach((id) => newSelectedIds.add(id));
+      return { selectedIds: newSelectedIds };
     })
 }));
 

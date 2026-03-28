@@ -1,5 +1,13 @@
 import { useCallback } from "react";
-import { ZoomIn, ZoomOut, Trash2, RotateCw, RotateCcw, X } from "lucide-react";
+import {
+  ZoomIn,
+  ZoomOut,
+  Trash2,
+  RotateCw,
+  RotateCcw,
+  X,
+  Combine
+} from "lucide-react";
 import {
   Button,
   Slider,
@@ -21,6 +29,7 @@ interface FloatingActionBarProps {
   onRotateCw: () => void;
   onRotateCcw: () => void;
   onClearSelection: () => void;
+  onMergeSelected: () => void;
 }
 
 export function FloatingActionBar({
@@ -30,7 +39,8 @@ export function FloatingActionBar({
   onDelete,
   onRotateCw,
   onRotateCcw,
-  onClearSelection
+  onClearSelection,
+  onMergeSelected
 }: FloatingActionBarProps) {
   const cardSize = useCardSize();
   const { setCardSize, zoomIn, zoomOut } = useZoomStore();
@@ -98,6 +108,19 @@ export function FloatingActionBar({
                 <Trash2 size={16} />
               </Button>
             </Tooltip>
+            {selectionType === SELECTION_TYPE.FILE && selectedCount >= 2 && (
+              <Tooltip content="선택 파일 병합">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onMergeSelected}
+                  aria-label="선택 파일 병합"
+                >
+                  <Combine size={16} />
+                  <span className="ml-1 text-xs">병합하기</span>
+                </Button>
+              </Tooltip>
+            )}
           </div>
           <div className="bg-border h-6 w-px" />
           <Tooltip content="선택 해제">

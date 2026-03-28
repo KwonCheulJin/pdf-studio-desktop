@@ -1,13 +1,9 @@
 import { Plus } from "lucide-react";
-
-interface DropZonePosition {
-  x: number;
-  y: number;
-}
+import type { GridPosition } from "@/renderer/shared/lib/layout-calculator";
 
 interface DropZoneIndicatorProps {
   /** 드롭 영역 절대 좌표 */
-  position: DropZonePosition;
+  position: GridPosition;
   /** 드롭 영역 높이 */
   height: number;
   /** 드롭 영역 너비 (확장된 갭) */

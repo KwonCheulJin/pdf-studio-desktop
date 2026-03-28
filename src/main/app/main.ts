@@ -2,6 +2,7 @@ import { app, BrowserWindow, Menu, nativeTheme } from "electron";
 import path from "node:path";
 import started from "electron-squirrel-startup";
 import { registerIpcHandlers } from "./ipc-handler";
+import { IPC_CHANNEL } from "../types/ipc-schema";
 import { WINDOW_CONFIG } from "../config/constants";
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
@@ -35,7 +36,7 @@ function createWindow() {
 
 function sendThemeToRenderer(window: BrowserWindow): void {
   const isDark = nativeTheme.shouldUseDarkColors;
-  window.webContents.send("theme:changed", isDark);
+  window.webContents.send(IPC_CHANNEL.THEME_CHANGED, isDark);
 }
 
 app.whenReady().then(() => {

@@ -1,7 +1,4 @@
-interface GridPosition {
-  x: number;
-  y: number;
-}
+import type { GridPosition } from "@/renderer/shared/lib/layout-calculator";
 
 interface InsertionLineProps {
   /** 삽입 선 위치 */

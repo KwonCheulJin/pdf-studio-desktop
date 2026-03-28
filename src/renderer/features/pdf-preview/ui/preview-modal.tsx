@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -35,48 +36,52 @@ export function PreviewModal({ isOpen, onClose, target }: PreviewModalProps) {
   // merge-store에서 최신 파일 상태 구독 (회전 등 실시간 반영)
   const liveDocument = useFile(documentId);
 
-  // target 또는 liveDocument가 없으면 렌더링 안함
-  if (!target || !liveDocument) {
-    return null;
-  }
+  // 그룹 페이지 ID Set 메모이제이션
+  const groupPageIdSet = useMemo(
+    () => new Set(groupPageIds ?? []),
+    [groupPageIds]
+  );
 
-  // 실시간 document 사용
-  let document = liveDocument;
-
-  // 그룹 페이지 ID가 있으면 해당 페이지만 필터링
-  if (groupPageIds && groupPageIds.length > 0) {
-    const groupPageIdSet = new Set(groupPageIds);
-    document = {
+  // 그룹 페이지가 있으면 필터링된 document, 아니면 liveDocument 그대로 사용
+  const document = useMemo(() => {
+    if (!liveDocument) return null;
+    if (!groupPageIds || groupPageIds.length === 0) return liveDocument;
+    return {
       ...liveDocument,
       pages: liveDocument.pages.filter((page) => groupPageIdSet.has(page.id)),
       pageCount: groupPageIds.length
     };
-  }
+  }, [liveDocument, groupPageIds, groupPageIdSet]);
 
-  // 모달 타이틀 생성
-  const getTitle = () => {
+  // 모달 타이틀 메모이제이션
+  const title = useMemo(() => {
+    if (!document) return "";
     if (mode === PREVIEW_MODE.PAGE) {
       return `${document.name} - ${initialPageIndex + 1}페이지`;
     }
     return document.name;
-  };
+  }, [document, mode, initialPageIndex]);
 
-  // 푸터 텍스트 생성
-  const getFooterText = () => {
+  // 푸터 텍스트 메모이제이션
+  const footerText = useMemo(() => {
+    if (!document) return "";
     if (mode === PREVIEW_MODE.PAGE) {
       return `${initialPageIndex + 1} / ${document.pageCount}페이지`;
     }
     return `${document.pageCount}페이지`;
-  };
+  }, [document, mode, initialPageIndex]);
+
+  // target 또는 document가 없으면 렌더링 안함
+  if (!target || !document) {
+    return null;
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="flex h-[80vh] flex-col gap-0 p-0">
         {/* 헤더 */}
         <DialogHeader className="border-border shrink-0 border-b px-6 py-4">
-          <DialogTitle className="text-sm font-medium">
-            {getTitle()}
-          </DialogTitle>
+          <DialogTitle className="text-sm font-medium">{title}</DialogTitle>
         </DialogHeader>
 
         {/* 콘텐츠 */}
@@ -93,9 +98,7 @@ export function PreviewModal({ isOpen, onClose, target }: PreviewModalProps) {
 
         {/* 푸터 */}
         <DialogFooter className="border-border shrink-0 justify-center border-t px-6 py-3">
-          <span className="text-muted-foreground text-xs">
-            {getFooterText()}
-          </span>
+          <span className="text-muted-foreground text-xs">{footerText}</span>
         </DialogFooter>
       </DialogContent>
     </Dialog>

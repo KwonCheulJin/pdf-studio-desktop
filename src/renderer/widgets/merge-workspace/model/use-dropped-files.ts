@@ -72,7 +72,7 @@ export function useDroppedFiles(): UseDroppedFilesResult {
         droppedFiles.map(async (file) => {
           const filePath = ipcClient.file.getPath(file);
           if (!filePath) {
-            console.warn("파일 경로를 가져올 수 없습니다:", file.name);
+            ipcClient.log.warn(`파일 경로를 가져올 수 없습니다: ${file.name}`);
             return null;
           }
           try {

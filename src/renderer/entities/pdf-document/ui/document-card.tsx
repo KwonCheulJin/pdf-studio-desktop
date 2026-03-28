@@ -63,7 +63,8 @@ export function DocumentCard({
   // Store 직접 접근
   const selectedIds = useSelectedIds();
   const selectionType = useSelectionType();
-  const { toggleFileWithPages, setSelectionType } = useSelectionStore();
+  const { toggleFileWithPages, setSelectionType, ensurePagesSelected } =
+    useSelectionStore();
   const expandGroup = useMergeStore((state) => state.expandGroup);
   const removeFile = useMergeStore((state) => state.removeFile);
 
@@ -71,12 +72,14 @@ export function DocumentCard({
     selectedIds.has(document.id) && selectionType === SELECTION_TYPE.FILE;
 
   // 활성 페이지 ID 목록 (삭제되지 않은 것만)
-  const activePageIds = document.pages
-    .filter((page) => !page.isDeleted)
-    .map((page) => page.id);
+  const activePageIds = useMemo(
+    () =>
+      document.pages.filter((page) => !page.isDeleted).map((page) => page.id),
+    [document.pages]
+  );
 
   // 그룹의 첫 페이지 찾기 (groupPageIds 기준)
-  const groupPageIdSet = new Set(groupPageIds);
+  const groupPageIdSet = useMemo(() => new Set(groupPageIds), [groupPageIds]);
   const firstGroupPage = document.pages.find(
     (page) => groupPageIdSet.has(page.id) && !page.isDeleted
   );
@@ -144,8 +147,12 @@ export function DocumentCard({
       event.stopPropagation();
       // 그룹 명시적 펼침 (collapsedGroups에서 제거)
       expandGroup(groupId);
+      // 파일이 선택된 상태라면 모든 페이지 ID도 selectedIds에 추가
+      if (isSelected) {
+        ensurePagesSelected(activePageIds);
+      }
     },
-    [groupId, expandGroup]
+    [groupId, expandGroup, isSelected, activePageIds, ensurePagesSelected]
   );
 
   return (

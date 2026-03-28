@@ -31,7 +31,7 @@ export function AppToolbarPreview() {
     try {
       await ipcClient.file.delete({ path: mergedFilePath });
     } catch (error) {
-      console.error("임시 병합 파일 삭제 실패", error);
+      ipcClient.log.error(`임시 병합 파일 삭제 실패: ${String(error)}`);
     }
   }, [mergedFilePath]);
 
@@ -40,14 +40,14 @@ export function AppToolbarPreview() {
     setMergedDocument(null);
   }, [deleteMergedFile, setMergedDocument]);
 
-  const handleDownload = async () => {
+  const handleDownload = useCallback(async () => {
     if (!mergedDocument) return;
     const result = await download(mergedDocument);
     if (result.success) {
       await cleanupMergedFile();
       setView(MERGE_VIEW.WORKSPACE);
     }
-  };
+  }, [mergedDocument, download, cleanupMergedFile, setView]);
 
   const handleBack = useCallback(async () => {
     setIsConfirmOpen(false);
@@ -55,9 +55,9 @@ export function AppToolbarPreview() {
     setView(MERGE_VIEW.WORKSPACE);
   }, [cleanupMergedFile, setView]);
 
-  const handleRequestBack = () => {
+  const handleRequestBack = useCallback(() => {
     setIsConfirmOpen(true);
-  };
+  }, []);
 
   if (!mergedDocument) {
     return null;

@@ -1,7 +1,10 @@
-export interface LayoutPosition {
+export interface GridPosition {
   x: number;
   y: number;
 }
+
+/** @deprecated Use GridPosition instead */
+export type LayoutPosition = GridPosition;
 
 interface GetDropZonePositionParams {
   index: number;

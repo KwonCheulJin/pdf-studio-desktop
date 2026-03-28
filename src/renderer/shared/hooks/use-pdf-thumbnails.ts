@@ -1,6 +1,7 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { generateAllPageThumbnails } from "@/renderer/shared/lib/pdf-thumbnail";
 import { useMergeStore } from "@/renderer/shared/model/merge-store";
+import { FILE_EXTENSIONS } from "@/renderer/shared/constants/app";
 
 interface UsePdfThumbnailsOptions {
   fileId: string;
@@ -21,8 +22,8 @@ export function usePdfThumbnails({
   pageCount,
   enabled = true
 }: UsePdfThumbnailsOptions): UsePdfThumbnailsResult {
-  const isLoadingRef = useRef(false);
-  const errorRef = useRef<Error | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
   const hasGeneratedRef = useRef(false);
   const updatePageThumbnail = useMergeStore(
     (state) => state.updatePageThumbnail
@@ -33,8 +34,8 @@ export function usePdfThumbnails({
 
   const generateThumbnails = useCallback(async () => {
     // PDF 파일만 처리
-    const isPdf = filePath.toLowerCase().endsWith(".pdf");
-    if (!isPdf || !enabled || isLoadingRef.current || hasGeneratedRef.current) {
+    const isPdf = filePath.toLowerCase().endsWith(FILE_EXTENSIONS.PDF);
+    if (!isPdf || !enabled || isLoading || hasGeneratedRef.current) {
       return;
     }
 
@@ -45,8 +46,8 @@ export function usePdfThumbnails({
       return;
     }
 
-    isLoadingRef.current = true;
-    errorRef.current = null;
+    setIsLoading(true);
+    setError(null);
 
     try {
       await generateAllPageThumbnails({
@@ -62,12 +63,19 @@ export function usePdfThumbnails({
       });
       hasGeneratedRef.current = true;
     } catch (err) {
-      errorRef.current =
-        err instanceof Error ? err : new Error("썸네일 생성 실패");
+      setError(err instanceof Error ? err : new Error("썸네일 생성 실패"));
     } finally {
-      isLoadingRef.current = false;
+      setIsLoading(false);
     }
-  }, [fileId, filePath, pageCount, enabled, file, updatePageThumbnail]);
+  }, [
+    fileId,
+    filePath,
+    pageCount,
+    enabled,
+    isLoading,
+    file,
+    updatePageThumbnail
+  ]);
 
   // enabled가 true가 되면 자동으로 썸네일 생성
   useEffect(() => {
@@ -81,9 +89,5 @@ export function usePdfThumbnails({
     hasGeneratedRef.current = false;
   }, [fileId]);
 
-  return {
-    isLoading: isLoadingRef.current,
-    error: errorRef.current,
-    generateThumbnails
-  };
+  return { isLoading, error, generateThumbnails };
 }

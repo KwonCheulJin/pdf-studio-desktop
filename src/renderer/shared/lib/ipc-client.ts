@@ -1,3 +1,4 @@
+import { IPC_CHANNEL } from "../../../main/types/ipc-schema";
 import type {
   MergeRequest,
   MergeProgress,
@@ -12,14 +13,15 @@ import type {
   DialogOpenOptions,
   DialogSaveOptions,
   CopyFileRequest,
-  DeleteFileRequest
+  DeleteFileRequest,
+  LogLevel
 } from "../../../main/types/ipc-schema";
 
 // window.api 타입 정의
 declare global {
   interface Window {
     api: {
-      mergePdf: (request: MergeRequest) => Promise<void>;
+      mergePdf: (request: MergeRequest) => Promise<MergeResult>;
       editPdf: (request: EditPageRequest) => Promise<void>;
       rotatePage: (request: RotatePageRequest) => Promise<void>;
       convertTiff: (request: ConvertTiffRequest) => Promise<ConvertResult>;
@@ -35,7 +37,7 @@ declare global {
       onMergeComplete: (callback: (result: MergeResult) => void) => void;
       removeAllListeners: (channel: string) => void;
       onThemeChanged: (callback: (isDark: boolean) => void) => void;
-      log: (level: string, message: string) => void;
+      log: (level: LogLevel, message: string) => void;
       getFilePath: (file: File) => string | null;
     };
   }
@@ -43,15 +45,15 @@ declare global {
 
 export const ipcClient = {
   merge: {
-    start: (request: MergeRequest): Promise<void> =>
+    start: (request: MergeRequest): Promise<MergeResult> =>
       window.api.mergePdf(request),
     onProgress: (callback: (progress: MergeProgress) => void): void =>
       window.api.onMergeProgress(callback),
     onComplete: (callback: (result: MergeResult) => void): void =>
       window.api.onMergeComplete(callback),
     removeListeners: (): void => {
-      window.api.removeAllListeners("pdf.merge:progress");
-      window.api.removeAllListeners("pdf.merge:complete");
+      window.api.removeAllListeners(IPC_CHANNEL.MERGE_PROGRESS);
+      window.api.removeAllListeners(IPC_CHANNEL.MERGE_COMPLETE);
     }
   },
   edit: {

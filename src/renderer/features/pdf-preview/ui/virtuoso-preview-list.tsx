@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useRef, type HTMLAttributes } from "react";
+import { useCallback, useRef, type HTMLAttributes, type Ref } from "react";
 import { Virtuoso } from "react-virtuoso";
 import { Loader2 } from "lucide-react";
 import { PreviewPageItem } from "./preview-page-item";
@@ -16,25 +16,33 @@ const FIXED_ITEM_HEIGHT = 900;
 
 /**
  * 커스텀 스크롤러 - 컴포넌트 외부에 정의하여 참조 안정성 확보
+ * React 19: ref를 일반 prop으로 전달
  */
-const CustomScroller = forwardRef<
-  HTMLDivElement,
-  HTMLAttributes<HTMLDivElement>
->(({ className, style, ...props }, ref) => (
-  <div
-    ref={ref}
-    {...props}
-    className={cn(
-      "scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent pr-4",
-      className
-    )}
-    style={{
-      ...style,
-      scrollbarGutter: "stable both-edges"
-    }}
-  />
-));
-CustomScroller.displayName = "CustomScroller";
+interface CustomScrollerProps extends HTMLAttributes<HTMLDivElement> {
+  ref?: Ref<HTMLDivElement>;
+}
+
+function CustomScroller({
+  className,
+  style,
+  ref,
+  ...props
+}: CustomScrollerProps) {
+  return (
+    <div
+      ref={ref}
+      {...props}
+      className={cn(
+        "scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent pr-4",
+        className
+      )}
+      style={{
+        ...style,
+        scrollbarGutter: "stable both-edges"
+      }}
+    />
+  );
+}
 
 interface VirtuosoPreviewListProps {
   document: PdfDocument;

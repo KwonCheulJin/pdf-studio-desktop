@@ -1,3 +1,5 @@
+import type { ValueOf } from "@/renderer/shared/types/common";
+
 export const APP_STATUS = {
   READY: "준비",
   PROCESSING: "처리 중...",
@@ -5,7 +7,6 @@ export const APP_STATUS = {
   ERROR: "오류"
 } as const;
 
-type ValueOf<T> = T[keyof T];
 export type AppStatus = ValueOf<typeof APP_STATUS>;
 
 export const FILE_EXTENSIONS = {

@@ -22,20 +22,3 @@ export const GRID_CONFIG = {
   /** 드롭존 인디케이터 위치 보정 오프셋 (px) */
   DROP_INDICATOR_OFFSET: 4
 } as const;
-
-/**
- * 절대 좌표 기반 카드 그리드 레이아웃 상수
- * @deprecated GRID_CONFIG 사용 권장
- */
-export const GRID_LAYOUT = {
-  /** 카드 폭 (px) */
-  CARD_W: 231,
-  /** 카드 높이 - 썸네일 + 푸터 (px) */
-  CARD_H: 287,
-  /** 카드 간 간격 (px) */
-  GAP: 40,
-  /** 컨테이너 패딩 (px) */
-  PADDING: 24,
-  /** 드롭 인디케이터 폭 (px) */
-  DROPZONE_W: 8
-} as const;

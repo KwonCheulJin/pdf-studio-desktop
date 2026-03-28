@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useShallow } from "zustand/react/shallow";
 import type { PdfDocument, PdfPage, MergeOrderItem } from "./pdf-document";
 import {
   MERGE_STATUS,
@@ -56,7 +57,7 @@ interface MergeStoreActions {
   expandGroup: (groupId: string) => void;
 
   // 페이지 레벨 액션
-  rotatePage: (fileId: string, pageId: string, degrees?: number) => void;
+  rotatePage: (fileId: string, pageId: string, degrees?: PageRotation) => void;
   deletePage: (fileId: string, pageId: string) => void;
   restorePage: (fileId: string, pageId: string) => void;
   reorderPageWithinFile: (
@@ -540,10 +541,12 @@ export const useTotalActivePages = () =>
 
 // 특정 파일의 활성 페이지만 반환
 export const useActivePages = (fileId: string) =>
-  useMergeStore((state) => {
-    const file = state.files.find((candidate) => candidate.id === fileId);
-    return file?.pages.filter((page) => !page.isDeleted) ?? [];
-  });
+  useMergeStore(
+    useShallow((state) => {
+      const file = state.files.find((candidate) => candidate.id === fileId);
+      return file?.pages.filter((page) => !page.isDeleted) ?? [];
+    })
+  );
 
 // 특정 파일 찾기
 export const useFile = (fileId: string) =>

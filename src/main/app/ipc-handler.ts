@@ -7,6 +7,7 @@ import {
   fileReaderService
 } from "../services";
 import fse from "fs-extra";
+import { IPC_CHANNEL } from "../types/ipc-schema";
 import type {
   MergeRequest,
   MergeResult,
@@ -32,7 +33,7 @@ function getMainWindow(): BrowserWindow | null {
 export function registerIpcHandlers(): void {
   // PDF Merge
   ipcMain.handle(
-    "pdf.merge:start",
+    IPC_CHANNEL.MERGE_START,
     async (_event, request: MergeRequest): Promise<MergeResult> => {
       const mainWindow = getMainWindow();
 
@@ -56,7 +57,7 @@ export function registerIpcHandlers(): void {
 
   // PDF Edit
   ipcMain.handle(
-    "pdf.edit:apply",
+    IPC_CHANNEL.EDIT_APPLY,
     async (_event, request: EditPageRequest): Promise<void> => {
       await pdfEditService.applyOperations({
         filePath: request.filePath,
@@ -67,7 +68,7 @@ export function registerIpcHandlers(): void {
 
   // PDF Page Rotate (개별 페이지 회전 - 즉시 파일 저장)
   ipcMain.handle(
-    "pdf.page:rotate",
+    IPC_CHANNEL.PAGE_ROTATE,
     async (_event, request: RotatePageRequest): Promise<void> => {
       await pdfEditService.rotatePageAndSave(request);
     }
@@ -75,7 +76,7 @@ export function registerIpcHandlers(): void {
 
   // TIFF Convert
   ipcMain.handle(
-    "file.convert.tiff",
+    IPC_CHANNEL.CONVERT_TIFF,
     async (_event, request: ConvertTiffRequest): Promise<ConvertResult> => {
       return fileConverterService.convertTiffToPdf({
         tiffPath: request.tiffPath,
@@ -86,7 +87,7 @@ export function registerIpcHandlers(): void {
 
   // PDF Metadata
   ipcMain.handle(
-    "file.meta.get-pdf-info",
+    IPC_CHANNEL.META_PDF_INFO,
     async (_event, filePath: string): Promise<PdfInfo> => {
       return pdfMetadataService.getPdfInfo(filePath);
     }
@@ -94,7 +95,7 @@ export function registerIpcHandlers(): void {
 
   // File Read - PDF
   ipcMain.handle(
-    "file.read:pdf",
+    IPC_CHANNEL.READ_PDF,
     async (_event, request: ReadPdfRequest): Promise<ReadPdfResult> => {
       return fileReaderService.readPdf(request);
     }
@@ -102,7 +103,7 @@ export function registerIpcHandlers(): void {
 
   // Dialog - Open
   ipcMain.handle(
-    "dialog.show-open",
+    IPC_CHANNEL.DIALOG_OPEN,
     async (_event, options?: DialogOpenOptions): Promise<string[]> => {
       const result = await dialog.showOpenDialog({
         properties: ["openFile", "multiSelections"],
@@ -118,7 +119,7 @@ export function registerIpcHandlers(): void {
 
   // Dialog - Save
   ipcMain.handle(
-    "dialog.show-save",
+    IPC_CHANNEL.DIALOG_SAVE,
     async (
       _event,
       options?: DialogSaveOptions
@@ -133,14 +134,14 @@ export function registerIpcHandlers(): void {
 
   // File Save (copy)
   ipcMain.handle(
-    "file.save.copy",
+    IPC_CHANNEL.FILE_COPY,
     async (_event, request: CopyFileRequest): Promise<void> => {
       await fse.copy(request.sourcePath, request.destinationPath);
     }
   );
 
   ipcMain.handle(
-    "file.delete",
+    IPC_CHANNEL.FILE_DELETE,
     async (_event, request: DeleteFileRequest): Promise<void> => {
       if (!request.path) return;
       await fse.remove(request.path);
@@ -148,7 +149,7 @@ export function registerIpcHandlers(): void {
   );
 
   // App Log
-  ipcMain.on("app.log", (_event, payload: LogPayload): void => {
+  ipcMain.on(IPC_CHANNEL.APP_LOG, (_event, payload: LogPayload): void => {
     const { level, message } = payload;
     switch (level) {
       case "error":
@@ -169,7 +170,7 @@ export function sendMergeProgress(
   current: number,
   total: number
 ): void {
-  window.webContents.send("pdf.merge:progress", {
+  window.webContents.send(IPC_CHANNEL.MERGE_PROGRESS, {
     current,
     total,
     percentage: Math.round((current / total) * 100)
@@ -180,5 +181,5 @@ export function sendMergeComplete(
   window: BrowserWindow,
   result: MergeResult
 ): void {
-  window.webContents.send("pdf.merge:complete", result);
+  window.webContents.send(IPC_CHANNEL.MERGE_COMPLETE, result);
 }

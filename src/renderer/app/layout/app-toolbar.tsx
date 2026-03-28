@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Button, Checkbox, Tooltip } from "@/renderer/shared/ui";
 import {
@@ -24,10 +25,10 @@ export function AppToolbar() {
   const isMerging = status === MERGE_STATUS.MERGING;
   const canClear = hasFiles && !isMerging;
 
-  const handleClearAll = () => {
+  const handleClearAll = useCallback(() => {
     clearFiles();
     clearSelection();
-  };
+  }, [clearFiles, clearSelection]);
 
   if (!hasFiles) {
     return null;

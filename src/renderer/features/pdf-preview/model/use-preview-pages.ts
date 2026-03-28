@@ -10,7 +10,7 @@ interface PageDimensions {
   height: number;
 }
 
-interface PageData {
+export interface PageData {
   dataUrl: string | null;
   dimensions: PageDimensions | null;
   isLoading: boolean;

@@ -17,8 +17,7 @@ import {
 } from "@/renderer/shared/model/selection-store";
 import { SELECTION_TYPE } from "@/renderer/shared/constants/page-state";
 import { FLAT_CARD_TYPE } from "@/renderer/shared/constants/flat-card";
-import { ipcClient } from "@/renderer/shared/lib/ipc-client";
-import { ROTATION_DEGREES } from "@/main/types/ipc-schema";
+import { usePageRotateHandlers } from "@/renderer/shared/hooks/use-page-rotate-handlers";
 import type { PdfPage } from "@/renderer/shared/model/pdf-document";
 import type { GroupColor } from "@/renderer/shared/constants/group-colors";
 import type { DragStartParams } from "@/renderer/shared/hooks/use-unified-drag";
@@ -73,9 +72,14 @@ export function ExpandedPageCard({
   const selectedIds = useSelectedIds();
   const selectionType = useSelectionType();
   const { select, toggle, setSelectionType } = useSelectionStore();
-  const rotatePage = useMergeStore((state) => state.rotatePage);
   const deletePage = useMergeStore((state) => state.deletePage);
   const toggleGroupExpand = useMergeStore((state) => state.toggleGroupExpand);
+
+  const { handleRotateCw, handleRotateCcw } = usePageRotateHandlers({
+    fileId,
+    page,
+    filePath
+  });
 
   // 파일 선택 모드에서도 해당 파일의 페이지가 선택 표시되도록
   const isFileSelected =
@@ -104,50 +108,6 @@ export function ExpandedPageCard({
       toggleGroupExpand(groupId);
     },
     [groupId, toggleGroupExpand]
-  );
-
-  // 시계 방향 회전 핸들러
-  const handleRotateCw = useCallback(
-    async (event: React.MouseEvent) => {
-      event.stopPropagation();
-
-      try {
-        await ipcClient.edit.rotatePage({
-          filePath,
-          pageIndex: page.sourcePageIndex,
-          rotationDegrees: ROTATION_DEGREES.CW_90
-        });
-        rotatePage(fileId, page.id, ROTATION_DEGREES.CW_90);
-      } catch (error) {
-        console.error(
-          `페이지 회전 실패: 페이지 ${page.sourcePageIndex + 1}`,
-          error
-        );
-      }
-    },
-    [fileId, page.id, page.sourcePageIndex, filePath, rotatePage]
-  );
-
-  // 반시계 방향 회전 핸들러
-  const handleRotateCcw = useCallback(
-    async (event: React.MouseEvent) => {
-      event.stopPropagation();
-
-      try {
-        await ipcClient.edit.rotatePage({
-          filePath,
-          pageIndex: page.sourcePageIndex,
-          rotationDegrees: ROTATION_DEGREES.CW_270
-        });
-        rotatePage(fileId, page.id, ROTATION_DEGREES.CW_270);
-      } catch (error) {
-        console.error(
-          `페이지 회전 실패: 페이지 ${page.sourcePageIndex + 1}`,
-          error
-        );
-      }
-    },
-    [fileId, page.id, page.sourcePageIndex, filePath, rotatePage]
   );
 
   // 페이지 삭제 핸들러

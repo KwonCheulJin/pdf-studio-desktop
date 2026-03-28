@@ -1,10 +1,6 @@
 import { useEffect } from "react";
 import { Loader2, FileText } from "lucide-react";
-
-interface PageData {
-  dataUrl: string | null;
-  isLoading: boolean;
-}
+import type { PageData } from "../model/use-preview-pages";
 
 interface PreviewPageItemProps {
   pageIndex: number;

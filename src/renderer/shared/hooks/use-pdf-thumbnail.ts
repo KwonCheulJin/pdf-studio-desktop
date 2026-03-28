@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { generateThumbnail } from "@/renderer/shared/lib/pdf-thumbnail";
+import { FILE_EXTENSIONS } from "@/renderer/shared/constants/app";
 
 interface UsePdfThumbnailOptions {
   filePath: string;
@@ -29,7 +30,7 @@ export function usePdfThumbnail({
     }
 
     // PDF 파일만 썸네일 생성
-    const isPdf = filePath.toLowerCase().endsWith(".pdf");
+    const isPdf = filePath.toLowerCase().endsWith(FILE_EXTENSIONS.PDF);
     if (!isPdf) {
       return;
     }

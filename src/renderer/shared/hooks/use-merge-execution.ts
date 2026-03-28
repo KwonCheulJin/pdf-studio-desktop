@@ -1,65 +1,13 @@
 import { useCallback, useEffect } from "react";
 import { ipcClient } from "../lib/ipc-client";
+import { buildMergeRequest } from "../lib/build-merge-request";
 import { MERGE_STATUS, MERGE_VIEW } from "../model/merge-state";
 import { useMergeStore } from "../model/merge-store";
 import { createPdfDocument } from "../model/pdf-document";
-import type { MergeOrderItem, PdfDocument } from "../model/pdf-document";
 import type {
-  MergeRequest,
   MergeResult,
   MergeProgress
 } from "../../../main/types/ipc-schema";
-
-interface BuildMergeRequestParams {
-  files: PdfDocument[];
-  mergeOrder: MergeOrderItem[];
-}
-
-function buildMergeRequest({
-  files,
-  mergeOrder
-}: BuildMergeRequestParams): MergeRequest {
-  // mergeOrder가 비어 있으면 파일 순서대로 모든 활성 페이지를 병합
-  if (mergeOrder.length === 0) {
-    return {
-      files: files.map((file) => ({
-        path: file.path,
-        pages: file.pages
-          .filter((page) => !page.isDeleted)
-          .map((page) => page.sourcePageIndex)
-      }))
-    };
-  }
-
-  // mergeOrder 순서를 유지하면서 연속된 동일 파일을 하나의 청크로 묶어 요청 생성
-  const segments: MergeRequest["files"] = [];
-  let currentSegment: { path: string; pages: number[] } | null = null;
-
-  mergeOrder.forEach((item) => {
-    const file = files.find((candidate) => candidate.id === item.fileId);
-    if (!file) return;
-
-    const page = file.pages.find((candidate) => candidate.id === item.pageId);
-    if (!page || page.isDeleted) return;
-
-    if (currentSegment && currentSegment.path === file.path) {
-      currentSegment.pages.push(page.sourcePageIndex);
-      return;
-    }
-
-    currentSegment = {
-      path: file.path,
-      pages: [page.sourcePageIndex]
-    };
-    segments.push(currentSegment);
-  });
-
-  if (segments.length === 0) {
-    return { files: [] };
-  }
-
-  return { files: segments };
-}
 
 export function useMergeExecution() {
   const files = useMergeStore((state) => state.files);
@@ -73,11 +21,15 @@ export function useMergeExecution() {
   // IPC 이벤트 리스너 등록
   useEffect(() => {
     const handleProgress = (progress: MergeProgress) => {
+      // 전체 병합 중일 때만 처리 (선택 병합 이벤트는 무시)
+      if (useMergeStore.getState().status !== MERGE_STATUS.MERGING) return;
       setProgress(progress.percentage);
       setStatus(MERGE_STATUS.MERGING);
     };
 
     const handleComplete = (result: MergeResult) => {
+      // 전체 병합 중일 때만 처리 (선택 병합 이벤트는 무시)
+      if (useMergeStore.getState().status !== MERGE_STATUS.MERGING) return;
       const mergedDocument = createPdfDocument(
         result.outputPath,
         result.totalPages

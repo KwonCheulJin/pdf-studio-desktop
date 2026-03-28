@@ -1,7 +1,4 @@
-interface GridPosition {
-  x: number;
-  y: number;
-}
+import type { GridPosition } from "@/renderer/shared/lib/layout-calculator";
 
 interface GridItemWrapperProps {
   children: React.ReactNode;

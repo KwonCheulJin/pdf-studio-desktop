@@ -9,8 +9,7 @@ import {
   useSelectionType
 } from "@/renderer/shared/model/selection-store";
 import { SELECTION_TYPE } from "@/renderer/shared/constants/page-state";
-import { ipcClient } from "@/renderer/shared/lib/ipc-client";
-import { ROTATION_DEGREES } from "@/main/types/ipc-schema";
+import { usePageRotateHandlers } from "@/renderer/shared/hooks/use-page-rotate-handlers";
 import type { PdfPage } from "@/renderer/shared/model/pdf-document";
 
 interface PageThumbnailProps {
@@ -47,9 +46,14 @@ export function PageThumbnail({
   const selectedIds = useSelectedIds();
   const selectionType = useSelectionType();
   const { select, toggle, setSelectionType } = useSelectionStore();
-  const rotatePage = useMergeStore((state) => state.rotatePage);
   const deletePage = useMergeStore((state) => state.deletePage);
   const restorePage = useMergeStore((state) => state.restorePage);
+
+  const { handleRotateCw, handleRotateCcw } = usePageRotateHandlers({
+    fileId,
+    page,
+    filePath
+  });
 
   // 페이지 선택 모드에서만 선택 상태 표시
   const isSelected =
@@ -67,50 +71,6 @@ export function PageThumbnail({
       toggle(page.id);
     }
   }, [selectionType, setSelectionType, select, toggle, page.id]);
-
-  // 시계 방향 회전 핸들러
-  const handleRotateCw = useCallback(
-    async (event: React.MouseEvent) => {
-      event.stopPropagation();
-
-      try {
-        await ipcClient.edit.rotatePage({
-          filePath,
-          pageIndex: page.sourcePageIndex,
-          rotationDegrees: ROTATION_DEGREES.CW_90
-        });
-        rotatePage(fileId, page.id, ROTATION_DEGREES.CW_90);
-      } catch (error) {
-        console.error(
-          `페이지 회전 실패: 페이지 ${page.sourcePageIndex + 1}`,
-          error
-        );
-      }
-    },
-    [fileId, page.id, page.sourcePageIndex, filePath, rotatePage]
-  );
-
-  // 반시계 방향 회전 핸들러
-  const handleRotateCcw = useCallback(
-    async (event: React.MouseEvent) => {
-      event.stopPropagation();
-
-      try {
-        await ipcClient.edit.rotatePage({
-          filePath,
-          pageIndex: page.sourcePageIndex,
-          rotationDegrees: ROTATION_DEGREES.CW_270
-        });
-        rotatePage(fileId, page.id, ROTATION_DEGREES.CW_270);
-      } catch (error) {
-        console.error(
-          `페이지 회전 실패: 페이지 ${page.sourcePageIndex + 1}`,
-          error
-        );
-      }
-    },
-    [fileId, page.id, page.sourcePageIndex, filePath, rotatePage]
-  );
 
   // 페이지 삭제 핸들러
   const handleDelete = useCallback(

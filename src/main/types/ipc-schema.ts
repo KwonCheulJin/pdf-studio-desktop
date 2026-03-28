@@ -141,3 +141,22 @@ export interface LogPayload {
   level: LogLevel;
   message: string;
 }
+
+// --- IPC Channels ---
+
+export const IPC_CHANNEL = {
+  MERGE_START: "pdf.merge:start",
+  MERGE_PROGRESS: "pdf.merge:progress",
+  MERGE_COMPLETE: "pdf.merge:complete",
+  EDIT_APPLY: "pdf.edit:apply",
+  PAGE_ROTATE: "pdf.page:rotate",
+  CONVERT_TIFF: "file.convert.tiff",
+  META_PDF_INFO: "file.meta.get-pdf-info",
+  READ_PDF: "file.read:pdf",
+  DIALOG_OPEN: "dialog.show-open",
+  DIALOG_SAVE: "dialog.show-save",
+  FILE_COPY: "file.save.copy",
+  FILE_DELETE: "file.delete",
+  APP_LOG: "app.log",
+  THEME_CHANGED: "theme:changed"
+} as const;

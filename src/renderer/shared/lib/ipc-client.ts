@@ -1,4 +1,4 @@
-import { IPC_CHANNEL } from "../../../main/types/ipc-schema";
+import { IPC_CHANNEL } from "@/main/types/ipc-schema";
 import type {
   MergeRequest,
   MergeProgress,
@@ -16,7 +16,7 @@ import type {
   DeleteFileRequest,
   LogLevel,
   ValueOf
-} from "../../../main/types/ipc-schema";
+} from "@/main/types/ipc-schema";
 
 // window.api 타입 정의
 declare global {

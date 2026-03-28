@@ -7,7 +7,7 @@ import { createPdfDocument } from "../model/pdf-document";
 import type {
   MergeResult,
   MergeProgress
-} from "../../../main/types/ipc-schema";
+} from "@/main/types/ipc-schema";
 
 export function useMergeExecution() {
   const files = useMergeStore((state) => state.files);

@@ -469,11 +469,15 @@ export const useMergeStore = create<MergeStore>((set) => ({
 
       if (!movedPage) return state;
 
+      const page = movedPage;
       return {
         files: filesWithoutPage.map((file) => {
           if (file.id === targetFileId) {
-            const newPages = [...file.pages];
-            newPages.splice(targetIndex, 0, movedPage!);
+            const newPages = [
+              ...file.pages.slice(0, targetIndex),
+              page,
+              ...file.pages.slice(targetIndex)
+            ];
             return { ...file, pages: newPages };
           }
           return file;

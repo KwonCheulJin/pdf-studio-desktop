@@ -14,7 +14,8 @@ import type {
   DialogSaveOptions,
   CopyFileRequest,
   DeleteFileRequest,
-  LogLevel
+  LogLevel,
+  ValueOf
 } from "../../../main/types/ipc-schema";
 
 // window.api 타입 정의
@@ -35,7 +36,7 @@ declare global {
       deleteFile: (request: DeleteFileRequest) => Promise<void>;
       onMergeProgress: (callback: (progress: MergeProgress) => void) => void;
       onMergeComplete: (callback: (result: MergeResult) => void) => void;
-      removeAllListeners: (channel: string) => void;
+      removeAllListeners: (channel: ValueOf<typeof IPC_CHANNEL>) => void;
       onThemeChanged: (callback: (isDark: boolean) => void) => void;
       log: (level: LogLevel, message: string) => void;
       getFilePath: (file: File) => string | null;

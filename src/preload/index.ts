@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import { IPC_CHANNEL } from "../main/types/ipc-schema";
+import type { ValueOf } from "../main/types/ipc-schema";
 import type {
   MergeRequest,
   MergeResult,
@@ -63,7 +64,7 @@ const api = {
   },
 
   // Cleanup listeners
-  removeAllListeners: (channel: string): void => {
+  removeAllListeners: (channel: ValueOf<typeof IPC_CHANNEL>): void => {
     ipcRenderer.removeAllListeners(channel);
   },
 

@@ -66,8 +66,10 @@ export class PdfEditService {
           operation.pageIndices,
           operation.rotationDegrees ?? ROTATION_DEGREES.CW_90
         );
-      default:
-        return pdf;
+      default: {
+        const _exhaustive: never = operation.type;
+        throw new Error(`Unknown operation type: ${String(_exhaustive)}`);
+      }
     }
   }
 
@@ -146,18 +148,23 @@ export class PdfEditService {
       }
     }
 
-    // 각 페이지 회전 적용
+    // 새 PDF 생성 후 모든 페이지 복사 (직접 변이 방지)
+    const newPdf = await PDFDocument.create();
+    const allIndices = Array.from({ length: pageCount }, (_, i) => i);
+    const copiedPages = await newPdf.copyPages(sourcePdf, allIndices);
+
     const rotateSet = new Set(pageIndicesToRotate);
     for (let i = 0; i < pageCount; i++) {
+      const page = copiedPages[i];
       if (rotateSet.has(i)) {
-        const page = sourcePdf.getPage(i);
         const currentRotation = page.getRotation().angle;
         const newRotation = (currentRotation + rotationDegrees) % 360;
         page.setRotation(degrees(newRotation));
       }
+      newPdf.addPage(page);
     }
 
-    return sourcePdf;
+    return newPdf;
   }
 }
 

@@ -57,30 +57,25 @@ export function buildMergeRequest({
     }
   }
 
-  const result: FilePayload[] = [];
-  let currentPayload: FilePayload | null = null;
-  let currentFileId: string | null = null;
-
-  for (const item of mergeOrder) {
+  const result = mergeOrder.reduce<FilePayload[]>((accumulator, item) => {
     const file = fileMap.get(item.fileId);
-    if (!file) continue;
+    if (!file) return accumulator;
 
     const pageIndex = pageIndexMap.get(item.pageId);
-    if (pageIndex === undefined) continue;
+    if (pageIndex === undefined) return accumulator;
 
-    if (currentFileId === item.fileId && currentPayload) {
-      // 같은 파일의 연속 페이지 → 기존 payload에 추가
-      currentPayload.pages!.push(pageIndex);
-    } else {
-      // 새 파일 시작 → 새 payload 생성
-      currentPayload = {
-        path: file.path,
-        pages: [pageIndex]
-      };
-      result.push(currentPayload);
-      currentFileId = item.fileId;
+    const last = accumulator[accumulator.length - 1];
+    if (last && last.path === file.path) {
+      // 같은 파일의 연속 페이지 → 새 payload로 교체 (불변)
+      return [
+        ...accumulator.slice(0, -1),
+        { path: last.path, pages: [...(last.pages ?? []), pageIndex] }
+      ];
     }
-  }
+
+    // 새 파일 시작
+    return [...accumulator, { path: file.path, pages: [pageIndex] }];
+  }, []);
 
   return { files: result };
 }

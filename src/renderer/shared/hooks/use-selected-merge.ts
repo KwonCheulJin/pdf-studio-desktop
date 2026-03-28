@@ -61,22 +61,24 @@ export function useSelectedMerge(): UseSelectedMergeResult {
     }
 
     // FilePayload 배열 생성 (연속된 같은 파일 페이지 그룹화)
-    const segments: { path: string; pages: number[] }[] = [];
-    let currentSegment: { path: string; pages: number[] } | null = null;
+    const segments = filteredOrder.reduce<{ path: string; pages: number[] }[]>(
+      (accumulator, item) => {
+        const file = fileMap.get(item.fileId);
+        if (!file) return accumulator;
+        const pageIndex = pageIndexMap.get(item.pageId);
+        if (pageIndex === undefined) return accumulator;
 
-    for (const item of filteredOrder) {
-      const file = fileMap.get(item.fileId);
-      if (!file) continue;
-      const pageIndex = pageIndexMap.get(item.pageId);
-      if (pageIndex === undefined) continue;
-
-      if (currentSegment && currentSegment.path === file.path) {
-        currentSegment.pages.push(pageIndex);
-      } else {
-        currentSegment = { path: file.path, pages: [pageIndex] };
-        segments.push(currentSegment);
-      }
-    }
+        const last = accumulator[accumulator.length - 1];
+        if (last && last.path === file.path) {
+          return [
+            ...accumulator.slice(0, -1),
+            { path: last.path, pages: [...last.pages, pageIndex] }
+          ];
+        }
+        return [...accumulator, { path: file.path, pages: [pageIndex] }];
+      },
+      []
+    );
 
     if (segments.length === 0) return;
 

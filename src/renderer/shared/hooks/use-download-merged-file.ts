@@ -26,7 +26,7 @@ export function useDownloadMergedFile() {
 
     try {
       await ipcClient.file.copy({
-        sourcePath: defaultPath,
+        sourcePath: document.path,
         destinationPath: savePath
       });
       return { success: true };

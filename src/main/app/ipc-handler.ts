@@ -37,21 +37,26 @@ export function registerIpcHandlers(): void {
     async (_event, request: MergeRequest): Promise<MergeResult> => {
       const mainWindow = getMainWindow();
 
-      const result = await pdfMergeService.merge({
-        files: request.files,
-        outputPath: request.outputPath,
-        onProgress: (current, total) => {
-          if (mainWindow) {
-            sendMergeProgress(mainWindow, current, total);
+      try {
+        const result = await pdfMergeService.merge({
+          files: request.files,
+          outputPath: request.outputPath,
+          onProgress: (current, total) => {
+            if (mainWindow) {
+              sendMergeProgress(mainWindow, current, total);
+            }
           }
+        });
+
+        if (mainWindow) {
+          sendMergeComplete(mainWindow, result);
         }
-      });
 
-      if (mainWindow) {
-        sendMergeComplete(mainWindow, result);
+        return result;
+      } catch (error) {
+        console.error("[IPC] MERGE_START 실패:", error);
+        throw error;
       }
-
-      return result;
     }
   );
 
@@ -59,10 +64,15 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     IPC_CHANNEL.EDIT_APPLY,
     async (_event, request: EditPageRequest): Promise<void> => {
-      await pdfEditService.applyOperations({
-        filePath: request.filePath,
-        operations: request.operations
-      });
+      try {
+        await pdfEditService.applyOperations({
+          filePath: request.filePath,
+          operations: request.operations
+        });
+      } catch (error) {
+        console.error("[IPC] EDIT_APPLY 실패:", error);
+        throw error;
+      }
     }
   );
 
@@ -70,7 +80,12 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     IPC_CHANNEL.PAGE_ROTATE,
     async (_event, request: RotatePageRequest): Promise<void> => {
-      await pdfEditService.rotatePageAndSave(request);
+      try {
+        await pdfEditService.rotatePageAndSave(request);
+      } catch (error) {
+        console.error("[IPC] PAGE_ROTATE 실패:", error);
+        throw error;
+      }
     }
   );
 
@@ -78,10 +93,15 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     IPC_CHANNEL.CONVERT_TIFF,
     async (_event, request: ConvertTiffRequest): Promise<ConvertResult> => {
-      return fileConverterService.convertTiffToPdf({
-        tiffPath: request.tiffPath,
-        outputDir: request.outputDir
-      });
+      try {
+        return fileConverterService.convertTiffToPdf({
+          tiffPath: request.tiffPath,
+          outputDir: request.outputDir
+        });
+      } catch (error) {
+        console.error("[IPC] CONVERT_TIFF 실패:", error);
+        throw error;
+      }
     }
   );
 
@@ -89,7 +109,12 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     IPC_CHANNEL.META_PDF_INFO,
     async (_event, filePath: string): Promise<PdfInfo> => {
-      return pdfMetadataService.getPdfInfo(filePath);
+      try {
+        return pdfMetadataService.getPdfInfo(filePath);
+      } catch (error) {
+        console.error("[IPC] META_PDF_INFO 실패:", error);
+        throw error;
+      }
     }
   );
 
@@ -97,7 +122,12 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     IPC_CHANNEL.READ_PDF,
     async (_event, request: ReadPdfRequest): Promise<ReadPdfResult> => {
-      return fileReaderService.readPdf(request);
+      try {
+        return fileReaderService.readPdf(request);
+      } catch (error) {
+        console.error("[IPC] READ_PDF 실패:", error);
+        throw error;
+      }
     }
   );
 
@@ -136,7 +166,12 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     IPC_CHANNEL.FILE_COPY,
     async (_event, request: CopyFileRequest): Promise<void> => {
-      await fse.copy(request.sourcePath, request.destinationPath);
+      try {
+        await fse.copy(request.sourcePath, request.destinationPath);
+      } catch (error) {
+        console.error("[IPC] FILE_COPY 실패:", error);
+        throw error;
+      }
     }
   );
 
@@ -144,7 +179,12 @@ export function registerIpcHandlers(): void {
     IPC_CHANNEL.FILE_DELETE,
     async (_event, request: DeleteFileRequest): Promise<void> => {
       if (!request.path) return;
-      await fse.remove(request.path);
+      try {
+        await fse.remove(request.path);
+      } catch (error) {
+        console.error("[IPC] FILE_DELETE 실패:", error);
+        throw error;
+      }
     }
   );
 

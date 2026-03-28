@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { IPC_CHANNEL } from "@/main/types/ipc-schema";
 
 interface UseThemeManagerResult {
   isDark: boolean;
@@ -18,15 +19,15 @@ export function useThemeManager(): UseThemeManagerResult {
   useEffect(() => {
     // Electron IPC 또는 CSS 미디어 쿼리로 테마 변경 감지
     if (window.api?.onThemeChanged) {
-      window.api.onThemeChanged((dark) => {
-        setIsDark(dark);
-      });
-    } else {
-      const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-      const handler = (e: MediaQueryListEvent) => setIsDark(e.matches);
-      mediaQuery.addEventListener("change", handler);
-      return () => mediaQuery.removeEventListener("change", handler);
+      const handler = (dark: boolean) => setIsDark(dark);
+      window.api.onThemeChanged(handler);
+      return () => window.api.removeAllListeners(IPC_CHANNEL.THEME_CHANGED);
     }
+
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const handler = (e: MediaQueryListEvent) => setIsDark(e.matches);
+    mediaQuery.addEventListener("change", handler);
+    return () => mediaQuery.removeEventListener("change", handler);
   }, []);
 
   const handleToggleTheme = useCallback(() => {

@@ -33,7 +33,7 @@ export const PAGE_OPERATION_TYPE = {
   ROTATE: "rotate"
 } as const;
 
-type ValueOf<T> = T[keyof T];
+export type ValueOf<T> = T[keyof T];
 export type PageOperationType = ValueOf<typeof PAGE_OPERATION_TYPE>;
 
 export const ROTATION_DEGREES = {

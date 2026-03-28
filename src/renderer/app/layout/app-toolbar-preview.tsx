@@ -91,7 +91,7 @@ export function AppToolbarPreview() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader className="text-left">
             <DialogTitle>작업 공간으로 돌아갈까요?</DialogTitle>
-            <DialogDescription className="text-white">
+            <DialogDescription className="text-muted-foreground">
               병합 결과 파일을 다운로드했는지 확인해주세요. <br />
               돌아가면 병합된 파일이 삭제됩니다.
             </DialogDescription>

@@ -56,7 +56,8 @@ export class PdfMergeService {
   }
 
   private generateOutputPath(): string {
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const isoString = new Date().toISOString();
+    const timestamp = isoString.replace(/:/g, "-").replace(/\./g, "-");
     const outputDir = path.join(
       app.getPath("documents"),
       APP_CONFIG.OUTPUT_DIRECTORY_NAME

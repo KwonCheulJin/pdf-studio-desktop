@@ -45,15 +45,16 @@ export function FloatingActionBar({
   const cardSize = useCardSize();
   const { setCardSize, zoomIn, zoomOut } = useZoomStore();
 
+  const SLIDER_MAX = 100;
+  const cardSizeRange = ZOOM_CONFIG.MAX_CARD_SIZE - ZOOM_CONFIG.MIN_CARD_SIZE;
+
   const handleSliderChange = useCallback(
     (value: number[]) => {
       const newSize =
-        ZOOM_CONFIG.MIN_CARD_SIZE +
-        (value[0] / 100) *
-          (ZOOM_CONFIG.MAX_CARD_SIZE - ZOOM_CONFIG.MIN_CARD_SIZE);
+        ZOOM_CONFIG.MIN_CARD_SIZE + (value[0] / SLIDER_MAX) * cardSizeRange;
       setCardSize(Math.round(newSize));
     },
-    [setCardSize]
+    [setCardSize, cardSizeRange]
   );
 
   const hasSelection = selectedCount > 0;
@@ -66,11 +67,9 @@ export function FloatingActionBar({
       ? `${selectedCount}개 페이지 선택됨`
       : `${selectedCount}개 파일 선택됨`;
 
-  // Slider value는 0-100 범위로 변환
+  // Slider value는 0-SLIDER_MAX 범위로 변환
   const sliderValue = Math.round(
-    ((cardSize - ZOOM_CONFIG.MIN_CARD_SIZE) /
-      (ZOOM_CONFIG.MAX_CARD_SIZE - ZOOM_CONFIG.MIN_CARD_SIZE)) *
-      100
+    ((cardSize - ZOOM_CONFIG.MIN_CARD_SIZE) / cardSizeRange) * SLIDER_MAX
   );
 
   const isMinZoom = cardSize <= ZOOM_CONFIG.MIN_CARD_SIZE;

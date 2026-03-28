@@ -33,25 +33,21 @@ export function MergePreviewModal({
 }: MergePreviewModalProps) {
   const { download } = useDownloadMergedFile();
 
-  const cleanupTempFile = useCallback(async () => {
-    if (mergedDocument) {
-      await ipcClient.file.delete({ path: mergedDocument.path });
-    }
-  }, [mergedDocument]);
-
   const handleDownload = useCallback(async () => {
     if (!mergedDocument) return;
     const result = await download(mergedDocument);
     if (result.success) {
-      await cleanupTempFile();
+      await ipcClient.file.delete({ path: mergedDocument.path });
       onClose();
     }
-  }, [mergedDocument, download, onClose, cleanupTempFile]);
+  }, [mergedDocument, download, onClose]);
 
   const handleClose = useCallback(async () => {
-    await cleanupTempFile();
+    if (mergedDocument) {
+      await ipcClient.file.delete({ path: mergedDocument.path });
+    }
     onClose();
-  }, [cleanupTempFile, onClose]);
+  }, [mergedDocument, onClose]);
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>

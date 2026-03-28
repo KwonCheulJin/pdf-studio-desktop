@@ -6,16 +6,13 @@ interface TooltipProps {
   content: React.ReactNode;
   side?: "top" | "right" | "bottom" | "left";
   sideOffset?: number;
-  /** Tooltip이 닫힐 때 지연 시간 (ms) - 퀵 액션 버튼처럼 사라지는 요소에 유용 */
-  closeDelay?: number;
 }
 
 export function Tooltip({
   children,
   content,
   side = "top",
-  sideOffset = 4,
-  closeDelay = 0
+  sideOffset = 4
 }: TooltipProps) {
   return (
     <TooltipPrimitive.Provider delayDuration={300} skipDelayDuration={100}>

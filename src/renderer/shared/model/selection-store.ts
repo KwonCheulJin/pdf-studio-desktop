@@ -59,18 +59,12 @@ export const useSelectionStore = create<SelectionStore>((set, get) => ({
 
   toggleFileWithPages: (fileId: string, pageIds: string[]) =>
     set((state) => {
-      const newSelectedIds = new Set(state.selectedIds);
-      const isFileSelected = newSelectedIds.has(fileId);
+      const isFileSelected = state.selectedIds.has(fileId);
+      const excludeIds = new Set([fileId, ...pageIds]);
 
-      if (isFileSelected) {
-        // 파일 선택 해제 시 해당 파일의 모든 페이지도 해제
-        newSelectedIds.delete(fileId);
-        pageIds.forEach((id) => newSelectedIds.delete(id));
-      } else {
-        // 파일 선택 시 해당 파일의 모든 페이지도 선택
-        newSelectedIds.add(fileId);
-        pageIds.forEach((id) => newSelectedIds.add(id));
-      }
+      const newSelectedIds = isFileSelected
+        ? new Set([...state.selectedIds].filter((id) => !excludeIds.has(id)))
+        : new Set([...state.selectedIds, fileId, ...pageIds]);
 
       return {
         selectedIds: newSelectedIds,
@@ -122,23 +116,22 @@ export const useSelectionStore = create<SelectionStore>((set, get) => ({
 
   removeFromSelection: (idOrIds: string | string[]) =>
     set((state) => {
-      const ids = Array.isArray(idOrIds) ? idOrIds : [idOrIds];
-      const newSelectedIds = new Set(state.selectedIds);
-      ids.forEach((id) => newSelectedIds.delete(id));
+      const ids = new Set(Array.isArray(idOrIds) ? idOrIds : [idOrIds]);
+      const newSelectedIds = new Set(
+        [...state.selectedIds].filter((id) => !ids.has(id))
+      );
       return {
         selectedIds: newSelectedIds,
-        lastSelectedId: ids.includes(state.lastSelectedId ?? "")
+        lastSelectedId: ids.has(state.lastSelectedId ?? "")
           ? null
           : state.lastSelectedId
       };
     }),
 
   ensurePagesSelected: (pageIds: string[]) =>
-    set((state) => {
-      const newSelectedIds = new Set(state.selectedIds);
-      pageIds.forEach((id) => newSelectedIds.add(id));
-      return { selectedIds: newSelectedIds };
-    })
+    set((state) => ({
+      selectedIds: new Set([...state.selectedIds, ...pageIds])
+    }))
 }));
 
 // Selector hooks

@@ -100,18 +100,22 @@ const initialState: MergeStoreState = {
 };
 
 /**
+ * PdfDocument 배열에서 mergeOrder 아이템 생성
+ */
+function buildMergeOrderItems(docs: PdfDocument[]): MergeOrderItem[] {
+  return docs.flatMap((doc) =>
+    doc.pages
+      .filter((page) => !page.isDeleted)
+      .map((page) => ({ fileId: doc.id, pageId: page.id }))
+  );
+}
+
+/**
  * PdfDocument 배열에서 mergeOrder 생성
  * 파일 순서대로 각 파일의 활성 페이지들을 나열
  */
 function buildMergeOrderFromFiles(files: PdfDocument[]): MergeOrderItem[] {
-  return files.flatMap((file) =>
-    file.pages
-      .filter((page) => !page.isDeleted)
-      .map((page) => ({
-        fileId: file.id,
-        pageId: page.id
-      }))
-  );
+  return buildMergeOrderItems(files);
 }
 
 export const useMergeStore = create<MergeStore>((set) => ({
@@ -119,18 +123,6 @@ export const useMergeStore = create<MergeStore>((set) => ({
 
   addFiles: (documents) =>
     set((state) => {
-      const newFiles = [...state.files, ...documents];
-      // 새 파일들의 페이지를 mergeOrder 끝에 추가
-      const newMergeOrderItems = documents.flatMap((doc) =>
-        doc.pages
-          .filter((page) => !page.isDeleted)
-          .map((page) => ({
-            fileId: doc.id,
-            pageId: page.id
-          }))
-      );
-
-      // 새 파일들의 그룹 ID 생성 (각 파일의 첫 페이지 ID 기준)
       const newGroupIds = documents
         .map((doc) => {
           const firstPage = doc.pages.find((p) => !p.isDeleted);
@@ -138,45 +130,39 @@ export const useMergeStore = create<MergeStore>((set) => ({
         })
         .filter((id): id is string => id !== null);
 
-      // 새 그룹들을 접힌 상태로 추가
-      const newCollapsedGroups = new Set(state.collapsedGroups);
-      newGroupIds.forEach((id) => newCollapsedGroups.add(id));
-
       return {
-        files: newFiles,
-        mergeOrder: [...state.mergeOrder, ...newMergeOrderItems],
-        collapsedGroups: newCollapsedGroups
+        files: [...state.files, ...documents],
+        mergeOrder: [...state.mergeOrder, ...buildMergeOrderItems(documents)],
+        collapsedGroups: new Set([...state.collapsedGroups, ...newGroupIds])
       };
     }),
 
   insertFiles: (index, documents) =>
     set((state) => {
-      const newFiles = [...state.files];
-      newFiles.splice(index, 0, ...documents);
-      // 삽입 위치에 해당하는 mergeOrder 인덱스 찾기
-      // index 번째 파일의 첫 페이지 앞에 삽입
       const targetFile = state.files[index];
       let insertIndex = state.mergeOrder.length;
       if (targetFile) {
         const firstPageOfTarget = targetFile.pages.find((p) => !p.isDeleted);
         if (firstPageOfTarget) {
-          insertIndex = state.mergeOrder.findIndex(
+          const found = state.mergeOrder.findIndex(
             (item) => item.pageId === firstPageOfTarget.id
           );
-          if (insertIndex === -1) insertIndex = state.mergeOrder.length;
+          if (found !== -1) insertIndex = found;
         }
       }
-      const newMergeOrderItems = documents.flatMap((doc) =>
-        doc.pages
-          .filter((page) => !page.isDeleted)
-          .map((page) => ({
-            fileId: doc.id,
-            pageId: page.id
-          }))
-      );
-      const newMergeOrder = [...state.mergeOrder];
-      newMergeOrder.splice(insertIndex, 0, ...newMergeOrderItems);
-      return { files: newFiles, mergeOrder: newMergeOrder };
+      const newMergeOrderItems = buildMergeOrderItems(documents);
+      return {
+        files: [
+          ...state.files.slice(0, index),
+          ...documents,
+          ...state.files.slice(index)
+        ],
+        mergeOrder: [
+          ...state.mergeOrder.slice(0, insertIndex),
+          ...newMergeOrderItems,
+          ...state.mergeOrder.slice(insertIndex)
+        ]
+      };
     }),
 
   removeFile: (id) =>
@@ -199,10 +185,13 @@ export const useMergeStore = create<MergeStore>((set) => ({
 
   reorderFiles: (fromIndex, toIndex) =>
     set((state) => {
-      const newFiles = [...state.files];
-      const [movedFile] = newFiles.splice(fromIndex, 1);
-      newFiles.splice(toIndex, 0, movedFile);
-      // mergeOrder도 재계산 (파일 순서 기반)
+      const movedFile = state.files[fromIndex];
+      const withoutMoved = state.files.filter((_, i) => i !== fromIndex);
+      const newFiles = [
+        ...withoutMoved.slice(0, toIndex),
+        movedFile,
+        ...withoutMoved.slice(toIndex)
+      ];
       return {
         files: newFiles,
         mergeOrder: buildMergeOrderFromFiles(newFiles)
@@ -266,10 +255,13 @@ export const useMergeStore = create<MergeStore>((set) => ({
       }
 
       // 새 mergeOrder 생성
-      const newMergeOrder = [...orderWithoutMovingFile];
-      newMergeOrder.splice(insertIndex, 0, ...itemsToInsert);
-
-      return { mergeOrder: newMergeOrder };
+      return {
+        mergeOrder: [
+          ...orderWithoutMovingFile.slice(0, insertIndex),
+          ...itemsToInsert,
+          ...orderWithoutMovingFile.slice(insertIndex)
+        ]
+      };
     }),
 
   // mergeOrder 내 단일 페이지 이동
@@ -310,10 +302,13 @@ export const useMergeStore = create<MergeStore>((set) => ({
         return state;
       }
 
-      const newMergeOrder = [...orderWithoutPage];
-      newMergeOrder.splice(insertIndex, 0, movingItem);
-
-      return { mergeOrder: newMergeOrder };
+      return {
+        mergeOrder: [
+          ...orderWithoutPage.slice(0, insertIndex),
+          movingItem,
+          ...orderWithoutPage.slice(insertIndex)
+        ]
+      };
     }),
 
   // 파일 확장/축소
@@ -341,25 +336,21 @@ export const useMergeStore = create<MergeStore>((set) => ({
 
   // 그룹 확장/축소 토글
   toggleGroupExpand: (groupId) =>
-    set((state) => {
-      const newCollapsedGroups = new Set(state.collapsedGroups);
-      if (newCollapsedGroups.has(groupId)) {
-        newCollapsedGroups.delete(groupId);
-      } else {
-        newCollapsedGroups.add(groupId);
-      }
-      return { collapsedGroups: newCollapsedGroups };
-    }),
+    set((state) => ({
+      collapsedGroups: state.collapsedGroups.has(groupId)
+        ? new Set([...state.collapsedGroups].filter((id) => id !== groupId))
+        : new Set([...state.collapsedGroups, groupId])
+    })),
 
   // 그룹 명시적 펼침 (collapsedGroups에서 제거)
   expandGroup: (groupId) =>
     set((state) => {
-      if (!state.collapsedGroups.has(groupId)) {
-        return state;
-      }
-      const newCollapsedGroups = new Set(state.collapsedGroups);
-      newCollapsedGroups.delete(groupId);
-      return { collapsedGroups: newCollapsedGroups };
+      if (!state.collapsedGroups.has(groupId)) return state;
+      return {
+        collapsedGroups: new Set(
+          [...state.collapsedGroups].filter((id) => id !== groupId)
+        )
+      };
     }),
 
   // 페이지 회전 (기본: 90도 시계 방향, 또는 지정된 각도 추가)
@@ -420,9 +411,13 @@ export const useMergeStore = create<MergeStore>((set) => ({
     set((state) => ({
       files: state.files.map((file) => {
         if (file.id !== fileId) return file;
-        const newPages = [...file.pages];
-        const [movedPage] = newPages.splice(fromIndex, 1);
-        newPages.splice(toIndex, 0, movedPage);
+        const movedPage = file.pages[fromIndex];
+        const withoutMoved = file.pages.filter((_, i) => i !== fromIndex);
+        const newPages = [
+          ...withoutMoved.slice(0, toIndex),
+          movedPage,
+          ...withoutMoved.slice(toIndex)
+        ];
         return { ...file, pages: newPages };
       })
     })),
@@ -442,9 +437,15 @@ export const useMergeStore = create<MergeStore>((set) => ({
         return {
           files: state.files.map((mergeFile) => {
             if (mergeFile.id !== sourceFileId) return mergeFile;
-            const newPages = [...mergeFile.pages];
-            const [movedPage] = newPages.splice(fromIndex, 1);
-            newPages.splice(targetIndex, 0, movedPage);
+            const movedPage = mergeFile.pages[fromIndex];
+            const withoutMoved = mergeFile.pages.filter(
+              (_, i) => i !== fromIndex
+            );
+            const newPages = [
+              ...withoutMoved.slice(0, targetIndex),
+              movedPage,
+              ...withoutMoved.slice(targetIndex)
+            ];
             return { ...mergeFile, pages: newPages };
           })
         };

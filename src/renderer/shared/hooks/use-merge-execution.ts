@@ -4,10 +4,7 @@ import { buildMergeRequest } from "../lib/build-merge-request";
 import { MERGE_STATUS, MERGE_VIEW } from "../model/merge-state";
 import { useMergeStore } from "../model/merge-store";
 import { createPdfDocument } from "../model/pdf-document";
-import type {
-  MergeResult,
-  MergeProgress
-} from "@/main/types/ipc-schema";
+import type { MergeResult, MergeProgress } from "@/main/types/ipc-schema";
 
 export function useMergeExecution() {
   const files = useMergeStore((state) => state.files);

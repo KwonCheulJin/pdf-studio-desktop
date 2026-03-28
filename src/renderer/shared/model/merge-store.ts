@@ -205,11 +205,6 @@ export const useMergeStore = create<MergeStore>((set) => ({
       const fileToMove = state.files.find((f) => f.id === fileId);
       if (!fileToMove) return state;
 
-      // 이동할 파일의 활성 페이지 ID들
-      const movingPageIds = new Set(
-        fileToMove.pages.filter((p) => !p.isDeleted).map((p) => p.id)
-      );
-
       // mergeOrder에서 이동할 파일의 페이지들 제거
       const orderWithoutMovingFile = state.mergeOrder.filter(
         (item) => item.fileId !== fileId
@@ -316,21 +311,16 @@ export const useMergeStore = create<MergeStore>((set) => ({
 
   collapseAll: () =>
     set((state) => {
-      // mergeOrder를 그룹화하여 모든 그룹 ID 수집
-      const groups: { groupId: string }[] = [];
+      const allGroupIds = new Set<string>();
       let currentFileId: string | null = null;
-      let currentGroupId: string | null = null;
 
       for (const item of state.mergeOrder) {
         if (currentFileId !== item.fileId) {
-          // 새 그룹 시작
           currentFileId = item.fileId;
-          currentGroupId = `group_${item.pageId}`;
-          groups.push({ groupId: currentGroupId });
+          allGroupIds.add(`group_${item.pageId}`);
         }
       }
 
-      const allGroupIds = new Set(groups.map((g) => g.groupId));
       return { collapsedGroups: allGroupIds };
     }),
 

@@ -27,7 +27,7 @@ const initialState: SelectionStoreState = {
   lastSelectedId: null
 };
 
-export const useSelectionStore = create<SelectionStore>((set, get) => ({
+export const useSelectionStore = create<SelectionStore>((set) => ({
   ...initialState,
 
   setSelectionType: (type: SelectionType) =>
@@ -122,9 +122,10 @@ export const useSelectionStore = create<SelectionStore>((set, get) => ({
       );
       return {
         selectedIds: newSelectedIds,
-        lastSelectedId: ids.has(state.lastSelectedId ?? "")
-          ? null
-          : state.lastSelectedId
+        lastSelectedId:
+          state.lastSelectedId !== null && ids.has(state.lastSelectedId)
+            ? null
+            : state.lastSelectedId
       };
     }),
 

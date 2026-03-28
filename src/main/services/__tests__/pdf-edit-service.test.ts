@@ -9,11 +9,10 @@ import { PdfEditService } from "../pdf-edit-service";
 
 describe("PdfEditService", () => {
   let service: PdfEditService;
-  let outputDir: string;
 
   beforeEach(async () => {
     service = new PdfEditService();
-    outputDir = await getOutputDir();
+    await getOutputDir();
   });
 
   afterAll(async () => {

@@ -364,11 +364,6 @@ export function FileGrid({
           const key =
             card.type === FLAT_CARD_TYPE.FILE ? card.file.id : card.page.id;
           const groupColor = getGroupColor(card.fileIndex);
-          const isDragging =
-            dragState.draggedCardType === FLAT_CARD_TYPE.FILE
-              ? dragState.draggedFileId === card.file.id
-              : card.type === FLAT_CARD_TYPE.PAGE &&
-                dragState.draggedPageId === card.page.id;
 
           return (
             <GridItemWrapper

@@ -1,7 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { buildMergeRequest } from "../build-merge-request";
-import type { PdfDocument, MergeOrderItem } from "../../model/pdf-document";
-import { PAGE_ROTATION } from "../../constants/page-state";
+import type {
+  PdfDocument,
+  MergeOrderItem
+} from "@/renderer/shared/model/pdf-document";
+import { PAGE_ROTATION } from "@/renderer/shared/constants/page-state";
 
 function createTestDocument(
   id: string,

@@ -1,8 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { flattenFileGrid } from "../flatten-file-grid";
-import type { PdfDocument, PdfPage } from "../../model/pdf-document";
-import { PAGE_ROTATION } from "../../constants/page-state";
-import { FLAT_CARD_TYPE } from "../../constants/flat-card";
+import type {
+  PdfDocument,
+  PdfPage
+} from "@/renderer/shared/model/pdf-document";
+import { PAGE_ROTATION } from "@/renderer/shared/constants/page-state";
+import { FLAT_CARD_TYPE } from "@/renderer/shared/constants/flat-card";
 
 // 테스트용 PdfPage 생성 헬퍼
 function createTestPage(

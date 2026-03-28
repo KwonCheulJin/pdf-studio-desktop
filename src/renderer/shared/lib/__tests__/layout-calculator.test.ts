@@ -26,7 +26,6 @@ function createPositions(
 
 describe("getDropZonePosition", () => {
   const cardSize = 200;
-  const cardHeight = 256;
   const gap = 40;
   const padding = 24;
   const columns = 3;

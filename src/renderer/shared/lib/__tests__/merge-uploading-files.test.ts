@@ -4,9 +4,10 @@ import {
   RENDER_ITEM_TYPE
 } from "../merge-uploading-files";
 import type { FlatCard } from "../flatten-file-grid";
-import type { UploadingFile } from "../../hooks/use-file-drop-zone";
-import type { PdfDocument } from "../../model/pdf-document";
-import { FLAT_CARD_TYPE } from "../../constants/flat-card";
+import type { UploadingFile } from "@/renderer/shared/hooks/use-file-drop-zone";
+import type { PdfDocument } from "@/renderer/shared/model/pdf-document";
+import { FLAT_CARD_TYPE } from "@/renderer/shared/constants/flat-card";
+import { PAGE_ROTATION } from "@/renderer/shared/constants/page-state";
 
 // 테스트용 FlatCard 생성 헬퍼
 function createFileCard(
@@ -24,7 +25,7 @@ function createFileCard(
         id: `page-${id}-0`,
         sourceDocumentId: id,
         sourcePageIndex: 0,
-        rotation: 0,
+        rotation: PAGE_ROTATION.DEG_0,
         isDeleted: false
       }
     ]

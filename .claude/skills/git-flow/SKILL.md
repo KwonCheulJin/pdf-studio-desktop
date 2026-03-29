@@ -113,6 +113,62 @@ git commit -m "feat(merge): implement PDF merge with progress tracking
 
 사용자가 직접 push합니다.
 
+---
+
+## 버전 릴리즈 워크플로우
+
+커밋이 완료된 후 사용자가 버전 업데이트 + push를 요청할 때 사용합니다.
+
+### 버전 타입 선택 기준
+
+| 타입 | 명령어 | 기준 |
+|------|--------|------|
+| `patch` | `pnpm release:patch` | 버그 수정, 소규모 fix |
+| `minor` | `pnpm release:minor` | 새 기능 추가, 하위 호환 변경 |
+| `major` | `pnpm release:major` | Breaking change, 대규모 개편 |
+
+### 릴리즈 단계
+
+**Step 1: 현재 버전 확인**
+
+```bash
+git tag --sort=-version:refname | head -5
+```
+
+**Step 2: 사용자에게 릴리즈 정보 표시 후 승인 요청**
+
+```
+"현재 버전: v1.1.1
+릴리즈할 커밋:
+- feat(merge): ...
+- fix(ipc): ...
+
+minor 버전으로 v1.2.0 릴리즈할까요?
+(package.json 버전 업데이트 + git tag + push 진행)"
+```
+
+**사용자 승인 대기** — 승인 없이 진행 금지
+
+**Step 3: 승인 후 릴리즈 실행**
+
+```bash
+pnpm release:minor   # patch / minor / major 중 선택
+```
+
+이 명령어는 다음을 순서대로 실행합니다:
+1. `package.json` version 필드 업데이트
+2. `git add package.json` + `git commit -m "chore: release v1.2.0"`
+3. `git tag v1.2.0` 생성
+4. `git push origin main --follow-tags`
+
+### 릴리즈 체크리스트
+
+- [ ] 릴리즈할 커밋 목록 사용자에게 표시
+- [ ] 버전 타입(patch/minor/major) 사용자 확인
+- [ ] **사용자 승인 완료**
+- [ ] `pnpm release:<type>` 실행
+- [ ] push 완료 확인
+
 ## 실제 예시
 
 ### 신규 기능

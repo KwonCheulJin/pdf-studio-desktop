@@ -1,7 +1,7 @@
 {
   "name": "pdf-studio-desktop",
   "productName": "pdf-studio-desktop",
-  "version": "1.0.0",
+  "version": "1.2.1",
   "description": "My Electron application description",
   "main": ".vite/build/main.js",
   "scripts": {
@@ -17,7 +17,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "validate": "pnpm lint && pnpm typecheck && pnpm test"
+    "validate": "pnpm lint && pnpm typecheck && pnpm test",
+    "release:patch": "pnpm version patch --no-git-tag-version && node scripts/release.mjs patch",
+    "release:minor": "pnpm version minor --no-git-tag-version && node scripts/release.mjs minor",
+    "release:major": "pnpm version major --no-git-tag-version && node scripts/release.mjs major"
   },
   "keywords": [],
   "author": {

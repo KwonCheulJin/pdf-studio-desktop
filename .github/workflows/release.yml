@@ -77,10 +77,9 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
           files: |
-            artifacts/**/*.dmg
+            artifacts/**/*.zip
             artifacts/**/*.exe
             artifacts/**/*.deb
-            artifacts/**/*.zip
             artifacts/**/*.rpm
           token: ${{ secrets.GH_TOKEN }}
           fail_on_unmatched_files: false

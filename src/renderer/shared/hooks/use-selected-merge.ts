@@ -50,9 +50,7 @@ export function useSelectedMerge(): UseSelectedMergeResult {
       );
     } else {
       // PAGE 모드: 선택된 페이지 ID 기준으로 필터링
-      filteredOrder = mergeOrder.filter((item) =>
-        selectedIds.has(item.pageId)
-      );
+      filteredOrder = mergeOrder.filter((item) => selectedIds.has(item.pageId));
     }
 
     if (filteredOrder.length === 0) return;

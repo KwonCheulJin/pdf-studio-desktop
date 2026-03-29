@@ -2,7 +2,10 @@ import { useCallback } from "react";
 import { RotateCw, Trash2, Undo2, FileText, RotateCcw } from "lucide-react";
 import { cn } from "@/renderer/shared/lib/utils";
 import { Button, Checkbox } from "@/renderer/shared/ui";
-import { useMergeFiles, useMergeStore } from "@/renderer/shared/model/merge-store";
+import {
+  useMergeFiles,
+  useMergeStore
+} from "@/renderer/shared/model/merge-store";
 import {
   useSelectionStore,
   useSelectedIds,

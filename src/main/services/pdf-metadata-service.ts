@@ -22,10 +22,17 @@ export class PdfMetadataService {
   private async getPdfFileInfo(filePath: string): Promise<PdfInfo> {
     const pdfBytes = await fse.readFile(filePath);
     const pdf = await PDFDocument.load(pdfBytes);
+    const pageCount = pdf.getPageCount();
+
+    const pageRotations = Array.from(
+      { length: pageCount },
+      (_, index) => pdf.getPage(index).getRotation().angle
+    );
 
     return {
-      pageCount: pdf.getPageCount(),
-      title: pdf.getTitle()
+      pageCount,
+      title: pdf.getTitle(),
+      pageRotations
     };
   }
 

@@ -99,6 +99,7 @@ export interface ReadPdfResult {
 export interface PdfInfo {
   pageCount: number;
   title?: string;
+  pageRotations?: number[]; // 페이지별 회전값 (0, 90, 180, 270)
 }
 
 // --- Dialog ---

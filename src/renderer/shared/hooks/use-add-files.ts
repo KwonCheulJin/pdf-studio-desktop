@@ -32,7 +32,12 @@ export function useAddFiles(): UseAddFilesResult {
             );
           }
           const pdfInfo = await ipcClient.meta.getPdfInfo(filePath);
-          return createPdfDocument(filePath, pdfInfo.pageCount, pdfInfo.title);
+          return createPdfDocument(
+            filePath,
+            pdfInfo.pageCount,
+            pdfInfo.title,
+            pdfInfo.pageRotations
+          );
         } catch {
           // 메타데이터 가져오기 실패 시 기본값 사용
           return createPdfDocument(filePath, 1);

@@ -1,6 +1,7 @@
 import { app, BrowserWindow, Menu, nativeTheme } from "electron";
 import path from "node:path";
-import started from "electron-squirrel-startup";
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const started = require("electron-squirrel-startup") as boolean;
 import { registerIpcHandlers } from "./ipc-handler";
 import { IPC_CHANNEL } from "../types/ipc-schema";
 import { WINDOW_CONFIG } from "../config/constants";

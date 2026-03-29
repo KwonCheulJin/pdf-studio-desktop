@@ -41,7 +41,8 @@ export async function generateThumbnail(
   const pdf = await loadingTask.promise;
 
   const page = await pdf.getPage(pageNumber);
-  const viewport = page.getViewport({ scale });
+  // rotation: 0 → PDF 내장 회전을 무시. CSS rotate()로만 회전 적용
+  const viewport = page.getViewport({ scale, rotation: 0 });
 
   // Canvas 생성
   const canvas = document.createElement("canvas");
@@ -111,7 +112,8 @@ export async function generateAllPageThumbnails(
 
   for (let pageNum = 1; pageNum <= pageCount; pageNum++) {
     const page = await pdf.getPage(pageNum);
-    const viewport = page.getViewport({ scale });
+    // rotation: 0 → PDF 내장 회전을 무시. CSS rotate()로만 회전 적용
+    const viewport = page.getViewport({ scale, rotation: 0 });
 
     const canvas = document.createElement("canvas");
     const context = canvas.getContext("2d");

@@ -62,15 +62,12 @@ export function usePageRotation(files: PdfDocument[]): UsePageRotationResult {
 
         await Promise.all(
           selectedFiles.map(async (file) => {
-            const pageIndices = Array.from(
-              { length: file.pageCount },
-              (_, index) => index
-            );
-            await ipcClient.edit.apply({
-              filePath: file.path,
-              operations: [{ type: "rotate", pageIndices, rotationDegrees }]
-            });
             for (const page of file.pages) {
+              await ipcClient.edit.rotatePage({
+                filePath: file.path,
+                pageIndex: page.sourcePageIndex,
+                rotationDegrees
+              });
               rotatePage(file.id, page.id, rotationDegrees);
             }
           })

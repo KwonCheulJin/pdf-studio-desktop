@@ -138,8 +138,7 @@ export function registerIpcHandlers(): void {
       const result = await dialog.showOpenDialog({
         properties: ["openFile", "multiSelections"],
         filters: options?.filters ?? [
-          { name: "PDF Files", extensions: ["pdf"] },
-          { name: "TIFF Files", extensions: ["tif", "tiff"] },
+          { name: "지원하는 파일", extensions: ["pdf", "tif", "tiff"] },
           { name: "All Files", extensions: ["*"] }
         ]
       });

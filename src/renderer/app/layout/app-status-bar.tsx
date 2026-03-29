@@ -31,7 +31,11 @@ export function AppStatusBar() {
         <span className="mx-2">|</span>
         전체 페이지: {totalPages}
       </p>
-      <p className="text-muted-foreground text-sm">상태: {statusText}</p>
+      <div className="text-muted-foreground flex items-center gap-3 text-sm">
+        <span>상태: {statusText}</span>
+        <span className="text-muted-foreground/50">|</span>
+        <span>v{__APP_VERSION__}</span>
+      </div>
     </footer>
   );
 }

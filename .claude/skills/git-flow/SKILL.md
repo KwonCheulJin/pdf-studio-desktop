@@ -109,65 +109,56 @@ git commit -m "feat(merge): implement PDF merge with progress tracking
 - Update useMergeCommand hook for IPC integration"
 ```
 
-### Step 4: push 금지
+### Step 4: 커밋 완료 후 버전업 제안 (필수)
 
-사용자가 직접 push합니다.
+커밋이 완료되면 **반드시** 버전업을 이어서 제안합니다.
 
----
+**커밋 타입별 권장 버전 타입:**
 
-## 버전 릴리즈 워크플로우
+| 커밋 타입 | 권장 버전 | 이유 |
+|-----------|-----------|------|
+| `fix` | `patch` | 버그 수정 |
+| `refactor`, `style`, `perf`, `docs`, `chore` | `patch` | 소규모 변경 |
+| `feat` | `minor` | 새 기능 추가 |
+| Breaking change | `major` | 하위 호환 불가 변경 |
 
-커밋이 완료된 후 사용자가 버전 업데이트 + push를 요청할 때 사용합니다.
-
-### 버전 타입 선택 기준
-
-| 타입 | 명령어 | 기준 |
-|------|--------|------|
-| `patch` | `pnpm release:patch` | 버그 수정, 소규모 fix |
-| `minor` | `pnpm release:minor` | 새 기능 추가, 하위 호환 변경 |
-| `major` | `pnpm release:major` | Breaking change, 대규모 개편 |
-
-### 릴리즈 단계
-
-**Step 1: 현재 버전 확인**
-
-```bash
-git tag --sort=-version:refname | head -5
-```
-
-**Step 2: 사용자에게 릴리즈 정보 표시 후 승인 요청**
+**사용자에게 표시할 메시지:**
 
 ```
-"현재 버전: v1.1.1
-릴리즈할 커밋:
-- feat(merge): ...
-- fix(ipc): ...
+"커밋이 완료되었습니다.
 
-minor 버전으로 v1.2.0 릴리즈할까요?
-(package.json 버전 업데이트 + git tag + push 진행)"
+현재 버전: v1.2.1
+권장 버전업: patch → v1.2.2
+(이번 커밋: fix 타입 기준)
+
+버전업 후 push할까요? (patch / minor / major / 건너뛰기)"
 ```
 
 **사용자 승인 대기** — 승인 없이 진행 금지
 
-**Step 3: 승인 후 릴리즈 실행**
+### Step 5: 승인 후 버전업 및 push
 
 ```bash
-pnpm release:minor   # patch / minor / major 중 선택
+pnpm release:patch   # patch / minor / major 중 선택
 ```
 
 이 명령어는 다음을 순서대로 실행합니다:
-1. `package.json` version 필드 업데이트
-2. `git add package.json` + `git commit -m "chore: release v1.2.0"`
-3. `git tag v1.2.0` 생성
+1. `package.json` version 필드 업데이트 (`pnpm version patch --no-git-tag-version`)
+2. `git add package.json` + `git commit -m "chore: release v1.2.2"`
+3. `git tag v1.2.2` 생성
 4. `git push origin main --follow-tags`
 
-### 릴리즈 체크리스트
+**사용자가 "건너뛰기"를 선택한 경우:** push 없이 종료. 사용자가 직접 push합니다.
 
-- [ ] 릴리즈할 커밋 목록 사용자에게 표시
-- [ ] 버전 타입(patch/minor/major) 사용자 확인
-- [ ] **사용자 승인 완료**
-- [ ] `pnpm release:<type>` 실행
-- [ ] push 완료 확인
+---
+
+## 버전업 선택 기준 상세
+
+| 타입 | 명령어 | 기준 |
+|------|--------|------|
+| `patch` | `pnpm release:patch` | 버그 수정, 소규모 fix, 리팩토링 |
+| `minor` | `pnpm release:minor` | 새 기능 추가, 하위 호환 변경 |
+| `major` | `pnpm release:major` | Breaking change, 대규모 개편 |
 
 ## 실제 예시
 
@@ -201,8 +192,9 @@ refactor(store): separate merge store by concern
 - Remove duplicate state management
 ```
 
-## 커밋 전 체크리스트
+## 체크리스트
 
+### 커밋 전
 - [ ] `pnpm typecheck` 성공
 - [ ] `pnpm lint` 오류 없음
 - [ ] 사용자에게 변경 사항 표시
@@ -210,4 +202,9 @@ refactor(store): separate merge store by concern
 - [ ] 커밋 메시지에 제목 + 본문 포함
 - [ ] 본문에 3~5개 bullet point
 - [ ] **Claude Code 저작권 표시 없음**
-- [ ] push 자동 실행 안 함
+
+### 커밋 후 (버전업)
+- [ ] 커밋 타입 기준으로 버전 타입(patch/minor/major) 추천
+- [ ] 현재 버전 및 다음 버전 사용자에게 표시
+- [ ] **사용자 승인 완료**
+- [ ] `pnpm release:<type>` 실행 또는 건너뛰기

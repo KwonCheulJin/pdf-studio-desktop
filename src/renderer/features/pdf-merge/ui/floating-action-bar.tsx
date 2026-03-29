@@ -107,7 +107,7 @@ export function FloatingActionBar({
                 <Trash2 size={16} />
               </Button>
             </Tooltip>
-            {selectionType === SELECTION_TYPE.FILE && selectedCount >= 2 && (
+            {selectedCount >= 2 && (
               <Tooltip content="선택 파일 병합">
                 <Button
                   variant="ghost"

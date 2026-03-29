@@ -17,6 +17,7 @@ interface SelectionStoreActions {
   selectAll: (ids: string[]) => void;
   removeFromSelection: (idOrIds: string | string[]) => void;
   ensurePagesSelected: (pageIds: string[]) => void;
+  switchToPageMode: (fileIds: string[], togglePageId: string) => void;
 }
 
 type SelectionStore = SelectionStoreState & SelectionStoreActions;
@@ -132,7 +133,25 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
   ensurePagesSelected: (pageIds: string[]) =>
     set((state) => ({
       selectedIds: new Set([...state.selectedIds, ...pageIds])
-    }))
+    })),
+
+  switchToPageMode: (fileIds: string[], togglePageId: string) =>
+    set((state) => {
+      const fileIdSet = new Set(fileIds);
+      const pageOnlyIds = new Set(
+        [...state.selectedIds].filter((id) => !fileIdSet.has(id))
+      );
+      if (pageOnlyIds.has(togglePageId)) {
+        pageOnlyIds.delete(togglePageId);
+      } else {
+        pageOnlyIds.add(togglePageId);
+      }
+      return {
+        selectionType: SELECTION_TYPE.PAGE,
+        selectedIds: pageOnlyIds,
+        lastSelectedId: togglePageId
+      };
+    })
 }));
 
 // Selector hooks

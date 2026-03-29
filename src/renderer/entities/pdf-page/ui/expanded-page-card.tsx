@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/renderer/shared/lib/utils";
 import { Button, Checkbox, Tooltip } from "@/renderer/shared/ui";
-import { useMergeStore } from "@/renderer/shared/model/merge-store";
+import { useMergeFiles, useMergeStore } from "@/renderer/shared/model/merge-store";
 import {
   useSelectionStore,
   useSelectedIds,
@@ -71,7 +71,8 @@ export function ExpandedPageCard({
   // Store 직접 접근
   const selectedIds = useSelectedIds();
   const selectionType = useSelectionType();
-  const { select, toggle, setSelectionType } = useSelectionStore();
+  const { toggle, switchToPageMode } = useSelectionStore();
+  const files = useMergeFiles();
   const deletePage = useMergeStore((state) => state.deletePage);
   const toggleGroupExpand = useMergeStore((state) => state.toggleGroupExpand);
 
@@ -90,16 +91,15 @@ export function ExpandedPageCard({
 
   // 체크박스 클릭 핸들러 (selectionType 변경 포함)
   const handleCheckboxChange = useCallback(() => {
-    // 페이지 선택 모드가 아니면 전환
     if (selectionType !== SELECTION_TYPE.PAGE) {
-      setSelectionType(SELECTION_TYPE.PAGE);
-      // 새 모드에서 현재 페이지 선택
-      select(page.id);
+      // FILE 모드에서 전환: 파일 ID 제거 후 PAGE 모드로 전환하면서 이 페이지 토글
+      const fileIds = files.map((f) => f.id);
+      switchToPageMode(fileIds, page.id);
     } else {
       // 이미 페이지 모드면 토글
       toggle(page.id);
     }
-  }, [selectionType, setSelectionType, select, toggle, page.id]);
+  }, [selectionType, files, switchToPageMode, toggle, page.id]);
 
   // 그룹 접기 핸들러
   const handleCollapse = useCallback(

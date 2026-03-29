@@ -3,16 +3,16 @@ import { builtinModules } from "module";
 import fs from "fs-extra";
 import path from "path";
 
-// Sharp 네이티브 모듈과 의존성 복사 플러그인
-function copySharpPlugin(): Plugin {
+// 네이티브 모듈 및 CJS interop 문제 모듈 복사 플러그인
+function copyNativeModulesPlugin(): Plugin {
   return {
-    name: "copy-sharp-binaries",
+    name: "copy-native-modules",
     closeBundle: async () => {
       const buildOutput = path.join(process.cwd(), ".vite", "build");
       const nodeModulesDest = path.join(buildOutput, "node_modules");
 
-      // sharp와 그 의존성들 복사
       const modulesToCopy = [
+        // sharp 네이티브 모듈
         "sharp",
         "@img",
         "detect-libc",
@@ -20,7 +20,12 @@ function copySharpPlugin(): Plugin {
         "color-string",
         "color-name",
         "simple-swizzle",
-        "semver"
+        "semver",
+        // pdf-lib (Rolldown CJS interop 버그 우회)
+        "pdf-lib",
+        "@pdf-lib/standard-fonts",
+        "@pdf-lib/upng",
+        "pako"
       ];
 
       for (const moduleName of modulesToCopy) {
@@ -43,9 +48,10 @@ export default defineConfig({
       external: [
         "electron",
         "sharp",
+        "pdf-lib",
         ...builtinModules.flatMap((m) => [m, `node:${m}`])
       ]
     }
   },
-  plugins: [copySharpPlugin()]
+  plugins: [copyNativeModulesPlugin()]
 });

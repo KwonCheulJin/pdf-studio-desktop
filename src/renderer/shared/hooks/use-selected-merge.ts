@@ -34,20 +34,26 @@ export function useSelectedMerge(): UseSelectedMergeResult {
   const selectionType = useSelectionStore((state) => state.selectionType);
 
   const startSelectedMerge = useCallback(async () => {
-    if (selectionType !== SELECTION_TYPE.FILE || selectedIds.size < 2) return;
+    if (selectedIds.size < 2) return;
 
-    const selectedFileIds = new Set(
-      [...selectedIds].filter((id) =>
-        files.some((candidate) => candidate.id === id)
-      )
-    );
+    let filteredOrder: typeof mergeOrder;
 
-    if (selectedFileIds.size < 2) return;
-
-    // 선택된 파일만 포함하도록 mergeOrder 필터링
-    const filteredOrder = mergeOrder.filter((item) =>
-      selectedFileIds.has(item.fileId)
-    );
+    if (selectionType === SELECTION_TYPE.FILE) {
+      const selectedFileIds = new Set(
+        [...selectedIds].filter((id) =>
+          files.some((candidate) => candidate.id === id)
+        )
+      );
+      if (selectedFileIds.size < 2) return;
+      filteredOrder = mergeOrder.filter((item) =>
+        selectedFileIds.has(item.fileId)
+      );
+    } else {
+      // PAGE 모드: 선택된 페이지 ID 기준으로 필터링
+      filteredOrder = mergeOrder.filter((item) =>
+        selectedIds.has(item.pageId)
+      );
+    }
 
     if (filteredOrder.length === 0) return;
 

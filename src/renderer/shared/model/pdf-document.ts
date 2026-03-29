@@ -1,6 +1,6 @@
 // PDF 문서 도메인 타입
 
-import { PAGE_ROTATION, type PageRotation } from "../constants/page-state";
+import type { PageRotation } from "../constants/page-state";
 
 /**
  * 병합 순서 아이템
@@ -33,17 +33,29 @@ export interface PdfDocument {
 export function createPdfDocument(
   path: string,
   pageCount: number,
-  title?: string
+  title?: string,
+  pageRotations?: number[]
 ): PdfDocument {
   const documentId = crypto.randomUUID();
   const name = path?.split("/").pop() ?? path ?? "Unknown";
-  const pages: PdfPage[] = Array.from({ length: pageCount }, (_, index) => ({
-    id: crypto.randomUUID(),
-    sourceDocumentId: documentId,
-    sourcePageIndex: index,
-    rotation: PAGE_ROTATION.DEG_0,
-    isDeleted: false
-  }));
+  const pages: PdfPage[] = Array.from({ length: pageCount }, (_, index) => {
+    const rawRotation = pageRotations?.[index] ?? 0;
+    const rotation = (
+      rawRotation === 0 ||
+      rawRotation === 90 ||
+      rawRotation === 180 ||
+      rawRotation === 270
+        ? rawRotation
+        : 0
+    ) as PageRotation;
+    return {
+      id: crypto.randomUUID(),
+      sourceDocumentId: documentId,
+      sourcePageIndex: index,
+      rotation,
+      isDeleted: false
+    };
+  });
 
   return {
     id: documentId,

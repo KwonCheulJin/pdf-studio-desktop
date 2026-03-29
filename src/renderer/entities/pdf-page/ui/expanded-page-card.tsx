@@ -9,7 +9,10 @@ import {
 } from "lucide-react";
 import { cn } from "@/renderer/shared/lib/utils";
 import { Button, Checkbox, Tooltip } from "@/renderer/shared/ui";
-import { useMergeFiles, useMergeStore } from "@/renderer/shared/model/merge-store";
+import {
+  useMergeFiles,
+  useMergeStore
+} from "@/renderer/shared/model/merge-store";
 import {
   useSelectionStore,
   useSelectedIds,

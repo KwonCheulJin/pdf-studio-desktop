@@ -80,7 +80,8 @@ export function useDroppedFiles(): UseDroppedFilesResult {
             return createPdfDocument(
               filePath,
               pdfInfo.pageCount,
-              pdfInfo.title
+              pdfInfo.title,
+              pdfInfo.pageRotations
             );
           } catch {
             // 메타데이터 가져오기 실패 시 기본값 사용

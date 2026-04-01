@@ -1,5 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { Toaster } from "sonner";
 import { AppShell } from "./layout/app-shell";
 import "../styles/index.css";
 
@@ -34,5 +35,6 @@ if (!container) {
 createRoot(container).render(
   <StrictMode>
     <AppShell />
+    <Toaster theme="system" position="bottom-right" richColors />
   </StrictMode>
 );

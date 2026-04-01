@@ -5,6 +5,7 @@ import path from "node:path";
 import { app } from "electron";
 import type { ConvertResult } from "../types/ipc-schema";
 import { APP_CONFIG } from "../config/constants";
+import { writeFileWithRetry } from "../utils/retry-write";
 
 export interface ConvertOptions {
   tiffPath: string;
@@ -31,7 +32,7 @@ export class FileConverterService {
     const outputPath = this.generateOutputPath(tiffPath, outputDir);
 
     await fse.ensureDir(path.dirname(outputPath));
-    await fse.writeFile(outputPath, pdfBytes);
+    await writeFileWithRetry({ filePath: outputPath, data: pdfBytes });
 
     return {
       outputPdfPath: outputPath,

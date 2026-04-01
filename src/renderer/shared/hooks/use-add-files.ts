@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { toast } from "sonner";
 import { useMergeStore } from "@/renderer/shared/model/merge-store";
 import { createPdfDocument } from "@/renderer/shared/model/pdf-document";
 import { ipcClient } from "@/renderer/shared/lib/ipc-client";
@@ -20,7 +21,7 @@ export function useAddFiles(): UseAddFilesResult {
     const filePaths = await ipcClient.dialog.open();
     if (filePaths.length === 0) return;
 
-    const documents = await Promise.all(
+    const documentsOrNull = await Promise.all(
       filePaths.map(async (filePath) => {
         try {
           if (isTiffFile(filePath)) {
@@ -38,11 +39,19 @@ export function useAddFiles(): UseAddFilesResult {
             pdfInfo.title,
             pdfInfo.pageRotations
           );
-        } catch {
-          // 메타데이터 가져오기 실패 시 기본값 사용
-          return createPdfDocument(filePath, 1);
+        } catch (error) {
+          const fileName = getFileBaseName(filePath);
+          ipcClient.log.error(`파일 로드 실패: ${filePath} - ${String(error)}`);
+          toast.error(`"${fileName}" 파일을 열 수 없습니다.`, {
+            description: String(error)
+          });
+          return null;
         }
       })
+    );
+
+    const documents = documentsOrNull.filter(
+      (doc): doc is NonNullable<typeof doc> => doc !== null
     );
 
     addFiles(documents);

@@ -6,6 +6,7 @@ import type {
   RotatePageRequest
 } from "../types/ipc-schema";
 import { ROTATION_DEGREES } from "../types/ipc-schema";
+import { writeFileWithRetry } from "../utils/retry-write";
 
 export interface EditOptions {
   filePath: string;
@@ -31,7 +32,7 @@ export class PdfEditService {
     page.setRotation(degrees(newRotation));
 
     const modifiedBytes = await pdf.save();
-    await fse.writeFile(filePath, modifiedBytes);
+    await writeFileWithRetry({ filePath, data: modifiedBytes });
   }
 
   async applyOperations(options: EditOptions): Promise<void> {
@@ -45,7 +46,7 @@ export class PdfEditService {
     }
 
     const modifiedBytes = await pdf.save();
-    await fse.writeFile(filePath, modifiedBytes);
+    await writeFileWithRetry({ filePath, data: modifiedBytes });
   }
 
   private async applyOperation(

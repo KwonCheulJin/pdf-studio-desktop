@@ -11,8 +11,8 @@ interface UsePageRotateHandlersParams {
 }
 
 interface UsePageRotateHandlersResult {
-  handleRotateCw: (event: React.MouseEvent) => Promise<void>;
-  handleRotateCcw: (event: React.MouseEvent) => Promise<void>;
+  handleRotateCw: (event: React.MouseEvent) => void;
+  handleRotateCcw: (event: React.MouseEvent) => void;
 }
 
 /**
@@ -27,39 +27,39 @@ export function usePageRotateHandlers({
   const rotatePage = useMergeStore((state) => state.rotatePage);
 
   const handleRotateCw = useCallback(
-    async (event: React.MouseEvent) => {
+    (event: React.MouseEvent) => {
       event.stopPropagation();
-      try {
-        await ipcClient.edit.rotatePage({
+      rotatePage(fileId, page.id, ROTATION_DEGREES.CW_90);
+      ipcClient.edit
+        .rotatePage({
           filePath,
           pageIndex: page.sourcePageIndex,
           rotationDegrees: ROTATION_DEGREES.CW_90
+        })
+        .catch((error: unknown) => {
+          ipcClient.log.error(
+            `페이지 회전 파일 저장 실패: 페이지 ${page.sourcePageIndex + 1} - ${String(error)}`
+          );
         });
-        rotatePage(fileId, page.id, ROTATION_DEGREES.CW_90);
-      } catch (error) {
-        ipcClient.log.error(
-          `페이지 회전 실패: 페이지 ${page.sourcePageIndex + 1} - ${String(error)}`
-        );
-      }
     },
     [fileId, page.id, page.sourcePageIndex, filePath, rotatePage]
   );
 
   const handleRotateCcw = useCallback(
-    async (event: React.MouseEvent) => {
+    (event: React.MouseEvent) => {
       event.stopPropagation();
-      try {
-        await ipcClient.edit.rotatePage({
+      rotatePage(fileId, page.id, ROTATION_DEGREES.CW_270);
+      ipcClient.edit
+        .rotatePage({
           filePath,
           pageIndex: page.sourcePageIndex,
           rotationDegrees: ROTATION_DEGREES.CW_270
+        })
+        .catch((error: unknown) => {
+          ipcClient.log.error(
+            `페이지 회전 파일 저장 실패: 페이지 ${page.sourcePageIndex + 1} - ${String(error)}`
+          );
         });
-        rotatePage(fileId, page.id, ROTATION_DEGREES.CW_270);
-      } catch (error) {
-        ipcClient.log.error(
-          `페이지 회전 실패: 페이지 ${page.sourcePageIndex + 1} - ${String(error)}`
-        );
-      }
     },
     [fileId, page.id, page.sourcePageIndex, filePath, rotatePage]
   );

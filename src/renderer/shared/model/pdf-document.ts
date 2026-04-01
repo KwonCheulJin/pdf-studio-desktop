@@ -37,7 +37,7 @@ export function createPdfDocument(
   pageRotations?: number[]
 ): PdfDocument {
   const documentId = crypto.randomUUID();
-  const name = path?.split("/").pop() ?? path ?? "Unknown";
+  const name = path?.split(/[/\\]/).pop() ?? path ?? "Unknown";
   const pages: PdfPage[] = Array.from({ length: pageCount }, (_, index) => {
     const rawRotation = pageRotations?.[index] ?? 0;
     const rotation = (

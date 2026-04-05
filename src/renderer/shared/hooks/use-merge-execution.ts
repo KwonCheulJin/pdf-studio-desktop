@@ -1,12 +1,15 @@
 import { useCallback, useEffect } from "react";
+import { useErrorSnapshot } from "@kwoncheulJin/error-snapshot";
 import { ipcClient } from "../lib/ipc-client";
 import { buildMergeRequest } from "../lib/build-merge-request";
+import { getErrorSnapshot } from "../lib/error-snapshot";
 import { MERGE_STATUS, MERGE_VIEW } from "../model/merge-state";
 import { useMergeStore } from "../model/merge-store";
 import { createPdfDocument } from "../model/pdf-document";
 import type { MergeResult, MergeProgress } from "@/main/types/ipc-schema";
 
 export function useMergeExecution() {
+  const { captureError } = useErrorSnapshot(getErrorSnapshot());
   const files = useMergeStore((state) => state.files);
   const mergeOrder = useMergeStore((state) => state.mergeOrder);
   const setStatus = useMergeStore((state) => state.setStatus);
@@ -64,10 +67,17 @@ export function useMergeExecution() {
 
     try {
       await ipcClient.merge.start(request);
-    } catch {
+    } catch (error) {
       setError("병합 요청에 실패했습니다.");
       setStatus(MERGE_STATUS.ERROR);
       setProgress(0);
+      // Error Snapshot 캡처 (병합 실패 정보 포함)
+      const err = error instanceof Error ? error : new Error(String(error));
+      captureError(err, {
+        source: "merge",
+        fileCount: files.length,
+        mergeOrderCount: mergeOrder.length,
+      });
     }
   }, [
     files,

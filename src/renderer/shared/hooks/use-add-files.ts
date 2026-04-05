@@ -1,9 +1,11 @@
 import { useCallback } from "react";
 import { toast } from "sonner";
+import { useErrorSnapshot } from "@kwoncheulJin/error-snapshot";
 import { useMergeStore } from "@/renderer/shared/model/merge-store";
 import { createPdfDocument } from "@/renderer/shared/model/pdf-document";
 import { ipcClient } from "@/renderer/shared/lib/ipc-client";
 import { isTiffFile, getFileBaseName } from "@/renderer/shared/lib/file-utils";
+import { getErrorSnapshot } from "@/renderer/shared/lib/error-snapshot";
 
 interface UseAddFilesResult {
   handleAddFiles: () => Promise<void>;
@@ -16,6 +18,7 @@ interface UseAddFilesResult {
  */
 export function useAddFiles(): UseAddFilesResult {
   const addFiles = useMergeStore((state) => state.addFiles);
+  const { captureError } = useErrorSnapshot(getErrorSnapshot());
 
   const handleAddFiles = useCallback(async () => {
     const filePaths = await ipcClient.dialog.open();
@@ -45,6 +48,9 @@ export function useAddFiles(): UseAddFilesResult {
           toast.error(`"${fileName}" 파일을 열 수 없습니다.`, {
             description: String(error)
           });
+          // Error Snapshot 캡처 (파일 로드 실패 정보 포함)
+          const err = error instanceof Error ? error : new Error(String(error));
+          captureError(err, { source: "file-load", filePath, fileName });
           return null;
         }
       })

@@ -27,9 +27,12 @@ jobs:
         with:
           node-version: 22.x
           cache: pnpm
+          registry-url: "https://npm.pkg.github.com"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Build packages (forge make)
         run: pnpm make

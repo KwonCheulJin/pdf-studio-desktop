@@ -235,7 +235,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 | 20 | P2-5 페이지 짝짓기 | `feat/compare-page-pairs` | 페이지 삽입·삭제 픽스처에서 짝이 맞음 | [x] |
 | 21 | P2-6 옵션 | `feat/compare-options` | A·B 따로 페이지 범위(초과 시 `InvalidRange`), 머리말·꼬리말·쪽번호 따로 제외, 대소문자 무시 테스트 통과 | [x] |
 | 22 | P2-7 작업 실행기 | `feat/compare-runner` | 6단계 `Progress` 이벤트(단계별 %·전체 %, 1% 단위, 100%는 끝났을 때만), 취소(추출·OCR은 쪽마다 확인), 옵션만 바꾼 재실행에서 추출·OCR 생략(그 단계 즉시 100%), OCR 대상 쪽이 없으면 `ocr` 단계 즉시 100% | [x] |
-| 23 | P2-8 리포트 내보내기 | `feat/compare-report` | 비교 PDF(배치 3종, 차이 쪽만, 색 상자)와 주석 PDF 생성, 미리보기 렌더 | [ ] |
+| 23 | P2-8 리포트 내보내기 | `feat/compare-report` | 비교 PDF(배치 3종, 차이 쪽만, 색 상자)와 주석 PDF 생성, 미리보기 렌더 | [x] |
 
 - 읽을 곳: 계획서 §6 전체. Step 17의 좌표 일치는 이후 모든 하이라이트의 기반이므로 건너뛰지 않는다. Step 17-a·19-a는 §6.4.
 

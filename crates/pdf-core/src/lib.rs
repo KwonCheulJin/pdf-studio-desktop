@@ -1,14 +1,5 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+//! PDF 처리 도메인. Tauri·웹뷰에 의존하지 않는다.
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+mod engine;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub use engine::{EngineError, PdfEngine};

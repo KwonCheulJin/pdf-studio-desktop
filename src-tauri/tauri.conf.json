@@ -35,6 +35,11 @@
     ],
     "android": {
       "debugApplicationIdSuffix": ".debug"
+    },
+    "macOS": {
+      "frameworks": ["pdfium/aarch64-apple-darwin/libpdfium.dylib"],
+      "signingIdentity": "-",
+      "entitlements": "./Entitlements.plist"
     }
   }
 }

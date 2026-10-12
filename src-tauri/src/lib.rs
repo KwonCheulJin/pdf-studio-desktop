@@ -1,3 +1,5 @@
+mod pdf_engine;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -9,6 +11,7 @@ pub fn run() {
                         .build(),
                 )?;
             }
+            pdf_engine::bind_bundled(app);
             Ok(())
         })
         .run(tauri::generate_context!())

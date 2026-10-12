@@ -5,6 +5,7 @@ mod document;
 mod engine;
 mod info;
 mod merge;
+mod ocr;
 mod output;
 mod tiff;
 
@@ -20,6 +21,10 @@ pub use info::{PageBox, PageInfo, PageRotation, PdfInfo, read_pdf_info};
 pub use merge::{
     MAX_MERGE_FILES, MergeError, MergePage, MergeProgress, MergeRequest, MergeResult, MergeSource,
     MergeStage, merge_pdfs,
+};
+pub use ocr::{
+    OCR_DET_MAX_SIDE, OCR_RENDER_DPI, OcrChar, OcrEngine, OcrError, OcrLine, Quad,
+    render_page_for_ocr,
 };
 pub use output::{SaveError, copy_atomically};
 pub use tiff::{MAX_TIFF_PAGE_PIXELS, TiffConversion, TiffConversionError, convert_tiff};

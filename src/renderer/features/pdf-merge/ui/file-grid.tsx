@@ -1,10 +1,18 @@
-import React, {
-  useMemo,
-  useCallback,
-  useRef,
-  useState,
-  useEffect
-} from "react";
+import { useMemo, useCallback, useRef, useState, useEffect } from "react";
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  rectSortingStrategy,
+  sortableKeyboardCoordinates
+} from "@dnd-kit/sortable";
 import {
   useMergeStore,
   useMergeOrder,
@@ -12,28 +20,33 @@ import {
   type PdfDocument
 } from "@/renderer/entities/merge-plan";
 import { useResponsiveGridLayout } from "@/renderer/shared/lib/use-responsive-grid-layout";
+import {
+  calculateDropIndex,
+  type GridPosition
+} from "@/renderer/shared/lib/layout-calculator";
 import { getGroupColor } from "@/renderer/shared/constants/group-colors";
 import { GRID_CONFIG } from "@/renderer/shared/constants/grid-layout";
-import {
-  GridItemWrapper,
-  ReorderDropZone,
-  DropZoneIndicator,
-  InsertionLine
-} from "@/renderer/shared/ui";
-import {
-  getDropZonePosition as calcDropZonePosition,
-  getDropZoneWidth as calcDropZoneWidth,
-  getInsertionLinePosition as calcInsertionLinePosition
-} from "@/renderer/shared/lib/layout-calculator";
-import { useUnifiedDrag } from "../model/use-unified-drag";
+import { GridItemWrapper, DropZoneIndicator } from "@/renderer/shared/ui";
 import { useFileDropZone } from "../model/use-file-drop-zone";
 import { useCardSize } from "../model/zoom-store";
 import { flattenFileGrid, type FlatCard } from "../lib/flatten-file-grid";
-import { mergeUploadingFiles } from "../lib/merge-uploading-files";
+import {
+  mergeUploadingFiles,
+  RENDER_ITEM_TYPE
+} from "../lib/merge-uploading-files";
+import { getCardLabel, getCardSortId, resolveCardMove } from "../lib/card-move";
+import {
+  createReorderAnnouncements,
+  REORDER_INSTRUCTIONS
+} from "../lib/reorder-announcements";
 import { FLAT_CARD_TYPE } from "../config/flat-card";
 import { DocumentCard } from "./document-card";
 import { ExpandedPageCard } from "./expanded-page-card";
+import { SortableCard } from "./sortable-card";
 import { UploadingCard } from "./uploading-card";
+
+/** 이만큼 움직여야 포인터 드래그가 시작된다. 카드 안 버튼·체크박스 클릭과 구분한다. */
+const POINTER_ACTIVATION_DISTANCE_PX = 5;
 
 interface FileGridProps {
   files: PdfDocument[];
@@ -85,117 +98,100 @@ export function FileGrid({
     [files, mergeOrder, collapsedGroups]
   );
 
-  // 통합 드래그 훅
+  const sortIds = useMemo(() => flatCards.map(getCardSortId), [flatCards]);
+
+  const accessibility = useMemo(
+    () => ({
+      announcements: createReorderAnnouncements({
+        sortIds,
+        labels: new Map(
+          flatCards.map((card) => [getCardSortId(card), getCardLabel(card)])
+        )
+      }),
+      screenReaderInstructions: REORDER_INSTRUCTIONS
+    }),
+    [flatCards, sortIds]
+  );
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: POINTER_ACTIVATION_DISTANCE_PX }
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates
+    })
+  );
+
+  const handleDragEnd = useCallback(
+    ({ active, over }: DragEndEvent) => {
+      if (!over) return;
+      const move = resolveCardMove({
+        flatCards,
+        activeIndex: sortIds.indexOf(String(active.id)),
+        overIndex: sortIds.indexOf(String(over.id))
+      });
+      if (!move) return;
+      if (move.type === FLAT_CARD_TYPE.FILE) {
+        insertFileAtPosition({
+          fileId: move.fileId,
+          targetPageId: move.targetPageId
+        });
+      } else {
+        movePageInMergeOrder({
+          pageId: move.pageId,
+          targetPageId: move.targetPageId
+        });
+      }
+    },
+    [flatCards, sortIds, insertFileAtPosition, movePageInMergeOrder]
+  );
+
+  // 카드만 놓은 기본 레이아웃 (드롭 자리 계산용)
   const {
-    dragState,
-    handleCardDragStart,
-    handleCardDragEnd,
-    handleDropZoneDragOver,
-    handleDropZoneDragLeave,
-    handleDropZoneDrop
-  } = useUnifiedDrag({
-    flatCards,
-    onInsertFileAtPosition: insertFileAtPosition,
-    onMovePageInMergeOrder: movePageInMergeOrder
-  });
-
-  // 드래그 상태
-  const isCardDragging = dragState.isDragging;
-
-  // 활성 드롭 인덱스 결정
-  const activeDropIndexForLayout = useMemo(() => {
-    if (!isCardDragging) return null;
-    return dragState.dropTargetFlatIndex;
-  }, [isCardDragging, dragState.dropTargetFlatIndex]);
-
-  // 반응형 레이아웃 계산 (기본)
-  const { columns, cardSize, cardHeight, imageSize } = useResponsiveGridLayout({
-    itemsCount: flatCards.length,
-    viewportWidth: containerWidth,
-    activeDropIndex: activeDropIndexForLayout,
-    userCardSize
-  });
-
-  // 파일 드롭 관련 훅 (columns와 flatCards.length 필요)
-  const {
-    isFileDragOver,
-    activeDropIndex: fileDropIndex,
-    uploadingFiles,
-    handleFileDragOver,
-    handleFileDragLeave,
-    handleFileDrop
-  } = useFileDropZone({
-    containerRef,
     columns,
-    itemsCount: flatCards.length,
     cardSize,
-    cardHeight
-  });
-
-  // 파일 드래그 시 활성 드롭 인덱스
-  const activeDropIndexForFileUpload = isFileDragOver ? fileDropIndex : null;
-
-  // 업로드 중인 파일 포함한 전체 아이템 수
-  const totalItemsCount = flatCards.length + uploadingFiles.length;
-
-  // 최종 레이아웃 계산 (업로드 중인 파일 포함 + 파일 드래그 시 갭 확장)
-  const { positions, containerHeight } = useResponsiveGridLayout({
-    itemsCount: totalItemsCount,
+    cardHeight,
+    imageSize,
+    positions: cardPositions
+  } = useResponsiveGridLayout({
+    itemsCount: flatCards.length,
     viewportWidth: containerWidth,
-    activeDropIndex: activeDropIndexForFileUpload ?? activeDropIndexForLayout,
     userCardSize
   });
 
-  // ReorderDropZone 위치 계산 함수 (gap + 카드 왼쪽 절반 영역)
-  const getDropZonePosition = useCallback(
-    (index: number) =>
-      calcDropZonePosition({
-        index,
-        positions,
-        flatCardsLength: flatCards.length,
-        cardSize,
-        gap: GRID_CONFIG.GAP,
-        padding: GRID_CONFIG.PADDING
-      }),
-    [positions, flatCards.length, cardSize]
-  );
+  const resolveDropIndex = (point: GridPosition): number =>
+    calculateDropIndex({
+      point,
+      positions: cardPositions,
+      cardWidth: cardSize,
+      cardHeight,
+      gap: GRID_CONFIG.GAP
+    });
 
-  // 드롭존 폭 계산 함수 (첫 번째 카드는 gap 없음)
-  const getDropZoneWidth = useCallback(
-    (index: number) =>
-      calcDropZoneWidth({
-        index,
-        cardSize,
-        gap: GRID_CONFIG.GAP,
-        flatCardsLength: flatCards.length
-      }),
-    [cardSize, flatCards.length]
-  );
+  // 창 밖에서 끌어온 파일
+  const { activeDropIndex, uploadingFiles } = useFileDropZone({
+    containerRef,
+    resolveDropIndex,
+    flatCards
+  });
 
-  // 삽입선 위치 계산 함수 (카드 왼쪽 가장자리)
-  const getInsertionLinePosition = useCallback(
-    (index: number) =>
-      calcInsertionLinePosition({
-        index,
-        positions,
-        flatCardsLength: flatCards.length,
-        cardSize,
-        gap: GRID_CONFIG.GAP,
-        padding: GRID_CONFIG.PADDING,
-        insertionLineOffset: GRID_CONFIG.INSERTION_LINE_OFFSET
-      }),
-    [positions, flatCards.length, cardSize]
-  );
+  // 최종 레이아웃 (업로드 중인 파일 포함 + 파일 드래그 시 갭 확장)
+  const { positions, containerHeight } = useResponsiveGridLayout({
+    itemsCount: flatCards.length + uploadingFiles.length,
+    viewportWidth: containerWidth,
+    activeDropIndex,
+    userCardSize
+  });
 
   // DropZoneIndicator 위치 계산 (외부 파일 드래그 시 확장된 갭 영역 중앙)
   const dropZoneIndicatorPosition = useMemo(() => {
-    if (activeDropIndexForFileUpload === null) return null;
+    if (activeDropIndex === null) return null;
 
     const { GAP, EXPANSION_OFFSET, DROP_INDICATOR_OFFSET } = GRID_CONFIG;
-    const col = activeDropIndexForFileUpload % columns;
+    const column = activeDropIndex % columns;
 
     // 현재 카드 위치 (확장된 상태)
-    const currentCardPos = positions[activeDropIndexForFileUpload];
+    const currentCardPos = positions[activeDropIndex];
     if (!currentCardPos) return null;
 
     // 확장된 갭 영역의 너비 = 기본 GAP + EXPANSION_OFFSET
@@ -203,12 +199,12 @@ export function FileGrid({
 
     let indicatorX: number;
 
-    if (col === 0) {
+    if (column === 0) {
       // 첫 번째 칸: 카드 왼쪽에 배치 (갭 없음)
       indicatorX = currentCardPos.x - expandedGapWidth / 2;
     } else {
       // 이전 카드 위치 가져오기
-      const prevCardPos = positions[activeDropIndexForFileUpload - 1];
+      const prevCardPos = positions[activeDropIndex - 1];
       if (prevCardPos) {
         // 이전 카드 오른쪽 끝과 현재 카드 왼쪽 끝 사이의 중앙
         const prevCardRightX = prevCardPos.x + cardSize;
@@ -224,15 +220,7 @@ export function FileGrid({
       y: currentCardPos.y,
       width: expandedGapWidth
     };
-  }, [activeDropIndexForFileUpload, positions, columns, cardSize]);
-
-  // 내부 카드 드래그 시 삽입선 위치 계산
-  const cardDragInsertionIndex = useMemo(() => {
-    if (isCardDragging && dragState.dropTargetFlatIndex !== null) {
-      return dragState.dropTargetFlatIndex;
-    }
-    return null;
-  }, [isCardDragging, dragState.dropTargetFlatIndex]);
+  }, [activeDropIndex, positions, columns, cardSize]);
 
   // 실제 렌더링할 카드와 업로드 중인 카드를 합친 배열 생성
   const renderItems = useMemo(
@@ -241,149 +229,90 @@ export function FileGrid({
   );
 
   return (
-    <>
-      {/* 절대 좌표 기반 그리드 컨테이너 */}
-      <div
-        ref={containerRef}
-        className="relative w-full"
-        style={{ height: containerHeight > 0 ? containerHeight : "auto" }}
-        onDragOver={handleFileDragOver}
-        onDragLeave={handleFileDragLeave}
-        onDrop={handleFileDrop}
-      >
-        {/* ReorderDropZones - 통합 드래그 시스템 (flatCards 인덱스 사용) */}
-        {isCardDragging &&
-          flatCards.map((_, flatIndex) => {
-            const dropZonePos = getDropZonePosition(flatIndex);
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      accessibility={accessibility}
+      onDragEnd={handleDragEnd}
+    >
+      <SortableContext items={sortIds} strategy={rectSortingStrategy}>
+        {/* 절대 좌표 기반 그리드 컨테이너 */}
+        <div
+          ref={containerRef}
+          className="relative w-full"
+          style={{ height: containerHeight > 0 ? containerHeight : "auto" }}
+        >
+          {/* DropZoneIndicator - 외부 파일 드래그 시 CirclePlus 표시 */}
+          {dropZoneIndicatorPosition && (
+            <DropZoneIndicator
+              position={{
+                x: dropZoneIndicatorPosition.x,
+                y: dropZoneIndicatorPosition.y
+              }}
+              height={cardHeight}
+              width={dropZoneIndicatorPosition.width}
+            />
+          )}
+
+          {/* 카드 및 업로드 중인 파일 렌더링 */}
+          {renderItems.map((item) => {
+            const position = positions[item.positionIndex] ?? { x: 0, y: 0 };
+
+            if (item.type === RENDER_ITEM_TYPE.UPLOADING) {
+              return (
+                <GridItemWrapper
+                  key={`uploading-${item.file.id}`}
+                  position={position}
+                  cardWidth={cardSize}
+                  cardHeight={cardHeight}
+                >
+                  <UploadingCard fileName={item.file.name} />
+                </GridItemWrapper>
+              );
+            }
+
+            const card = item.card;
+            const sortId = getCardSortId(card);
+            const groupColor = getGroupColor(card.fileIndex);
+
             return (
-              <ReorderDropZone
-                key={`dropzone-${flatIndex}`}
-                index={flatIndex}
-                isDragging={isCardDragging}
-                draggedIndex={dragState.draggedFlatIndex}
-                position={dropZonePos}
-                height={cardHeight}
-                width={getDropZoneWidth(flatIndex)}
-                onDragOver={handleDropZoneDragOver}
-                onDragLeave={handleDropZoneDragLeave}
-                onDrop={handleDropZoneDrop}
-              />
+              <SortableCard
+                key={sortId}
+                id={sortId}
+                label={getCardLabel(card)}
+                position={position}
+                cardWidth={cardSize}
+                cardHeight={cardHeight}
+              >
+                {card.type === FLAT_CARD_TYPE.FILE ? (
+                  <DocumentCard
+                    document={card.file}
+                    groupId={card.groupId}
+                    groupPageIds={card.groupPageIds}
+                    imageSize={imageSize}
+                    isStacked={true}
+                    onPreview={onPreviewFile}
+                  />
+                ) : (
+                  <ExpandedPageCard
+                    fileId={card.file.id}
+                    filePath={card.file.path}
+                    page={card.page}
+                    pageNumber={card.page.sourcePageIndex + 1}
+                    fileName={card.file.name}
+                    imageSize={imageSize}
+                    groupColor={groupColor}
+                    groupId={card.groupId}
+                    showCollapseButton={card.isFirstOfGroup}
+                    isStacked={card.isFirstOfGroup}
+                    onPreview={onPreviewPage}
+                  />
+                )}
+              </SortableCard>
             );
           })}
-
-        {/* 마지막 ReorderDropZone */}
-        {isCardDragging && flatCards.length > 0 && (
-          <ReorderDropZone
-            index={flatCards.length}
-            isDragging={isCardDragging}
-            draggedIndex={dragState.draggedFlatIndex}
-            position={getDropZonePosition(flatCards.length)}
-            height={cardHeight}
-            width={getDropZoneWidth(flatCards.length)}
-            onDragOver={handleDropZoneDragOver}
-            onDragLeave={handleDropZoneDragLeave}
-            onDrop={handleDropZoneDrop}
-          />
-        )}
-
-        {/* InsertionLine - 내부 카드 드래그 시 삽입 위치 표시 */}
-        {cardDragInsertionIndex !== null && (
-          <InsertionLine
-            position={getInsertionLinePosition(cardDragInsertionIndex)}
-            height={cardHeight}
-            isActive={true}
-          />
-        )}
-
-        {/* DropZoneIndicator - 외부 파일 드래그 시 CirclePlus 표시 */}
-        {dropZoneIndicatorPosition && (
-          <DropZoneIndicator
-            position={{
-              x: dropZoneIndicatorPosition.x,
-              y: dropZoneIndicatorPosition.y
-            }}
-            height={cardHeight}
-            width={dropZoneIndicatorPosition.width}
-            isActive={isFileDragOver}
-            isFileDragging={isFileDragOver}
-            onDragOver={(e) =>
-              handleFileDragOver(e as React.DragEvent<HTMLDivElement>)
-            }
-            onDragLeave={() => {
-              // 컨테이너의 onDragLeave가 처리하므로 여기서는 no-op
-            }}
-            onDrop={(e) => handleFileDrop(e as React.DragEvent<HTMLDivElement>)}
-          />
-        )}
-
-        {/* 카드 및 업로드 중인 파일 렌더링 */}
-        {renderItems.map((item) => {
-          const position = positions[item.positionIndex] ?? { x: 0, y: 0 };
-
-          if (item.type === "uploading") {
-            return (
-              <div
-                key={`uploading-${item.file.id}`}
-                className="absolute transition-transform duration-200 ease-out"
-                style={{
-                  transform: `translate3d(${position.x}px, ${position.y}px, 0)`,
-                  width: cardSize,
-                  height: cardHeight
-                }}
-              >
-                <UploadingCard fileName={item.file.name} />
-              </div>
-            );
-          }
-
-          const card = item.card;
-          const key =
-            card.type === FLAT_CARD_TYPE.FILE ? card.file.id : card.page.id;
-          const groupColor = getGroupColor(card.fileIndex);
-
-          return (
-            <GridItemWrapper
-              key={key}
-              position={position}
-              cardWidth={cardSize}
-              cardHeight={cardHeight}
-            >
-              {card.type === FLAT_CARD_TYPE.FILE ? (
-                <DocumentCard
-                  document={card.file}
-                  groupId={card.groupId}
-                  groupPageIds={card.groupPageIds}
-                  imageSize={imageSize}
-                  flatIndex={card.flatIndex}
-                  isStacked={true}
-                  isDragging={dragState.draggedFileId === card.file.id}
-                  onPreview={onPreviewFile}
-                  onDragStart={handleCardDragStart}
-                  onDragEnd={handleCardDragEnd}
-                />
-              ) : (
-                <ExpandedPageCard
-                  fileId={card.file.id}
-                  filePath={card.file.path}
-                  page={card.page}
-                  pageNumber={card.page.sourcePageIndex + 1}
-                  flatIndex={card.flatIndex}
-                  fileName={card.file.name}
-                  imageSize={imageSize}
-                  groupColor={groupColor}
-                  groupId={card.groupId}
-                  showCollapseButton={card.isFirstOfGroup}
-                  isStacked={card.isFirstOfGroup}
-                  isDragging={dragState.draggedFileId === card.file.id}
-                  onDragStart={handleCardDragStart}
-                  onDragEnd={handleCardDragEnd}
-                  onPreview={onPreviewPage}
-                />
-              )}
-            </GridItemWrapper>
-          );
-        })}
-      </div>
-    </>
+        </div>
+      </SortableContext>
+    </DndContext>
   );
 }

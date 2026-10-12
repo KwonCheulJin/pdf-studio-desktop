@@ -22,16 +22,13 @@ import {
 } from "../model/selection-store";
 import { usePageRotateHandlers } from "../model/use-page-rotate-handlers";
 import { usePageThumbnail } from "../model/use-page-thumbnail";
-import type { DragStartParams } from "../model/use-unified-drag";
 import { SELECTION_TYPE } from "../config/selection-type";
-import { FLAT_CARD_TYPE } from "../config/flat-card";
 
 interface ExpandedPageCardProps {
   fileId: string;
   filePath: string;
   page: PdfPage;
   pageNumber: number; // 원본 페이지 번호 (1-based)
-  flatIndex: number; // flatCards 배열에서의 인덱스
   fileName: string;
   /** 이미지 고정 크기 (정사각형) */
   imageSize?: number;
@@ -40,10 +37,6 @@ interface ExpandedPageCardProps {
   groupId: string;
   showCollapseButton?: boolean; // 첫 카드에만 접기 버튼 표시
   isStacked?: boolean; // 스택 효과 표시 여부 (펼침 상태의 첫 페이지만)
-  // 드래그 상태
-  isDragging?: boolean;
-  onDragStart?: (event: React.DragEvent, params: DragStartParams) => void;
-  onDragEnd?: () => void;
   /** 미리보기 콜백 (fileId, pageIndex) */
   onPreview?: (fileId: string, pageIndex: number) => void;
 }
@@ -60,16 +53,12 @@ export function ExpandedPageCard({
   filePath,
   page,
   pageNumber,
-  flatIndex,
   fileName,
   imageSize,
   groupColor,
   groupId,
   showCollapseButton = false,
   isStacked = false,
-  isDragging = false,
-  onDragStart,
-  onDragEnd,
   onPreview
 }: ExpandedPageCardProps) {
   // Store 직접 접근
@@ -152,23 +141,12 @@ export function ExpandedPageCard({
 
         {/* 썸네일 영역 - 절대 좌표 기반으로 h-full 사용 */}
         <div
-          draggable
-          onDragStart={(e) =>
-            onDragStart?.(e, {
-              cardType: FLAT_CARD_TYPE.PAGE,
-              fileId,
-              pageId: page.id,
-              flatIndex
-            })
-          }
-          onDragEnd={onDragEnd}
           className={cn(
             "bg-card relative h-full w-full cursor-grab rounded-[4px] border p-3 transition-all hover:shadow-lg",
             isSelected
               ? "border-primary ring-primary/30 ring-2"
               : "border-border",
-            groupColor && !isSelected && groupColor,
-            isDragging && "scale-105 opacity-50"
+            groupColor && !isSelected && groupColor
           )}
         >
           {/* 선택 체크박스 */}

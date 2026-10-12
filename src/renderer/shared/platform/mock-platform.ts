@@ -1,5 +1,15 @@
-import type { OpenedFile, PageInfo } from "@/renderer/shared/api/bindings";
-import { MERGE_OUTPUT_KIND, type DesktopPlatform } from "./desktop-platform";
+import {
+  OPENABLE_EXTENSIONS,
+  type OpenedFile,
+  type PageInfo
+} from "@/renderer/shared/api/bindings";
+import {
+  FILE_DROP_EVENT_TYPE,
+  MERGE_OUTPUT_KIND,
+  type DesktopPlatform,
+  type FileDropHandler
+} from "./desktop-platform";
+import { toFileDropEvent, type NativeFileDropEvent } from "./native-file-drop";
 import { PlatformError } from "./platform-error";
 
 /** 가짜 파일 하나. `bytes`가 없으면 `readPdf`가 `NOT_FOUND`로 실패한다. */
@@ -13,8 +23,17 @@ export interface MockPdfFile {
 }
 
 export interface MockPlatformOptions {
-  /** 열기 다이얼로그가 고르는 파일들 */
+  /** 열기 다이얼로그가 고르는 파일들. 드롭으로도 열 수 있다. */
   files?: MockPdfFile[];
+}
+
+export interface MockPlatform extends DesktopPlatform {
+  /**
+   * 창 밖 파일 드래그·드롭을 흉내 낸다. 좌표는 WebView2처럼 물리 픽셀로 받아
+   * `devicePixelRatio`로 나눈다. 드롭한 경로는 구독자에게 알리기 전에
+   * 허용 목록에 기록한다(Rust가 드롭 이벤트에서 기록하는 것과 같은 순서).
+   */
+  simulateFileDrop(event: NativeFileDropEvent): void;
 }
 
 /** Rust 커맨드가 같은 상황에서 돌려주는 코드 */
@@ -30,6 +49,16 @@ const MOCK_DIRECTORY = {
 
 const PERCENT_COMPLETE = 100;
 
+const EXTENSION_SEPARATOR = ".";
+
+/** Rust `allow_dropped`처럼 열 수 있는 확장자만 기록한다. */
+function isOpenable(path: string): boolean {
+  const extension = path
+    .slice(path.lastIndexOf(EXTENSION_SEPARATOR) + 1)
+    .toLowerCase();
+  return OPENABLE_EXTENSIONS.some((openable) => openable === extension);
+}
+
 function reject(code: string, path: string): PlatformError {
   return new PlatformError({ code, message: path });
 }
@@ -40,9 +69,10 @@ function reject(code: string, path: string): PlatformError {
  */
 export function createMockPlatform({
   files = []
-}: MockPlatformOptions = {}): DesktopPlatform {
+}: MockPlatformOptions = {}): MockPlatform {
   const filesByPath = new Map(files.map((file) => [file.path, file]));
   const pickedPaths = new Set<string>();
+  const dropHandlers = new Set<FileDropHandler>();
   const saveTargets = new Set<string>();
   const tempOutputs = new Set<string>();
 
@@ -147,6 +177,28 @@ export function createMockPlatform({
     },
     log: ({ level, message }) => {
       console[level](message);
+    },
+    onFileDrop: (handler) => {
+      dropHandlers.add(handler);
+      return () => {
+        dropHandlers.delete(handler);
+      };
+    },
+    simulateFileDrop: (event) => {
+      if (event.type === FILE_DROP_EVENT_TYPE.DROP) {
+        for (const path of event.paths) {
+          if (filesByPath.has(path) && isOpenable(path)) {
+            pickedPaths.add(path);
+          }
+        }
+      }
+      const dropEvent = toFileDropEvent({
+        event,
+        pixelRatio: window.devicePixelRatio
+      });
+      for (const handler of dropHandlers) {
+        handler(dropEvent);
+      }
     }
   };
 }

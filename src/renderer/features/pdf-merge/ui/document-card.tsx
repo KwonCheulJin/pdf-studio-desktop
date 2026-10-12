@@ -19,9 +19,7 @@ import {
   useSelectedIds,
   useSelectionType
 } from "../model/selection-store";
-import type { DragStartParams } from "../model/use-unified-drag";
 import { SELECTION_TYPE } from "../config/selection-type";
-import { FLAT_CARD_TYPE } from "../config/flat-card";
 
 interface DocumentCardProps {
   document: PdfDocument;
@@ -31,14 +29,8 @@ interface DocumentCardProps {
   groupPageIds: string[];
   /** 이미지 고정 크기 (정사각형) */
   imageSize?: number;
-  /** flatCards 배열에서의 인덱스 */
-  flatIndex: number;
   // 스택 효과 표시 여부 (접힌 상태에서만)
   isStacked?: boolean;
-  // 드래그 상태
-  isDragging?: boolean;
-  onDragStart?: (event: React.DragEvent, params: DragStartParams) => void;
-  onDragEnd?: () => void;
   // Preview 모달 상태는 외부(MergeWorkspace)에서 관리
   onPreview?: (document: PdfDocument, groupPageIds: string[]) => void;
 }
@@ -55,11 +47,7 @@ export function DocumentCard({
   groupId,
   groupPageIds,
   imageSize,
-  flatIndex,
   isStacked = true,
-  isDragging = false,
-  onDragStart,
-  onDragEnd,
   onPreview
 }: DocumentCardProps) {
   // Store 직접 접근
@@ -172,22 +160,11 @@ export function DocumentCard({
 
         {/* 썸네일 영역 - 절대 좌표 기반으로 flex-1 사용 */}
         <div
-          draggable
-          onDragStart={(e) =>
-            onDragStart?.(e, {
-              cardType: FLAT_CARD_TYPE.FILE,
-              fileId: document.id,
-              pageId: null,
-              flatIndex
-            })
-          }
-          onDragEnd={onDragEnd}
           className={cn(
             "bg-card relative h-full w-full cursor-grab rounded-[4px] border transition-all hover:shadow-lg",
             isSelected
               ? "border-primary ring-primary/30 ring-2"
-              : "border-border",
-            isDragging && "scale-105 opacity-50"
+              : "border-border"
           )}
         >
           {/* 선택 체크박스 */}

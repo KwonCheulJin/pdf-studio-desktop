@@ -82,7 +82,7 @@
 | `file.delete` | **임의 경로 `rm -rf`** | **제거.** 앱 임시 디렉터리 정리용 `cleanup_temp`와, 미리보기 결과 하나만 지우는 `discard_temp(path)`(앱 임시 폴더 하위만)를 둔다. |
 | `app.log` | console | `@tauri-apps/plugin-log` |
 | `theme:changed` | nativeTheme | `matchMedia` + 수동 설정 영속화(`plugin-store`) |
-| `getFilePath(File)` | `webUtils` | **`getCurrentWebview().onDragDropEvent`**(paths, position). 드롭 경로도 Rust가 `WindowEvent::DragDrop`(또는 `onDragDropEvent`)에서 받은 경로를 허용 경로 목록에 기록한다(D13). |
+| `getFilePath(File)` | `webUtils` | **`getCurrentWebview().onDragDropEvent`**(paths, position). 드롭 경로도 Rust가 `RunEvent::WindowEvent`의 `DragDrop::Drop`에서 받아 허용 경로 목록에 기록한다(D13). 이 콜백은 같은 메인 스레드에서 웹뷰로 `tauri://drag-drop`을 보내기 전에 불리므로, 프론트가 `open_files`를 부를 때는 이미 기록돼 있다. 기록은 있는 파일이고 파일 추가 확장자일 때만 한다. 프론트가 경로를 허용 목록에 넣는 커맨드는 두지 않는다. |
 | (신규) 파일 추가 | 렌더러 3곳에 중복(`use-add-files`, `load-dropped-files`, `use-dropped-files`) | **`open_files(paths) -> 파일별 결과[]`**. 확장자 판별·TIFF 변환·정보 조회를 한 번에 하고, 파일별 성공/오류를 돌려준다(D14). |
 | (신규) 비교 | — | **`compare_pdfs(request, channel) -> CompareResult`**, `cancel_job(job_id)`, `export_compare_report(request)`(비교 PDF / 주석 PDF), `preview_compare_report(request, count)` |
 
@@ -180,7 +180,7 @@ Phase 5  고도화
     copyFile(params: { source: string; destination: string }): Promise<void>
     discardTemp(path: string): Promise<void>
     log(params: { level: LogLevel; message: string }): void
-    // P0-5: onFileDrop(handler) — paths + client 좌표
+    onFileDrop(handler: (event: FileDropEvent) => void): () => void      // enter/over/drop/leave, paths + CSS 좌표(P0-5)
     // Phase 3: comparePdfs, exportCompareReport
   }
   ```
@@ -211,8 +211,9 @@ Phase 5  고도화
 
 ### P0-5 내부 드래그 정렬을 `@dnd-kit`으로 전환 (M)
 - **이유:** Tauri v2에서 OS 파일 드롭 경로를 받으려면 `dragDropEnabled: true`(기본값)여야 한다. 이 경우 **Windows WebView2에서 HTML5 DnD가 동작하지 않는다.** 현재 페이지·파일 재정렬은 HTML5 DnD 기반이므로 pointer 기반 dnd-kit(이미 설치됨)으로 바꾼다.
-- 외부 파일 드롭은 `platform.onFileDrop`으로 분리한다. 드롭 위치에 삽입하는 로직(`calculateDropIndex`)은 **좌표 기반 순수 함수**로 만든다.
-- `KeyboardSensor`를 함께 등록해 키보드 재정렬을 지원한다(A1): 카드에 포커스 → Space로 집기 → 방향키 이동 → Space로 놓기 / Esc 취소. 이동 결과를 live region으로 알린다.
+- 외부 파일 드롭은 `platform.onFileDrop`으로 분리한다. 드롭 위치에 삽입하는 로직(`calculateDropIndex`, `shared/lib/layout-calculator.ts`)은 **좌표 기반 순수 함수**로 만든다: 그리드 컨테이너 기준 좌표와 카드 좌표로 몇 번째 카드 앞인지 계산한다. 드롭한 파일을 여는 동안 그 자리에 업로드 자리표시를 보인다.
+- `KeyboardSensor`를 함께 등록해 키보드 재정렬을 지원한다(A1): 카드에 포커스 → Space로 집기 → 방향키 이동 → Space로 놓기 / Esc 취소. 방향키는 그리드 방향으로 움직인다(행 끝에서 오른쪽으로는 넘어가지 않고 아래 방향키로 다음 행에 간다). 이동 결과를 live region(dnd-kit `announcements`, 한국어)으로 알린다.
+- dnd-kit은 transform을 뺀 자리로 카드를 재므로 카드 그리드 좌표는 `left/top`으로 두고 transform은 정렬 중 이동량에만 쓴다.
 - **완료 기준:** HTML5 DnD 이벤트(`onDragStart` 등) 의존이 0이다. 마우스 없이 파일과 페이지 순서를 바꿀 수 있다.
 
 ### P0-6 버그 수정과 정리 (M)
@@ -311,7 +312,7 @@ Phase 5  고도화
 ### P1-4 Tauri 어댑터와 드롭 (M)
 - `tauri-platform.ts`에서 `DesktopPlatform`을 구현한다.
 - 드롭 처리
-  - `onDragDropEvent`의 `position`은 **PhysicalPosition**이므로 `/ window.devicePixelRatio`로 CSS 좌표로 바꾼다.
+  - `onDragDropEvent`의 `position`은 타입이 **PhysicalPosition**이지만 실제 단위는 웹뷰마다 다르다(wry 0.57). WebView2(Windows)는 클라이언트 영역 물리 픽셀이므로 `/ window.devicePixelRatio`로 CSS 좌표로 바꾸고, WKWebView(macOS)·WebKitGTK(Linux)는 이미 논리(CSS) 픽셀이라 그대로 쓴다. 변환은 `shared/platform/native-file-drop.ts` 한 곳에서 하고 mock 플랫폼도 같은 함수를 쓴다.
   - `document.elementFromPoint`로 드롭 대상(슬롯, 그리드 위치)을 판정한다.
   - enter/over/leave로 드롭 오버레이 UI를 갱신한다.
 - 어댑터 동작은 `mock-platform` 기반 E2E로 확인한다(어댑터 전용 단위 테스트는 두지 않는다).

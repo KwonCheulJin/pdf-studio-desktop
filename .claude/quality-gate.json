@@ -15,7 +15,7 @@
     },
     {
       "name": "test",
-      "run": "pnpm exec vitest related --run --exclude '**/layout-calculator.test.ts' --exclude '**/node_modules/**' {files}",
+      "run": "pnpm exec vitest related --run --exclude '**/node_modules/**' {files}",
       "glob": "*.[jt]s*",
       "timeout": 600
     }

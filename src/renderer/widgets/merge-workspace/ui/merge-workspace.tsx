@@ -62,13 +62,10 @@ export function MergeWorkspace() {
     clearSelectedMerge();
   }, [clearSelectedMerge]);
 
-  // EmptyState용 드래그 앤 드롭 (파일이 없을 때만 사용)
-  const {
-    isDragOver: isEmptyDragOver,
-    handleDragOver: handleEmptyDragOver,
-    handleDragLeave: handleEmptyDragLeave,
-    handleDrop: handleEmptyDrop
-  } = useDroppedFiles();
+  // EmptyState용 파일 드롭 (파일이 없을 때만 사용)
+  const { isDragOver: isEmptyDragOver } = useDroppedFiles({
+    isEnabled: !hasFiles
+  });
 
   // 미리보기 열기/닫기
   const handlePreviewFile = useCallback(
@@ -106,11 +103,8 @@ export function MergeWorkspace() {
   return (
     <div
       className={`flex flex-1 flex-col overflow-auto py-6 transition-colors ${
-        !hasFiles && isEmptyDragOver ? "bg-primary/5" : ""
+        isEmptyDragOver ? "bg-primary/5" : ""
       }`}
-      onDragOver={!hasFiles ? handleEmptyDragOver : undefined}
-      onDragLeave={!hasFiles ? handleEmptyDragLeave : undefined}
-      onDrop={!hasFiles ? handleEmptyDrop : undefined}
     >
       {hasFiles ? (
         <FileGrid
@@ -124,7 +118,7 @@ export function MergeWorkspace() {
         </div>
       )}
       {/* 파일이 없을 때만 전체 오버레이 표시 */}
-      {isEmptyDragOver && !hasFiles && (
+      {isEmptyDragOver && (
         <div className="border-primary bg-background/80 pointer-events-none fixed inset-0 z-50 flex items-center justify-center border-4 border-dashed backdrop-blur-sm">
           <div className="bg-card flex flex-col items-center gap-4 rounded-xl p-10 shadow-2xl">
             <div className="bg-primary/10 text-primary flex h-16 w-16 items-center justify-center rounded-full">

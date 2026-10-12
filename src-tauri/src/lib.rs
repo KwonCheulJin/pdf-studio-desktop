@@ -10,9 +10,10 @@ mod pdf_engine;
 mod test_support;
 
 use std::error::Error;
+use std::path::PathBuf;
 use std::time::SystemTime;
 
-use tauri::{App, AppHandle, Manager, RunEvent};
+use tauri::{App, AppHandle, DragDropEvent, Manager, RunEvent, WindowEvent};
 
 use access::{AppDirectories, PathAccess, STALE_SESSION_AGE};
 use jobs::JobRegistry;
@@ -46,11 +47,23 @@ pub fn run() {
         })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|app, event| {
-            if let RunEvent::Exit = event {
-                remove_session(app);
-            }
+        .run(|app, event| match event {
+            RunEvent::WindowEvent {
+                event: WindowEvent::DragDrop(DragDropEvent::Drop { paths, .. }),
+                ..
+            } => allow_dropped(app, &paths),
+            RunEvent::Exit => remove_session(app),
+            _ => {}
         });
+}
+
+/// 창에 드롭한 파일을 허용 경로 목록(D13)에 기록한다. 이 콜백은 Tauri가 같은 드롭 이벤트를
+/// 웹뷰에 보내기(`tauri://drag-drop`) 전에 같은 메인 스레드에서 불린다. 그래서 프론트가
+/// 그 이벤트를 받고 `open_files`를 부를 때는 이미 기록돼 있다.
+fn allow_dropped(app: &AppHandle, paths: &[PathBuf]) {
+    if let Some(access) = app.try_state::<PathAccess>() {
+        access.allow_dropped(paths);
+    }
 }
 
 /// 병합 임시 폴더는 시스템 임시 폴더 아래 앱 식별자 폴더(그 안에 실행마다 세션 폴더),

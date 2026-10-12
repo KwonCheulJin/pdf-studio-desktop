@@ -1,12 +1,16 @@
-import { useState, useCallback, type RefObject } from "react";
-import { GRID_CONFIG } from "@/renderer/shared/constants/grid-layout";
-
-/**
- * 드래그 데이터가 외부 파일인지 확인
- */
-function isExternalFileDrag(dataTransfer: DataTransfer): boolean {
-  return dataTransfer.types.includes("Files") && dataTransfer.files.length > 0;
-}
+import { useEffect, useEffectEvent, useState, type RefObject } from "react";
+import {
+  FILE_DROP_EVENT_TYPE,
+  getPlatform,
+  type ClientPoint,
+  type FileDropDropEvent,
+  type FileDropEvent
+} from "@/renderer/shared/platform";
+import { getFileBaseName } from "@/renderer/shared/lib/file-utils";
+import type { GridPosition } from "@/renderer/shared/lib/layout-calculator";
+import type { FlatCard } from "../lib/flatten-file-grid";
+import { getInsertTargetPageId } from "../lib/card-move";
+import { useAddDroppedFiles } from "./use-add-files";
 
 export interface UploadingFile {
   id: string;
@@ -14,172 +18,92 @@ export interface UploadingFile {
   insertIndex: number;
 }
 
-interface CalculateDropIndexParams {
-  clientX: number;
-  clientY: number;
-  containerRect: DOMRect;
-  scrollTop: number;
-  columns: number;
-  itemsCount: number;
-  cardSize: number;
-  cardHeight: number;
-}
-
-/**
- * 마우스 좌표를 기반으로 드롭 인덱스 계산
- */
-function calculateDropIndex({
-  clientX,
-  clientY,
-  containerRect,
-  scrollTop,
-  columns,
-  itemsCount,
-  cardSize,
-  cardHeight
-}: CalculateDropIndexParams): number {
-  const { GAP, PADDING } = GRID_CONFIG;
-
-  // 컨테이너 기준 상대 좌표 (스크롤 포함)
-  const relX = clientX - containerRect.left;
-  const relY = clientY - containerRect.top + scrollTop;
-
-  // 열/행 계산 (카드 중앙 기준으로 반올림)
-  const col = Math.round((relX - PADDING) / (cardSize + GAP));
-  const row = Math.floor((relY - PADDING + GAP / 2) / (cardHeight + GAP));
-
-  // 유효 범위 클램핑
-  const clampedCol = Math.max(0, Math.min(col, columns));
-  const clampedRow = Math.max(0, row);
-
-  // 인덱스 계산
-  const index = clampedRow * columns + clampedCol;
-
-  return Math.max(0, Math.min(index, itemsCount));
-}
-
 interface UseFileDropZoneParams {
   /** 그리드 컨테이너 ref */
   containerRef: RefObject<HTMLDivElement | null>;
-  /** 현재 열 수 */
-  columns: number;
-  /** 현재 아이템 수 */
-  itemsCount: number;
-  /** 현재 카드 크기 (반응형) */
-  cardSize: number;
-  /** 현재 카드 높이 (반응형) */
-  cardHeight: number;
+  /** 그리드 컨테이너 기준 좌표에 놓으면 몇 번째 카드 앞에 들어가는지 */
+  resolveDropIndex: (point: GridPosition) => number;
+  flatCards: FlatCard[];
 }
 
 interface UseFileDropZoneResult {
-  isFileDragOver: boolean;
+  /** 끌고 있는 파일이 들어갈 자리. 그리드 밖이거나 끌고 있지 않으면 `null` */
   activeDropIndex: number | null;
+  /** 드롭한 파일을 여는 동안 그리드에 보이는 자리표시 */
   uploadingFiles: UploadingFile[];
-  handleFileDragOver: (e: React.DragEvent<HTMLDivElement>) => void;
-  handleFileDragLeave: (e: React.DragEvent<HTMLDivElement>) => void;
-  handleFileDrop: (e: React.DragEvent<HTMLDivElement>) => void;
-  handleInsertHover: (index: number) => void;
-  handleInsertLeave: () => void;
-  handleInsertDrop: (e: React.DragEvent) => void;
 }
 
 /**
- * Adobe Acrobat 스타일의 파일 드롭 존 관리 훅
- * - 파일 드래그 시 마우스 좌표 기반으로 삽입 위치 계산
- * - 외부 파일 경로는 HTML5 drop 이벤트가 주지 않는다. 경로는 플랫폼 드롭 이벤트로 받는다.
+ * 창 밖에서 끌어온 파일을 그리드의 놓은 자리에 넣는다.
+ * 드롭 대상은 `document.elementFromPoint`로 판정한다. 그리드 위면 좌표로 계산한 자리,
+ * 그 밖(툴바, 그리드 아래 빈 곳)이면 맨 끝이다.
  */
 export function useFileDropZone({
   containerRef,
-  columns,
-  itemsCount,
-  cardSize,
-  cardHeight
+  resolveDropIndex,
+  flatCards
 }: UseFileDropZoneParams): UseFileDropZoneResult {
-  const [isFileDragOver, setIsFileDragOver] = useState(false);
   const [activeDropIndex, setActiveDropIndex] = useState<number | null>(null);
-  // 외부 파일을 여는 동안 그리드에 보이는 자리표시
-  const [uploadingFiles] = useState<UploadingFile[]>([]);
+  const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([]);
+  const addDroppedFiles = useAddDroppedFiles();
 
-  // 전역 파일 드래그 오버 - 마우스 좌표 기반 인덱스 계산
-  const handleFileDragOver = useCallback(
-    (e: React.DragEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      e.stopPropagation();
+  const findDropIndex = (point: ClientPoint): number | null => {
+    const container = containerRef.current;
+    const target = document.elementFromPoint(point.x, point.y);
+    if (!container || !target || !container.contains(target)) {
+      return null;
+    }
+    const rect = container.getBoundingClientRect();
+    return resolveDropIndex({ x: point.x - rect.left, y: point.y - rect.top });
+  };
 
-      if (!isExternalFileDrag(e.dataTransfer)) return;
-
-      setIsFileDragOver(true);
-
-      // 컨테이너 rect 가져오기
-      const container = containerRef.current;
-      if (!container) return;
-
-      const containerRect = container.getBoundingClientRect();
-      const scrollTop = container.scrollTop;
-
-      // 마우스 좌표로 드롭 인덱스 계산
-      const dropIndex = calculateDropIndex({
-        clientX: e.clientX,
-        clientY: e.clientY,
-        containerRect,
-        scrollTop,
-        columns,
-        itemsCount,
-        cardSize,
-        cardHeight
+  const insertDroppedFiles = async ({
+    paths,
+    point
+  }: FileDropDropEvent): Promise<void> => {
+    const index = findDropIndex(point) ?? flatCards.length;
+    const placeholders = paths.map(
+      (path): UploadingFile => ({
+        id: crypto.randomUUID(),
+        name: getFileBaseName(path),
+        insertIndex: index
+      })
+    );
+    const placeholderIds = new Set<string>(
+      placeholders.map((placeholder) => placeholder.id)
+    );
+    setUploadingFiles((current) => [...current, ...placeholders]);
+    try {
+      await addDroppedFiles({
+        paths,
+        targetPageId: getInsertTargetPageId({ flatCards, index })
       });
+    } finally {
+      setUploadingFiles((current) =>
+        current.filter((file) => !placeholderIds.has(file.id))
+      );
+    }
+  };
 
-      setActiveDropIndex(dropIndex);
-    },
-    [containerRef, columns, itemsCount, cardSize, cardHeight]
-  );
+  const handleFileDrop = useEffectEvent((event: FileDropEvent) => {
+    switch (event.type) {
+      case FILE_DROP_EVENT_TYPE.ENTER:
+      case FILE_DROP_EVENT_TYPE.OVER:
+        setActiveDropIndex(findDropIndex(event.point));
+        return;
+      case FILE_DROP_EVENT_TYPE.LEAVE:
+        setActiveDropIndex(null);
+        return;
+      case FILE_DROP_EVENT_TYPE.DROP:
+        setActiveDropIndex(null);
+        void insertDroppedFiles(event);
+    }
+  });
 
-  // 전역 파일 드래그 종료
-  const handleFileDragLeave = useCallback(
-    (e: React.DragEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setIsFileDragOver(false);
-      setActiveDropIndex(null);
-    },
+  useEffect(
+    () => getPlatform().onFileDrop((event) => handleFileDrop(event)),
     []
   );
 
-  // 전역 드롭: 드래그 상태만 정리한다.
-  const handleFileDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsFileDragOver(false);
-    setActiveDropIndex(null);
-  }, []);
-
-  // 삽입 인디케이터 호버 (DropIndicator에서 호출)
-  const handleInsertHover = useCallback((index: number) => {
-    setActiveDropIndex(index);
-  }, []);
-
-  // 삽입 인디케이터 호버 종료
-  const handleInsertLeave = useCallback(() => {
-    setActiveDropIndex(null);
-  }, []);
-
-  // 삽입 인디케이터 드롭: 드래그 상태만 정리한다.
-  const handleInsertDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsFileDragOver(false);
-    setActiveDropIndex(null);
-  }, []);
-
-  return {
-    isFileDragOver,
-    activeDropIndex,
-    uploadingFiles,
-    handleFileDragOver,
-    handleFileDragLeave,
-    handleFileDrop,
-    handleInsertHover,
-    handleInsertLeave,
-    handleInsertDrop
-  };
+  return { activeDropIndex, uploadingFiles };
 }

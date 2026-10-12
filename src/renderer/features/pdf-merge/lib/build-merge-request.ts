@@ -5,26 +5,11 @@ import type {
 } from "@/renderer/entities/merge-plan";
 
 /**
- * buildMergeRequest·buildMergeSources 함수의 매개변수
+ * buildMergeSources 함수의 매개변수
  */
-interface BuildMergeRequestParams {
+interface BuildMergeSourcesParams {
   files: PdfDocument[];
   mergeOrder: MergeOrderItem[];
-}
-
-/**
- * 병합 구간 하나. 같은 파일에서 연속으로 가져오는 원본 페이지 번호(0부터)
- */
-interface MergeSegment {
-  path: string;
-  pages: number[];
-}
-
-/**
- * buildMergeRequest 함수의 반환값
- */
-interface BuildMergeRequestResult {
-  files: MergeSegment[];
 }
 
 /**
@@ -44,7 +29,7 @@ interface BuildMergeRequestResult {
 export function buildMergeSources({
   files,
   mergeOrder
-}: BuildMergeRequestParams): MergeSource[] {
+}: BuildMergeSourcesParams): MergeSource[] {
   if (mergeOrder.length === 0) {
     // mergeOrder가 비어있으면 files 순서대로 전체 병합
     return files.map((file) => ({
@@ -86,28 +71,4 @@ export function buildMergeSources({
     // 새 파일 시작
     return [...accumulator, { path: file.path, pages: [mergePage] }];
   }, []);
-}
-
-/**
- * mergeOrder를 기반으로 병합 구간(원본 페이지 번호) 생성
- *
- * @example
- * mergeOrder: [2-1, 1-1, 1-2, 1-3, 2-2, 2-3, 3-1, 3-2, 3-3]
- * →
- * files: [
- *   { path: "file2.pdf", pages: [0] },
- *   { path: "file1.pdf", pages: [0, 1, 2] },
- *   { path: "file2.pdf", pages: [1, 2] },
- *   { path: "file3.pdf", pages: [0, 1, 2] }
- * ]
- */
-export function buildMergeRequest(
-  params: BuildMergeRequestParams
-): BuildMergeRequestResult {
-  return {
-    files: buildMergeSources(params).map((source) => ({
-      path: source.path,
-      pages: source.pages.map((page) => page.index)
-    }))
-  };
 }

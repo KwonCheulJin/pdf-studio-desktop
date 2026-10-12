@@ -42,6 +42,53 @@ export interface LogParams {
   message: string;
 }
 
+/** 창 밖에서 파일을 끌어올 때 오는 이벤트 종류 */
+export const FILE_DROP_EVENT_TYPE = {
+  ENTER: "enter",
+  OVER: "over",
+  DROP: "drop",
+  LEAVE: "leave"
+} as const;
+
+/** 웹뷰 기준 CSS 픽셀 좌표(`document.elementFromPoint`에 그대로 넘긴다) */
+export interface ClientPoint {
+  x: number;
+  y: number;
+}
+
+export interface FileDropEnterEvent {
+  type: typeof FILE_DROP_EVENT_TYPE.ENTER;
+  paths: string[];
+  point: ClientPoint;
+}
+
+export interface FileDropOverEvent {
+  type: typeof FILE_DROP_EVENT_TYPE.OVER;
+  point: ClientPoint;
+}
+
+/** 놓은 파일 경로는 이 이벤트가 오기 전에 허용 경로 목록에 기록돼 있다(D13). */
+export interface FileDropDropEvent {
+  type: typeof FILE_DROP_EVENT_TYPE.DROP;
+  paths: string[];
+  point: ClientPoint;
+}
+
+export interface FileDropLeaveEvent {
+  type: typeof FILE_DROP_EVENT_TYPE.LEAVE;
+}
+
+export type FileDropEvent =
+  | FileDropEnterEvent
+  | FileDropOverEvent
+  | FileDropDropEvent
+  | FileDropLeaveEvent;
+
+export type FileDropHandler = (event: FileDropEvent) => void;
+
+/** 구독을 끊는다. 여러 번 불러도 된다. */
+export type Unsubscribe = () => void;
+
 /**
  * 프론트가 의존하는 데스크톱 기능. 파일 경로를 넘기고 결과(JSON)를 받는다.
  * 실패하면 `PlatformError`(`{ code, message }`)를 던진다.
@@ -64,4 +111,6 @@ export interface DesktopPlatform {
   /** 병합 미리보기 결과 하나를 지운다. */
   discardTemp(path: string): Promise<void>;
   log(params: LogParams): void;
+  /** 창 밖에서 끌어온 파일의 드래그·드롭. 좌표는 CSS 픽셀로 바꿔 넘긴다. */
+  onFileDrop(handler: FileDropHandler): Unsubscribe;
 }

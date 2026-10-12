@@ -14,5 +14,5 @@ pub use merge::{
     MAX_MERGE_FILES, MergeError, MergePage, MergeProgress, MergeRequest, MergeResult, MergeSource,
     MergeStage, merge_pdfs,
 };
-pub use output::SaveError;
+pub use output::{SaveError, copy_atomically};
 pub use tiff::{MAX_TIFF_PAGE_PIXELS, TiffConversion, TiffConversionError, convert_tiff};

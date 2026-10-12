@@ -24,3 +24,9 @@ log = "0.4"
 tauri = { version = "2.12.3", features = [] }
 tauri-plugin-log = "2"
 pdf-core = { version = "0.1.0", path = "../crates/pdf-core" }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+tauri-specta = { version = "=2.0.0-rc.25", features = ["typescript"] }
+specta = { version = "=2.0.0-rc.25", features = ["derive"] }
+specta-typescript = "=0.0.12"
+thiserror = "2"

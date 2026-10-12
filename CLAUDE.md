@@ -23,7 +23,7 @@ pnpm tauri build                    # Tauri 빌드
 ## 아키텍처 핵심
 
 - 의존 방향은 바깥 → 안쪽 한 방향이다. `crates/pdf-core`는 Tauri·웹뷰를 모른다.
-- 프론트는 `DesktopPlatform` 인터페이스에만 의존한다. `@tauri-apps/api`는 `shared/platform/tauri-platform.ts`에서만 import한다.
+- 프론트는 `DesktopPlatform` 인터페이스에만 의존한다. `@tauri-apps/api` import는 `shared/platform/tauri-platform.ts`와 생성 바인딩(`shared/api/bindings.ts`)에서만 한다. 바인딩의 커맨드(`commands`)는 `tauri-platform.ts`에서만 호출하고, 계약 타입은 어디서든 `import type`으로 가져온다.
 - 경계를 넘는 데이터는 계약 타입(`tauri-specta` 생성물)만 쓴다. 프론트는 파일 경로를 넘기고 결과(JSON)를 받는다.
 - FSD: `app → pages → widgets → features → entities → shared`. 위 레이어만 아래를 import하고, 같은 레이어의 슬라이스끼리는 import하지 않으며, 슬라이스 밖에서는 `index.ts`로만 가져온다. `shared`는 도메인을 모른다.
 

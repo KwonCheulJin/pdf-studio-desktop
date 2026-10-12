@@ -96,6 +96,33 @@ pub(crate) fn save_atomically(document: &PdfDocument, output_path: &Path) -> Res
     result
 }
 
+/// `source`를 `destination` 폴더 안의 새 임시 파일에 복사한 뒤 `destination`으로 rename한다.
+/// 같은 이름의 파일이 있으면 바꿔치기한다. 실패하면 임시 파일을 지운다. `source`는 읽기만 한다.
+pub fn copy_atomically(source: &Path, destination: &Path) -> Result<(), SaveError> {
+    let directory = ensure_output_directory(destination)?;
+    let write_error = |error: io::Error| SaveError::Write {
+        path: destination.to_path_buf(),
+        source: error,
+    };
+    let (temp_path, file) = create_temp_file(directory).map_err(write_error)?;
+
+    let result = copy_contents(source, file)
+        .and_then(|()| replace_file(&temp_path, destination))
+        .map_err(write_error);
+    if result.is_err() {
+        // 정리는 최선 노력이다. 정리 실패보다 원래 에러가 원인에 가깝다.
+        let _ = fs::remove_file(&temp_path);
+    }
+    result
+}
+
+/// 원본을 임시 파일에 복사하고 디스크에 내린 뒤 닫는다. rename 전에 닫아야 Windows에서 바꿔치기가 된다.
+fn copy_contents(source: &Path, mut file: File) -> io::Result<()> {
+    let mut reader = File::open(source)?;
+    io::copy(&mut reader, &mut file)?;
+    file.sync_all()
+}
+
 /// `{prefix}{프로세스 ID}-{나노초}-{일련번호}.{extension}`. 다른 프로세스와는 프로세스 ID로,
 /// 같은 프로세스 안에서는 일련번호로 갈린다.
 pub(crate) fn unique_file_name(prefix: &str, extension: &str) -> String {

@@ -9,6 +9,10 @@
 - korean-text.pdf: IBM Plex Sans KR(SIL OFL 1.1) 중 쓰는 글자만 남긴 TrueType을 Type0 +
   CIDFontType2 + Identity-H + ToUnicode로 임베드한다. 글꼴은 앱 의존성
   `@fontsource/ibm-plex-sans-kr`의 woff에서 읽으므로 `pnpm install` 뒤에 돌린다.
+- tokenize-korean.pdf(Step 18): 같은 방식의 한글 글꼴로 쓴 가상 계약서 문구. 숫자·금액·날짜,
+  호환 문자(NFKC로 바뀌는 ㈜·™·²), 대소문자, 연속 공백, 하이픈 줄바꿈(pdfium이 잇는 것과
+  줄바꿈으로 남기는 것, 쪽 경계)을 담는다. 3쪽은 ToUnicode가 PUA를 가리킨다(깨진 텍스트 레이어
+  흉내, LowTextConfidence 대상).
 
     python3 crates/pdf-core/tests/fixtures/generate_compare_fixtures.py
 
@@ -54,13 +58,15 @@ class TextRun:
 
 @dataclass
 class PageSpec:
-    """`media_box`가 None이면 Pages 노드의 MediaBox를 물려받는다."""
+    """`media_box`가 None이면 Pages 노드의 MediaBox를 물려받는다.
+    `font_object`는 쪽 자원 `/F1`이 가리키는 글꼴 객체 번호다."""
 
     runs: list[TextRun]
     media_box: tuple | None = LETTER_MEDIA_BOX
     crop_box: tuple | None = None
     rotate: int | None = None
     user_unit: float | None = None
+    font_object: int = 3
 
 
 # CTM 배율로 크기를 정하는 줄의 배율
@@ -256,7 +262,10 @@ def build_document(
         page_number, content_number = next_number, next_number + 1
         next_number += 2
         page_numbers.append(page_number)
-        parts = [b"<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 3 0 R >> >>"]
+        parts = [
+            b"<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 %d 0 R >> >>"
+            % spec.font_object
+        ]
         if spec.media_box is not None:
             parts.append(b" /MediaBox " + format_box(spec.media_box))
         if spec.crop_box is not None:
@@ -580,8 +589,19 @@ def to_unicode_cmap(cid_by_char: dict[str, int]) -> bytes:
     return b"\n".join(lines)
 
 
-def korean_text_pdf() -> bytes:
-    text = "".join(run.text for page in KOREAN_PAGES for run in page.runs)
+@dataclass
+class KoreanFont:
+    """글꼴 객체 3(Type0, ToUnicode 7)·4(CIDFont)·5(FontDescriptor)·6(FontFile2)·7(ToUnicode)."""
+
+    subset: FontSubset
+    objects: dict[int, bytes]
+
+    def encode(self, line: str) -> bytes:
+        return b"<" + b"".join(b"%04X" % self.subset.cid_by_char[char] for char in line) + b">"
+
+
+def korean_font(pages: list[PageSpec]) -> KoreanFont:
+    text = "".join(run.text for page in pages for run in page.runs)
     subset = subset_font(TrueTypeFont(read_woff_tables(KOREAN_FONT_PATH)), text)
 
     def to_glyph_space(value: int) -> int:
@@ -589,9 +609,8 @@ def korean_text_pdf() -> bytes:
 
     widths = b" ".join(b"%d" % to_glyph_space(advance) for advance in subset.advances)
     font_file = zlib.compress(subset.sfnt, 9)
-    font_objects = {
-        3: b"<< /Type /Font /Subtype /Type0 /BaseFont /%s /Encoding /Identity-H "
-        b"/DescendantFonts [4 0 R] /ToUnicode 7 0 R >>" % KOREAN_FONT_NAME,
+    objects = {
+        3: type0_font(KOREAN_TO_UNICODE_OBJECT),
         4: b"<< /Type /Font /Subtype /CIDFontType2 /BaseFont /%s "
         b"/CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> "
         b"/FontDescriptor 5 0 R /CIDToGIDMap /Identity /W [0 [%s]] >>"
@@ -610,13 +629,89 @@ def korean_text_pdf() -> bytes:
         6: stream_object(
             font_file, b" /Length1 %d /Filter /FlateDecode" % len(subset.sfnt)
         ),
-        7: stream_object(to_unicode_cmap(subset.cid_by_char)),
+        KOREAN_TO_UNICODE_OBJECT: stream_object(to_unicode_cmap(subset.cid_by_char)),
     }
+    return KoreanFont(subset, objects)
 
-    def encode(line: str) -> bytes:
-        return b"<" + b"".join(b"%04X" % subset.cid_by_char[char] for char in line) + b">"
 
-    return build_document(KOREAN_PAGES, font_objects, encode)
+KOREAN_TO_UNICODE_OBJECT = 7
+
+
+def type0_font(to_unicode_object: int) -> bytes:
+    """CIDFont 4를 쓰는 Type0 글꼴"""
+    return (
+        b"<< /Type /Font /Subtype /Type0 /BaseFont /%s /Encoding /Identity-H "
+        b"/DescendantFonts [4 0 R] /ToUnicode %d 0 R >>" % (KOREAN_FONT_NAME, to_unicode_object)
+    )
+
+
+def korean_text_pdf() -> bytes:
+    font = korean_font(KOREAN_PAGES)
+    return build_document(KOREAN_PAGES, font.objects, font.encode)
+
+
+# --- 토큰화(Step 18) ---------------------------------------------------------------
+
+# 깨진 ToUnicode 흉내: 공백이 아닌 글자를 PUA(U+E000부터)로 잇는다.
+PUA_FONT_OBJECT = 8
+PUA_TO_UNICODE_OBJECT = 9
+PRIVATE_USE_START = 0xE000
+
+TOKENIZE_FONT_SIZE = 12
+TOKENIZE_LINE_GAP = 22
+TOKENIZE_LEFT = 60
+TOKENIZE_TOP = 780
+
+
+def tokenize_runs(lines: list[str]) -> list[TextRun]:
+    return [
+        TextRun(TOKENIZE_LEFT, TOKENIZE_TOP - index * TOKENIZE_LINE_GAP, line, TOKENIZE_FONT_SIZE)
+        for index, line in enumerate(lines)
+    ]
+
+
+TOKENIZE_PAGES = [
+    # 줄 끝 하이픈: 글자 뒤 `-`는 pdfium이 다음 줄과 잇고(co-, Self-), 숫자 뒤 `-`(45-)와 홀로 선
+    # `-`(별첨 -)는 줄바꿈으로 남긴다. 마지막 줄의 `갑-`은 다음 쪽 첫 줄과 이어진다.
+    PageSpec(
+        media_box=A4_MEDIA_BOX,
+        runs=tokenize_runs(
+            [
+                "제3조(대금 지급) ㈜한빛상사는 계약 금액 금 1,000,000원을",
+                "2026. 10. 13.까지 을에게   지급한다.",
+                "입금 계좌는 사업자등록번호 123-45-",
+                "67890 명의로 하고, 실무는 co-",
+                "operation 담당이 맡는다. 연락처는 별첨 -",
+                "(부록 A)에 적는다. 독립 계약자(Self-",
+                "Employed) 조항, Service Level과 NDA™를 따르며",
+                "면적은 100m²로 본다. 이 계약서는 갑-",
+            ]
+        ),
+    ),
+    PageSpec(media_box=A4_MEDIA_BOX, runs=tokenize_runs(["을 쌍방이 서명한 날부터 효력이 생긴다."])),
+    PageSpec(
+        media_box=A4_MEDIA_BOX,
+        font_object=PUA_FONT_OBJECT,
+        runs=tokenize_runs(["제4조(해지) 위반 시 해지할 수 있다."]),
+    ),
+]
+
+
+def tokenize_korean_pdf() -> bytes:
+    font = korean_font(TOKENIZE_PAGES)
+    pua_by_char = {
+        char: char if char.isspace() else chr(PRIVATE_USE_START + cid)
+        for char, cid in font.subset.cid_by_char.items()
+    }
+    pua_cmap = to_unicode_cmap(
+        {pua_by_char[char]: cid for char, cid in font.subset.cid_by_char.items()}
+    )
+    objects = {
+        **font.objects,
+        PUA_FONT_OBJECT: type0_font(PUA_TO_UNICODE_OBJECT),
+        PUA_TO_UNICODE_OBJECT: stream_object(pua_cmap),
+    }
+    return build_document(TOKENIZE_PAGES, objects, font.encode)
 
 
 def main() -> None:
@@ -624,6 +719,7 @@ def main() -> None:
         "text-geometry.pdf": text_geometry_pdf(),
         "rotation-order.pdf": rotation_order_pdf(),
         "korean-text.pdf": korean_text_pdf(),
+        "tokenize-korean.pdf": tokenize_korean_pdf(),
     }
     for name, data in fixtures.items():
         (OUTPUT_DIR / name).write_bytes(data)

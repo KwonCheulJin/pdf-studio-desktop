@@ -68,5 +68,6 @@ pnpm tauri build                    # Tauri 빌드
 | `docs/rules/typescript-react.md` | `src/renderer`의 TS/TSX 작성 |
 | `docs/rules/testing.md` | 테스트 작성·수정·삭제 |
 | `docs/06-design-system.md` | UI 토큰·FSD 세부 배치 |
+| `docs/resource/design/` | 화면 작업(Phase 3 이후). 시안 캡처 PNG이고, 정본 HTML은 로컬 `design-files/`(git 제외) |
 
 `docs/01-folder-structure.md`는 현재 폴더 배치다. `docs/04-ui-component-tree.md`·`docs/05-naming-conventions.md`는 전환 전에 쓴 문서라 다르면 계획서와 `docs/rules`가 우선한다. Tauri 커맨드 목록은 계획서 §5 P1-3 표와 생성 바인딩(`src/renderer/shared/api/bindings.ts`)이 정본이다.

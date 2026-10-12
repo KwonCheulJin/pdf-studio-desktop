@@ -255,8 +255,11 @@ pnpm i && pnpm start                                           # 현재 Electron
 | 29 | P3-5 내보내기 | 5 | 비교 PDF(배치·차이 쪽만·색 상자)와 주석 PDF, 저장 위치, 미리보기 넘기기 | [ ] |
 
 - 읽을 곳: 계획서 §7과 §7.1, 토큰 문서 §2.1의 비교 하이라이트
-- 시안: Claude Design 캔버스 "PDF Studio 메인 화면"(https://claude.ai/artifact/DypiUsrVJh56yhBuv4tSvV). 같은 claude.ai 계정으로 Mac 브라우저에서 열 수 있다. 화면을 만들 때 해당 아트보드를 열어 두고 맞춘다.
-  - 1 홈 · 2 병합 · 3 비교 옵션 · 4 비교 결과 · 5 내보내기 · 6 병합 삭제·복원 · 7 병합 진행·취소 · 8 병합 실패 · 9 비교 진행
+- 시안: 레포 캡처 `docs/resource/design/NN-*.png`(1280×800, 14장). 문구·간격·색 정본은 로컬 `design-files/artboards/NN-*.html`이다(git 제외, 글꼴 포함이라 크다. 없으면 사용자에게 받는다). 원래 Claude Design 캔버스 "PDF Studio 메인 화면"(https://claude.ai/artifact/DypiUsrVJh56yhBuv4tSvV)은 참고용이다. 화면을 만들 때 해당 PNG를 열어 두고 맞춘다.
+  - 1 홈(01-home) · 2 병합(02-merge) · 3 비교 옵션(03-compare-options) · 4 비교 결과(04-compare-result) · 5 내보내기(05-compare-export) · 6 병합 삭제·복원(06-merge-restore) · 7 병합 진행·취소(07-merge-progress) · 8 병합 실패(08-merge-error) · 9 비교 진행(09-compare-progress)
+  - 10~14(번역 옵션·API 키·진행·결과, 설정)는 Phase 3 범위가 아니다. 계획서 Phase 6(가칭)에서 다룬다.
+  - 시안 1 홈에는 번역 카드가 있지만 Phase 3에서는 병합·비교 두 장만 만든다.
+  - 시안 2·6·7·8(병합)은 이미 구현된 화면과 다를 수 있다. Step 24에서 차이를 목록으로 정리한다(고치지는 않고 목록만).
 - 디자인 규칙: 하이라이트는 `diff-insert`(밑줄), `diff-delete`(취소선), `diff-change`(점선)와 각 `-fill`만 쓴다. 범례에는 칩과 낱말을 함께 둔다. 페이지는 `paper` + `radius-paper` + `shadow-paper`, 뒤는 `canvas`.
 - Phase 3 완료 기준: 100페이지 문서 쌍(텍스트 레이어)을 Mac에서 5초 안에 비교, 스캔 문서는 쪽당 처리 시간이 Step 17-a 합격 기준 안, 비교 중 스크롤과 취소 가능
 

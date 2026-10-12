@@ -1,7 +1,8 @@
-//! 스캔 쪽 OCR(계획서 §6.4, P2-2a 스파이크): pdfium 렌더 → PP-OCR 검출 → 한국어 인식.
+//! 스캔 쪽 OCR(계획서 §6.4): pdfium 렌더 → PP-OCR 검출 → 한국어 인식.
 //! ONNX Runtime은 `ort`의 동적 로드로 붙이고, 라이브러리·모델 경로는 `runtime.rs`에서 정한다.
-//! 좌표 되돌리기(PDF pt)·캐시·비교 연결은 P2-4a에서 한다.
+//! 결과는 렌더 이미지 픽셀 좌표다. PDF pt로 되돌리기와 비교 연결은 `compare`가 한다(ADR 0001 §11).
 
+mod cache;
 mod detect;
 mod recognize;
 mod runtime;
@@ -12,11 +13,14 @@ use std::path::{Path, PathBuf};
 
 use image::RgbImage;
 use ort::session::{Session, SessionOutputs};
-use pdfium_render::prelude::{PdfRenderConfig, PdfiumError};
+use pdfium_render::prelude::{PdfPage, PdfRenderConfig, PdfiumError};
+use serde::{Deserialize, Serialize};
 
 use crate::document::{DocumentError, open_document};
 use crate::engine::PdfEngine;
 
+pub(crate) use cache::{FileDigest, OcrPage};
+pub use cache::{MAX_OCR_CACHE_BYTES, OcrCache};
 pub use detect::OCR_DET_MAX_SIDE;
 
 /// OCR 렌더 해상도(dpi). P2-2a 측정으로 시작값 300에서 400으로 정했다(계획서 §6.4).
@@ -25,11 +29,19 @@ pub const OCR_RENDER_DPI: u32 = 400;
 const OCR_DET_MODEL_FILE: &str = "ch_PP-OCRv5_det_mobile.onnx";
 const OCR_REC_MODEL_FILE: &str = "korean_PP-OCRv5_rec_mobile.onnx";
 const OCR_REC_DICTIONARY_FILE: &str = "ppocrv5_korean_dict.txt";
+/// OCR 캐시 키에 넣는 모델·인식 규칙 판. 모델 파일(`scripts/fetch-ocr.mjs`가 고정한 SHA-256)이나
+/// 같은 이미지에서 다른 결과를 내는 처리(전처리, 검출·인식 값, 글자 상자 나누기, 줄 순서)를
+/// 바꾸면 올린다. 그래야 예전 결과를 캐시에서 다시 쓰지 않는다.
+pub const OCR_MODEL_VERSION: &str = "pp-ocrv5-mobile-korean/rapidocr-v3.10.0/1";
 
 const POINTS_PER_INCH: f32 = 72.0;
 /// CTC 클래스 0번(빈칸) 자리. 사전의 글자는 1번부터이고 마지막 클래스는 공백이다(PP-OCR `use_space_char`).
 const CTC_BLANK_SYMBOL: &str = "";
 const SPACE_SYMBOL: &str = " ";
+/// 줄 읽기 순서: 기울기를 되돌린 세로 위치 차이가 두 줄 중 낮은 줄 높이의 이 비율 이하면 같은 행이다.
+/// 표·서명란처럼 한 행에 떨어진 칸이 여럿이면 칸마다 줄 상자가 따로 나오는데, 스캔이 기울면
+/// 같은 행 칸의 세로 위치가 조금씩 달라 위→아래로만 정렬하면 칸 순서가 뒤집힌다.
+const SAME_ROW_MAX_OFFSET_RATIO: f32 = 0.5;
 
 #[derive(Debug, thiserror::Error)]
 pub enum OcrError {
@@ -58,12 +70,12 @@ pub enum OcrError {
 
 /// 이미지 위 사각형. 꼭짓점은 왼쪽 위, 오른쪽 위, 오른쪽 아래, 왼쪽 아래 순서(px, 위·왼쪽 원점)이고
 /// 기울어진 줄을 따라 회전해 있을 수 있다.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Quad {
     pub corners: [(f32, f32); 4],
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct OcrChar {
     pub text: String,
     /// CTC 구간의 최대 확률(0~1)
@@ -72,7 +84,7 @@ pub struct OcrChar {
     pub quad: Quad,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct OcrLine {
     pub text: String,
     /// 줄 안 글자 신뢰도의 최솟값
@@ -129,19 +141,59 @@ impl OcrEngine {
         &self.model_dir
     }
 
-    /// 이미지에서 글자 줄을 찾아 읽는다. 결과는 위에서 아래, 왼쪽에서 오른쪽 순서다.
+    /// 이미지에서 글자 줄을 찾아 읽는다. 결과는 읽는 순서([`reading_order`])다.
     pub fn recognize(&mut self, image: &RgbImage) -> Result<Vec<OcrLine>, OcrError> {
         let image = &red_channel_gray(image);
         let quads = detect::detect_lines(&mut self.detector, image)?;
-        let mut lines =
+        let lines =
             recognize::recognize_lines(&mut self.recognizer, &self.characters, image, &quads)?;
-        lines.sort_by(|left, right| {
-            let (left_x, left_y) = left.quad.center();
-            let (right_x, right_y) = right.quad.center();
-            left_y.total_cmp(&right_y).then(left_x.total_cmp(&right_x))
-        });
-        Ok(lines)
+        Ok(reading_order(lines))
     }
+}
+
+/// 줄을 읽는 순서로 놓는다: 기울기(가로 줄 윗변 각도의 가운데값)를 되돌린 좌표에서 위→아래로
+/// 놓고, 세로 위치가 [`SAME_ROW_MAX_OFFSET_RATIO`] 안인 줄은 같은 행으로 묶어 왼쪽→오른쪽으로 놓는다.
+fn reading_order(lines: Vec<OcrLine>) -> Vec<OcrLine> {
+    let mut angles: Vec<f32> = lines
+        .iter()
+        .filter(|line| line.quad.width() > line.quad.height())
+        .map(|line| {
+            let [top_left, top_right, ..] = line.quad.corners;
+            (top_right.1 - top_left.1).atan2(top_right.0 - top_left.0)
+        })
+        .collect();
+    angles.sort_by(f32::total_cmp);
+    let skew = angles.get(angles.len() / 2).copied().unwrap_or_default();
+    let (sin, cos) = (-skew).sin_cos();
+    let mut placed: Vec<(f32, f32, f32, OcrLine)> = lines
+        .into_iter()
+        .map(|line| {
+            let (x, y) = line.quad.center();
+            let height = line.quad.height();
+            (x * cos - y * sin, x * sin + y * cos, height, line)
+        })
+        .collect();
+    placed.sort_by(|left, right| left.1.total_cmp(&right.1));
+
+    let mut rows: Vec<Vec<(f32, f32, f32, OcrLine)>> = Vec::new();
+    for line in placed {
+        match rows.last_mut() {
+            Some(row)
+                if row.iter().any(|(_, y, height, _)| {
+                    (line.1 - y).abs() <= SAME_ROW_MAX_OFFSET_RATIO * height.min(line.2)
+                }) =>
+            {
+                row.push(line);
+            }
+            _ => rows.push(vec![line]),
+        }
+    }
+    rows.into_iter()
+        .flat_map(|mut row| {
+            row.sort_by(|left, right| left.0.total_cmp(&right.0));
+            row.into_iter().map(|(_, _, _, line)| line)
+        })
+        .collect()
 }
 
 /// 쪽을 `OCR_RENDER_DPI`로 렌더한다. 이미지는 메모리에만 둔다.
@@ -151,16 +203,24 @@ pub fn render_page_for_ocr(
     page_index: u16,
 ) -> Result<RgbImage, OcrError> {
     let document = open_document(engine.pdfium(), path)?;
+    let page = document
+        .pages()
+        .get(i32::from(page_index))
+        .map_err(|_| OcrError::PageOutOfRange { page_index })?;
+    render_page(&page, path)
+}
+
+/// 열린 쪽을 `OCR_RENDER_DPI`로 렌더한다. 렌더 영역은 pdfium 쪽 상자(CropBox ∩ MediaBox =
+/// `view_box`)이고 `/Rotate`를 적용한 화면 방향이다. 이미지 크기는 화면 크기(pt) × 배율을 내림한
+/// 값이라 배율과 조금 다를 수 있다(좌표 되돌리기는 실제 이미지 크기로 셈한다).
+/// `path`는 에러에 남길 문서 경로다.
+pub(crate) fn render_page(page: &PdfPage, path: &Path) -> Result<RgbImage, OcrError> {
     let to_error = |source: PdfiumError| {
         OcrError::Document(DocumentError::Pdfium {
             path: path.to_path_buf(),
             source,
         })
     };
-    let page = document
-        .pages()
-        .get(i32::from(page_index))
-        .map_err(|_| OcrError::PageOutOfRange { page_index })?;
     let config =
         PdfRenderConfig::new().scale_page_by_factor(OCR_RENDER_DPI as f32 / POINTS_PER_INCH);
     let bitmap = page.render_with_config(&config).map_err(to_error)?;

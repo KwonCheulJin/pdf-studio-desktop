@@ -65,7 +65,8 @@ pub struct LineExclusions {
 }
 
 impl CompareOptions {
-    /// 토큰화 옵션. 유니코드 형식은 기본(NFC)을 그대로 둔다.
+    /// 토큰화 옵션. 유니코드 형식은 기본(NFC)을 그대로 둔다. OCR 쪽이 있는 비교에서 NFKC로 올리는
+    /// 것은 [`compare_texts`](super::compare_texts) 한 곳이 한다(ADR 0001 §5·§11).
     pub fn normalize_options(&self) -> NormalizeOptions {
         NormalizeOptions {
             ignore_case: self.ignore_case,

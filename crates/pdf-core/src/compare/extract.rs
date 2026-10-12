@@ -28,7 +28,7 @@ use crate::info::{PageBox, PageRotation, rotation_of, view_box};
 /// 스캔본에 디지털로 찍힌 쪽 번호·날짜·도장 문구(보통 30자 아래)만으로는 텍스트 쪽으로 보지 않고,
 /// 서명란만 있는 쪽처럼 글자가 적은 텍스트 쪽은 OCR로 읽어도 같은 글자가 나와 손해가 작다.
 /// 반대로 놓치면 스캔한 본문 전체가 비교에서 빠지므로 낮은 쪽보다 높은 쪽으로 둔다.
-/// Step 19-a에서 스캔 픽스처로 다시 본다.
+/// 스캔 픽스처(이미지만 있는 쪽)는 0자, 가상 계약서 텍스트 쪽은 수백 자라 값을 그대로 둔다(Step 19-a).
 pub const OCR_MIN_TEXT_CHARS: u32 = 32;
 
 /// 내용 스트림에 그려진 글자의 상자와 크기
@@ -48,6 +48,9 @@ pub struct ExtractedChar {
     pub ch: char,
     /// pdfium이 만든 글자(내용 스트림에 없는 공백·줄바꿈)면 `None`
     pub glyph: Option<Glyph>,
+    /// OCR로 읽은 글자의 신뢰도(0~1). 텍스트 레이어 글자는 `None`이다(직렬화하지 않는다).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub confidence: Option<f32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -115,7 +118,11 @@ fn extract_char(
         .unicode_char()
         .unwrap_or(char::REPLACEMENT_CHARACTER);
     if text_char.is_generated()? {
-        return Ok(ExtractedChar { ch, glyph: None });
+        return Ok(ExtractedChar {
+            ch,
+            glyph: None,
+            confidence: None,
+        });
     }
     // pdfium 글꼴 크기는 `Tf` 값 그대로다. 글자 행렬(텍스트 행렬 × CTM)의 세로 단위 벡터
     // 길이를 곱해야 사용자 공간 크기가 된다(회전한 글자도 같다).
@@ -127,6 +134,7 @@ fn extract_char(
             bounds: text_box(page_number, text_char.tight_bounds()?),
             font_size: text_char.unscaled_font_size().value * vertical_scale,
         }),
+        confidence: None,
     })
 }
 

@@ -13,7 +13,7 @@ import {
 import { cn } from "@/renderer/shared/lib/utils";
 import { Button, Checkbox, Tooltip } from "@/renderer/shared/ui";
 import { formatPageRange } from "@/renderer/shared/lib/page-range-format";
-import { usePdfThumbnail } from "../model/use-pdf-thumbnail";
+import { usePageThumbnail } from "../model/use-page-thumbnail";
 import {
   useSelectionStore,
   useSelectedIds,
@@ -86,14 +86,14 @@ export function DocumentCard({
     (page) => groupPageIdSet.has(page.id) && !page.isDeleted
   );
 
-  // 그룹 첫 페이지의 sourcePageIndex (1-based로 변환)
-  const thumbnailPageNumber = firstGroupPage
-    ? firstGroupPage.sourcePageIndex + 1
-    : 1;
-
-  const { thumbnailUrl, isLoading } = usePdfThumbnail({
+  // 그룹 첫 페이지 썸네일. 펼친 카드의 같은 페이지와 렌더 결과를 함께 쓴다.
+  const {
+    ref: thumbnailRef,
+    thumbnailUrl,
+    isLoading
+  } = usePageThumbnail({
     filePath: document.path,
-    pageNumber: thumbnailPageNumber
+    pageIndex: firstGroupPage?.sourcePageIndex ?? 0
   });
 
   // 첫 페이지 회전 상태 (썸네일에 적용)
@@ -234,6 +234,7 @@ export function DocumentCard({
           {/* 썸네일 이미지 - 고정 크기 컨테이너 */}
           <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded">
             <div
+              ref={thumbnailRef}
               className="bg-muted flex items-center justify-center overflow-hidden rounded"
               style={
                 imageSize ? { width: imageSize, height: imageSize } : undefined

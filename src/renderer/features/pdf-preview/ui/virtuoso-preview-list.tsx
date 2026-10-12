@@ -1,9 +1,7 @@
 import { useCallback, useRef, type HTMLAttributes, type Ref } from "react";
 import { Virtuoso } from "react-virtuoso";
-import { Loader2 } from "lucide-react";
 import type { PdfDocument } from "@/renderer/entities/merge-plan";
 import { cn } from "@/renderer/shared/lib/utils";
-import { usePreviewPages } from "../model/use-preview-pages";
 import { PREVIEW_CONFIG } from "../config/preview";
 import { PreviewPageItem } from "./preview-page-item";
 
@@ -46,7 +44,6 @@ function CustomScroller({
 
 interface VirtuosoPreviewListProps {
   document: PdfDocument;
-  isOpen: boolean;
 }
 
 /**
@@ -55,57 +52,24 @@ interface VirtuosoPreviewListProps {
  * - 뷰포트 내 페이지만 렌더링
  * - 고정 높이로 스크롤 안정성 확보
  */
-export function VirtuosoPreviewList({
-  document,
-  isOpen
-}: VirtuosoPreviewListProps) {
-  const { totalPages, getPageData, loadPage, isDocumentLoading, error } =
-    usePreviewPages({
-      pdfDocument: document,
-      isOpen
-    });
+export function VirtuosoPreviewList({ document }: VirtuosoPreviewListProps) {
+  // 그룹 미리보기면 document.pages가 그 그룹 페이지만 담고 있다.
+  const totalPages = document.pages.length;
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   // 페이지 아이템 렌더링
   // PDF 파일 자체가 회전되므로 CSS 회전 불필요
   const renderItem = useCallback(
-    (index: number) => {
-      const pageData = getPageData(index);
-
-      return (
-        <PreviewPageItem
-          pageIndex={index}
-          pageData={pageData}
-          onLoadPage={loadPage}
-          itemHeight={FIXED_ITEM_HEIGHT}
-        />
-      );
-    },
-    [getPageData, loadPage]
+    (index: number) => (
+      <PreviewPageItem
+        filePath={document.path}
+        pageIndex={index}
+        sourcePageIndex={document.pages[index]?.sourcePageIndex ?? index}
+        itemHeight={FIXED_ITEM_HEIGHT}
+      />
+    ),
+    [document.path, document.pages]
   );
-
-  // PDF 로딩 중
-  if (isDocumentLoading) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="text-muted-foreground flex flex-col items-center gap-2">
-          <Loader2 size={32} className="animate-spin" />
-          <span className="text-sm">PDF 로딩 중...</span>
-        </div>
-      </div>
-    );
-  }
-
-  // 에러 상태
-  if (error) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="text-muted-foreground text-center">
-          <p>{error}</p>
-        </div>
-      </div>
-    );
-  }
 
   // 페이지가 없는 경우
   if (totalPages === 0) {

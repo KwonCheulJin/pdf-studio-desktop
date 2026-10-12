@@ -17,7 +17,6 @@ export interface PdfPage {
   sourcePageIndex: number; // 원본 페이지 인덱스 (0-based)
   rotation: PageRotation; // 0, 90, 180, 270
   isDeleted: boolean; // soft delete 플래그
-  thumbnailUrl?: string; // data URL 또는 blob URL
 }
 
 export interface PdfDocument {

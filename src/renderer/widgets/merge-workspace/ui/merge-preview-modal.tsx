@@ -69,7 +69,7 @@ export function MergePreviewModal({
               </div>
             </div>
           ) : mergedDocument ? (
-            <VirtuosoPreviewList document={mergedDocument} isOpen={isOpen} />
+            <VirtuosoPreviewList document={mergedDocument} />
           ) : null}
         </div>
 

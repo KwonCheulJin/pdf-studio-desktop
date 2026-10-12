@@ -1,5 +1,9 @@
 import type { MergeRequest } from "@/renderer/shared/api/bindings";
 import {
+  getPdfCacheStats,
+  type PdfCacheStats
+} from "@/renderer/shared/lib/pdfjs";
+import {
   createMockPlatform,
   type CopyFileParams,
   type DesktopPlatform,
@@ -50,6 +54,10 @@ declare global {
     __E2E_MOCK_SEED__?: E2eMockSeed;
     /** 앱이 쓰기 계열 호출을 기록하는 곳. 테스트가 읽는다. */
     __E2E_MOCK_WRITES__?: E2eWriteCall[];
+    /** 앱이 `readPdf`로 읽은 경로를 부른 순서대로 기록하는 곳 */
+    __E2E_MOCK_READS__?: string[];
+    /** pdf.js 캐시 상태(살아 있는 문서, 렌더 캐시 항목) 조회 */
+    __E2E_PDF_CACHE_STATS__?: () => PdfCacheStats;
   }
 }
 
@@ -86,6 +94,22 @@ function recordWrites(
   };
 }
 
+interface RecordReadsParams {
+  platform: DesktopPlatform;
+  reads: string[];
+}
+
+/** `readPdf` 호출 경로를 위임 전에 기록한다. */
+function recordReads({ platform, reads }: RecordReadsParams): DesktopPlatform {
+  return {
+    ...platform,
+    readPdf: (path) => {
+      reads.push(path);
+      return platform.readPdf(path);
+    }
+  };
+}
+
 /** 시드가 없으면(개발 서버를 브라우저로 그냥 열었을 때) 빈 가짜 플랫폼 */
 export function createE2ePlatform(): DesktopPlatform {
   const seed = window.__E2E_MOCK_SEED__;
@@ -93,9 +117,15 @@ export function createE2ePlatform(): DesktopPlatform {
     return createMockPlatform();
   }
   const writes: E2eWriteCall[] = [];
+  const reads: string[] = [];
   window.__E2E_MOCK_WRITES__ = writes;
-  return recordWrites(
-    createMockPlatform({ files: seed.files.map(toMockFile) }),
-    writes
-  );
+  window.__E2E_MOCK_READS__ = reads;
+  window.__E2E_PDF_CACHE_STATS__ = getPdfCacheStats;
+  return recordReads({
+    platform: recordWrites(
+      createMockPlatform({ files: seed.files.map(toMockFile) }),
+      writes
+    ),
+    reads
+  });
 }

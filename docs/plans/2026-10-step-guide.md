@@ -231,7 +231,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 | 17-a | ★ P2-2a OCR 스파이크 (게이트) | `spike/ocr` | 계획서 §6.4 합격 기준 표 전부 통과(한국어 CER, 숫자·금액·날짜 토큰 일치율, 숫자 조용한 오인식 0건, 쪽당 처리 시간, 번들 증가량), ad-hoc 서명 `.app`에서 ONNX Runtime 로드·추론, 확정한 모델 이름·버전·ONNX 출처·SHA-256과 측정값을 §6.4에 기록. Mac·Windows 결과 일치는 Step 30 CI에서 확인 | [x] |
 | 18 | P2-3 정규화·토큰화 | `feat/compare-tokenize` | 한글 픽스처 토큰화 golden 통과 | [x] |
 | 19 | P2-4 정렬과 diff | `feat/compare-diff` | 삽입·삭제·치환·문단 이동 golden 통과 | [x] |
-| 19-a | P2-4a OCR 연결 | `feat/compare-ocr` | Step 17-a 통과 후 시작. 텍스트본 ↔ 스캔본 차이 0, 금액·날짜·조항을 바꾼 짝에서 바꾼 곳만 변경 golden 통과, OCR 상자 → PDF pt 되돌리기가 원본 상자와 허용 오차 안(CropBox 오프셋, 회전 페이지 포함), 신뢰도 기준 미만 토큰이 걸린 변경과 OCR 쪽 띄어쓰기만·문장부호만 다른 치환이 `needs_review`로 분류, OCR 쪽이 있으면 NFKC 강제(ADR 0001 §5), 같은 파일 재비교에서 OCR 생략(캐시) | [ ] |
+| 19-a | P2-4a OCR 연결 | `feat/compare-ocr` | Step 17-a 통과 후 시작. 텍스트본 ↔ 스캔본 차이 0, 금액·날짜·조항을 바꾼 짝에서 바꾼 곳만 변경 golden 통과, OCR 상자 → PDF pt 되돌리기가 원본 상자와 허용 오차 안(CropBox 오프셋, 회전 페이지 포함), 신뢰도 기준 미만 토큰이 걸린 변경과 OCR 쪽 띄어쓰기만·문장부호만 다른 치환이 `needs_review`로 분류, OCR 쪽이 있으면 NFKC 강제(ADR 0001 §5), 같은 파일 재비교에서 OCR 생략(캐시) → [ADR 0001 §11](../adr/0001-compare-result-model.md) | [x] |
 | 20 | P2-5 페이지 짝짓기 | `feat/compare-page-pairs` | 페이지 삽입·삭제 픽스처에서 짝이 맞음 | [ ] |
 | 21 | P2-6 옵션 | `feat/compare-options` | A·B 따로 페이지 범위(초과 시 `InvalidRange`), 머리말·꼬리말·쪽번호 따로 제외, 대소문자 무시 테스트 통과 | [ ] |
 | 22 | P2-7 작업 실행기 | `feat/compare-runner` | 6단계 `Progress` 이벤트(단계별 %·전체 %, 1% 단위, 100%는 끝났을 때만), 취소(추출·OCR은 쪽마다 확인), 옵션만 바꾼 재실행에서 추출·OCR 생략(그 단계 즉시 100%), OCR 대상 쪽이 없으면 `ocr` 단계 즉시 100% | [ ] |

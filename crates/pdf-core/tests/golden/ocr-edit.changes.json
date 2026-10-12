@@ -1,0 +1,17 @@
+[
+  {"kind":"replace","before":"한다.","after":"한다","needsReview":true},
+  {"kind":"replace","before":"4월","after":"5월","needsReview":false},
+  {"kind":"replace","before":"31일까지로","after":"31 일까지로","needsReview":true},
+  {"kind":"delete","before":"서면으로","after":null,"needsReview":false},
+  {"kind":"insert","before":null,"after":"서면으로","needsReview":false},
+  {"kind":"replace","before":"연장한다.","after":"연장한다","needsReview":true},
+  {"kind":"replace","before":"토너와 복사","after":"토너와복사","needsReview":true},
+  {"kind":"replace","before":"(계약 금액)","after":"(계약금액)","needsReview":true},
+  {"kind":"replace","before":"48,750,000원(부가가치세","after":"48,950,000원(부가가치세","needsReview":true},
+  {"kind":"replace","before":"지급한다.","after":"지급한다","needsReview":true},
+  {"kind":"insert","before":null,"after":"규격 미달로","needsReview":false},
+  {"kind":"delete","before":"모든","after":null,"needsReview":false},
+  {"kind":"replace","before":"0.15%를","after":"0.20%를","needsReview":false},
+  {"kind":"replace","before":"낸다.","after":"낸다","needsReview":true},
+  {"kind":"replace","before":"있다. 제11조","after":"있다 제1 1조","needsReview":true}
+]

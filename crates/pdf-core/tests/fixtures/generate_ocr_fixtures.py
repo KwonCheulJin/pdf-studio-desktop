@@ -6,6 +6,10 @@
 2) pdfium으로 렌더해 스캔본처럼 만든다(기울기, 흐림, 노이즈, 붉은 원 도장, JPEG 압축).
    스캔 PDF 는 쪽마다 이미지 한 장만 있고 텍스트 레이어가 없다.
 정답은 텍스트 PDF 자체와, 그 PDF 를 그린 배치 그대로의 줄·글자 칸 TSV, 스캔 조건 TSV 다.
+3) 좌표 되돌리기 검증용(P2-4a) ocr-geometry.pdf(텍스트)와 ocr-geometry-scan.pdf(스캔)를 만든다.
+   쪽마다 CropBox 오프셋·MediaBox 원점·/Rotate 90·180·270 이 다르고, 스캔 쪽은 텍스트 쪽을 같은
+   상자·회전으로 렌더한 이미지를 사용자 공간 방향으로 되돌려 CropBox 에 붙인 것이라 화면에서 똑같이
+   보인다. 기울기·노이즈 없이 흐림만 둔다(정답 상자는 텍스트 PDF 의 글자 상자다).
 
 필요한 것
 - Python 3.11+, Pillow(기존 픽스처 생성과 같음)
@@ -235,6 +239,32 @@ CONTRACT_B_REPLACEMENTS = [
     ("검수에서 불합격한", "검수에서 규격 미달로 불합격한"),
     ("모든 비용을", "비용을"),
 ]
+
+# 좌표 되돌리기 픽스처: 쪽마다 (MediaBox, CropBox, /Rotate). 상자는 [왼쪽, 아래, 오른쪽, 위] pt
+GEOMETRY_PAGES = [
+    ((0, 0, 595, 842), (36, 48, 559, 794), 0),
+    ((0, 0, 595, 842), (40, 60, 560, 800), 90),
+    ((0, 0, 595, 842), (0, 0, 595, 842), 180),
+    ((50, 60, 645, 902), (80, 100, 620, 880), 270),
+]
+GEOMETRY_TEXT = [
+    "제4조 (계약 금액) 총 계약 금액은 금 48,750,000원(부가가치세 별도)으로 한다.",
+    "단가는 토너 1개당 27,500원, 복사 용지 1상자당 8,900원이다.",
+    "계약 기간은 2026년 4월 1일부터 2027년 3월 31일까지로 한다.",
+    "을은 매월 10일까지 갑의 본사 창고로 물품을 납품한다.",
+]
+GEOMETRY_MARGIN = 40
+GEOMETRY_DPI = 300
+GEOMETRY_JPEG_QUALITY = 75
+# 쪽 회전(/Rotate, 시계 방향)마다 글자를 화면에서 바로 서게 그리는 텍스트 행렬의 (a, b, c, d)
+TEXT_ROTATION_MATRIX = {0: (1, 0, 0, 1), 90: (0, 1, -1, 0), 180: (-1, 0, 0, -1), 270: (0, -1, 1, 0)}
+# 화면 방향 렌더 이미지를 사용자 공간 방향으로 되돌리는 PIL 회전(ROTATE_90 은 반시계 90도)
+UNROTATE_IMAGE = {
+    0: None,
+    90: Image.Transpose.ROTATE_90,
+    180: Image.Transpose.ROTATE_180,
+    270: Image.Transpose.ROTATE_270,
+}
 
 SCANS = [
     ScanSpec("contract-a-scan-300dpi", "contract-a", 300, [0.7, -1.2]),
@@ -602,6 +632,34 @@ class Pdfium:
         lib.FPDF_CloseDocument.argtypes = [ctypes.c_void_p]
         self.lib = lib
 
+    def render_pages(self, pdf: bytes, dpi: int) -> list[Image.Image]:
+        """쪽마다 화면 크기(CropBox, /Rotate 적용)로 렌더한다."""
+        lib = self.lib
+        lib.FPDF_GetPageWidthF.restype = ctypes.c_float
+        lib.FPDF_GetPageWidthF.argtypes = [ctypes.c_void_p]
+        lib.FPDF_GetPageHeightF.restype = ctypes.c_float
+        lib.FPDF_GetPageHeightF.argtypes = [ctypes.c_void_p]
+        buffer = ctypes.create_string_buffer(pdf, len(pdf))
+        document = lib.FPDF_LoadMemDocument(buffer, len(pdf), None)
+        if not document:
+            raise SystemExit("pdfium 이 텍스트 PDF 를 열지 못함")
+        images = []
+        for index in range(lib.FPDF_GetPageCount(document)):
+            page = lib.FPDF_LoadPage(document, index)
+            width = round(lib.FPDF_GetPageWidthF(page) * dpi / POINTS_PER_INCH)
+            height = round(lib.FPDF_GetPageHeightF(page) * dpi / POINTS_PER_INCH)
+            bitmap = lib.FPDFBitmap_Create(width, height, BITMAP_BGRX)
+            lib.FPDFBitmap_FillRect(bitmap, 0, 0, width, height, BITMAP_BACKGROUND)
+            lib.FPDF_RenderPageBitmap(bitmap, page, 0, 0, width, height, 0, FPDF_ANNOT)
+            stride = lib.FPDFBitmap_GetStride(bitmap)
+            raw = ctypes.string_at(lib.FPDFBitmap_GetBuffer(bitmap), stride * height)
+            image = Image.frombuffer("RGB", (width, height), raw, "raw", "BGRX", stride, 1)
+            images.append(image.copy())
+            lib.FPDFBitmap_Destroy(bitmap)
+            lib.FPDF_ClosePage(page)
+        lib.FPDF_CloseDocument(document)
+        return images
+
     def render(self, pdf: bytes, dpi: int) -> list[Image.Image]:
         lib = self.lib
         buffer = ctypes.create_string_buffer(pdf, len(pdf))
@@ -749,6 +807,114 @@ def scans_tsv(entries: list[tuple[ScanSpec, list[tuple[float, float]]]]) -> str:
     return "\n".join(rows) + "\n"
 
 
+# ---------------------------------------------------------------------------
+# 좌표 되돌리기 픽스처
+# ---------------------------------------------------------------------------
+
+
+def screen_to_user(crop: tuple, rotation: int, x: float, y: float) -> tuple[float, float]:
+    """화면 좌표(위·왼쪽 원점, /Rotate 적용 후) → 사용자 공간 좌표. 텍스트 쪽을 그릴 때만 쓴다
+    (정답 상자는 이 함수가 아니라 pdfium 이 텍스트 PDF 에서 읽은 글자 상자다)."""
+    left, bottom, right, top = crop
+    width, height = right - left, top - bottom
+    user = {
+        0: (x, height - y),
+        90: (y, x),
+        180: (width - x, y),
+        270: (width - y, height - x),
+    }[rotation]
+    return (left + user[0], bottom + user[1])
+
+
+def screen_size(crop: tuple, rotation: int) -> tuple[float, float]:
+    width, height = crop[2] - crop[0], crop[3] - crop[1]
+    return (height, width) if rotation in (90, 270) else (width, height)
+
+
+def geometry_content(font: Font, crop: tuple, rotation: int) -> bytes:
+    screen_width, _ = screen_size(crop, rotation)
+    a, b, c, d = TEXT_ROTATION_MATRIX[rotation]
+    commands = []
+    baseline = GEOMETRY_MARGIN
+    for paragraph in GEOMETRY_TEXT:
+        for text in wrap(font, paragraph, BODY_SIZE, screen_width - 2 * GEOMETRY_MARGIN):
+            baseline += BODY_SIZE * LINE_GAP_RATIO
+            x, y = screen_to_user(crop, rotation, GEOMETRY_MARGIN, baseline)
+            glyphs = "".join(f"{font.gid(character):04X}" for character in text)
+            commands.append(
+                f"BT /{FONT_RESOURCE['body']} {BODY_SIZE:g} Tf "
+                f"{a} {b} {c} {d} {x:.2f} {y:.2f} Tm <{glyphs}> Tj ET"
+            )
+    return "\n".join(commands).encode("ascii")
+
+
+def page_boxes(media: tuple, crop: tuple, rotation: int) -> bytes:
+    return b"/MediaBox [%s] /CropBox [%s] /Rotate %d" % (
+        " ".join(str(value) for value in media).encode("ascii"),
+        " ".join(str(value) for value in crop).encode("ascii"),
+        rotation,
+    )
+
+
+def geometry_text_pdf(font: Font) -> bytes:
+    contents = [geometry_content(font, crop, rotation) for _, crop, rotation in GEOMETRY_PAGES]
+    objects: dict[int, bytes] = font_objects(font, 3)
+    next_number = 8
+    page_numbers = []
+    for (media, crop, rotation), content in zip(GEOMETRY_PAGES, contents):
+        page_number, content_number = next_number, next_number + 1
+        next_number += 2
+        page_numbers.append(page_number)
+        objects[page_number] = (
+            b"<< /Type /Page /Parent 2 0 R %s /Resources << /Font << /F1 3 0 R >> >> "
+            b"/Contents %d 0 R >>" % (page_boxes(media, crop, rotation), content_number)
+        )
+        objects[content_number] = stream_object(content)
+    objects[1] = b"<< /Type /Catalog /Pages 2 0 R >>"
+    kids = b" ".join(b"%d 0 R" % number for number in page_numbers)
+    objects[2] = b"<< /Type /Pages /Kids [%s] /Count %d >>" % (kids, len(page_numbers))
+    return write_pdf(objects, next_number)
+
+
+def geometry_scan_pdf(pdfium: "Pdfium", text_pdf_bytes: bytes) -> bytes:
+    """텍스트 쪽을 화면 방향으로 렌더하고, 사용자 공간 방향으로 되돌린 이미지를 같은 상자·회전의
+    쪽 CropBox 에 붙인다."""
+    rendered = pdfium.render_pages(text_pdf_bytes, GEOMETRY_DPI)
+    objects: dict[int, bytes] = {1: b"<< /Type /Catalog /Pages 2 0 R >>"}
+    next_number = 3
+    page_numbers = []
+    for (media, crop, rotation), image in zip(GEOMETRY_PAGES, rendered):
+        page_number, content_number, image_number = next_number, next_number + 1, next_number + 2
+        next_number += 3
+        page_numbers.append(page_number)
+        page = image.convert("L").filter(ImageFilter.GaussianBlur(BLUR_RADIUS_PX))
+        if UNROTATE_IMAGE[rotation] is not None:
+            page = page.transpose(UNROTATE_IMAGE[rotation])
+        output = io.BytesIO()
+        page.save(output, "JPEG", quality=GEOMETRY_JPEG_QUALITY, optimize=True)
+        data = output.getvalue()
+        objects[page_number] = (
+            b"<< /Type /Page /Parent 2 0 R %s /Resources << /XObject << /Im0 %d 0 R >> >> "
+            b"/Contents %d 0 R >>" % (page_boxes(media, crop, rotation), image_number, content_number)
+        )
+        left, bottom, right, top = crop
+        content = b"q %d 0 0 %d %d %d cm /Im0 Do Q" % (right - left, top - bottom, left, bottom)
+        objects[content_number] = b"<< /Length %d >>\nstream\n%s\nendstream" % (
+            len(content),
+            content,
+        )
+        objects[image_number] = (
+            b"<< /Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceGray "
+            b"/BitsPerComponent 8 /Filter /DCTDecode /Length %d >>\nstream\n"
+            % (page.width, page.height, len(data))
+            + data
+            + b"\nendstream"
+        )
+    kids = b" ".join(b"%d 0 R" % number for number in page_numbers)
+    objects[2] = b"<< /Type /Pages /Kids [%s] /Count %d >>" % (kids, len(page_numbers))
+    return write_pdf(objects, next_number)
+
+
 def contract_b() -> list:
     blocks = []
     for kind, content in CONTRACT_A:
@@ -794,6 +960,12 @@ def main() -> None:
         entries.append((spec, centers))
         print(f"{spec.name}.pdf: {len(data)} bytes")
     (OUTPUT_DIR / "scans.tsv").write_text(scans_tsv(entries), encoding="utf-8")
+
+    geometry_text = geometry_text_pdf(Font("body"))
+    (OUTPUT_DIR / "ocr-geometry.pdf").write_bytes(geometry_text)
+    geometry_scan = geometry_scan_pdf(pdfium, geometry_text)
+    (OUTPUT_DIR / "ocr-geometry-scan.pdf").write_bytes(geometry_scan)
+    print(f"ocr-geometry.pdf: {len(geometry_text)} bytes, ocr-geometry-scan.pdf: {len(geometry_scan)} bytes")
 
 
 if __name__ == "__main__":

@@ -30,21 +30,21 @@ description: 설계 문서(.claude/plans/) 기반 단계별 구현 진행 스킬
 
 각 단계 완료 시 보고:
 ```
-✅ 1단계 완료: IPC 타입 정의 (src/main/types/ipc-schema.ts)
-→ 2단계 진행: 서비스 구현
+✅ 1단계 완료: 경계 타입 정의 (src-tauri/src/contract.rs)
+→ 2단계 진행: pdf-core 처리 구현
 ```
 
 ### 에이전트 활용
 
 | 작업 | 에이전트 |
 |------|---------|
-| IPC/서비스/스토어 | ipc-architect |
+| Tauri 커맨드/pdf-core/어댑터/스토어 | ipc-architect |
 | 비즈니스 로직/훅 | logic-expert |
 | UI 컴포넌트 | ui-publisher |
 
 ### 단계별 검증
 
-각 주요 단계 후 `pnpm typecheck`로 타입 오류 조기 발견
+각 주요 단계 후 `pnpm typecheck`(Rust를 고쳤으면 `cargo test`로 바인딩 재생성 후)로 타입 오류 조기 발견
 
 ### 범위 준수
 
@@ -55,8 +55,8 @@ description: 설계 문서(.claude/plans/) 기반 단계별 구현 진행 스킬
 
 ### TDD 준수
 
-`src/main/services/`, `src/renderer/shared/lib/` 구현 시:
-1. 테스트 먼저 작성 (`__tests__/` 디렉토리)
+`crates/pdf-core`, `src-tauri`의 순수 로직 구현 시 (`docs/rules/testing.md`):
+1. 테스트 먼저 작성 (Rust `#[cfg(test)]` 또는 `crates/*/tests/`). 프론트는 새 Vitest를 쓰지 않는다
 2. 테스트 통과하는 최소 구현
 3. 리팩토링
 
@@ -74,15 +74,16 @@ description: 설계 문서(.claude/plans/) 기반 단계별 구현 진행 스킬
 ## 구현 완료: {기능명}
 
 ### 변경 파일
-- src/main/types/ipc-schema.ts (수정)
-- src/main/services/... (신규)
-- src/preload/index.ts (수정)
+- crates/pdf-core/src/... (신규/수정)
+- src-tauri/src/contract.rs, commands.rs (수정)
+- src/renderer/shared/platform/... (수정)
 - src/renderer/... (신규/수정)
 
 ### 검증 결과
 - ✅ pnpm typecheck 성공
 - ✅ pnpm lint 경고 없음
 - ✅ pnpm test 통과
+- ✅ cargo fmt --check · cargo clippy -D warnings · cargo test 통과
 
 ### 사용자 확인 필요
 - 앱에서 {기능} 동작 확인

@@ -12,7 +12,7 @@ export function getErrorSnapshot(): ErrorSnapshotInstance {
   if (!instance) {
     instance = initErrorSnapshot({
       projectId: "pdf-studio",
-      appPrefix: "PDF",
+      appPrefix: "PDF"
       // firebase 설정은 생략 → 라이브러리 기본 Firebase 프로젝트 사용
     });
 

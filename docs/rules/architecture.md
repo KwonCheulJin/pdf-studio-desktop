@@ -13,7 +13,7 @@
 | 프레임워크·UI | Tauri 런타임, React 컴포넌트 | 입출력, 화면 | 어댑터 인터페이스 |
 
 - `pdf-core`는 Tauri·웹뷰를 모른다. `cargo test`만으로 검증할 수 있어야 한다.
-- 프론트는 `DesktopPlatform` 인터페이스에만 의존한다. `@tauri-apps/api` import는 `shared/platform/tauri-platform.ts`와 생성 바인딩(`shared/api/bindings.ts`)에서만 한다. 바인딩의 커맨드(`commands`)는 `tauri-platform.ts`에서만 호출하고, 계약 타입은 어디서든 `import type`으로 가져온다. `window.api`(Electron)는 Step 2에서 없앤다.
+- 프론트는 `DesktopPlatform` 인터페이스에만 의존한다. `@tauri-apps/api` import는 `shared/platform/tauri-platform.ts`와 생성 바인딩(`shared/api/bindings.ts`)에서만 한다. 바인딩의 커맨드(`commands`)는 `tauri-platform.ts`에서만 호출하고, 계약 타입은 어디서든 `import type`으로 가져온다.
 - 경계를 넘는 데이터는 계약 타입(`tauri-specta` 생성물)만 쓴다. TS 쪽에 같은 타입을 손으로 복제하지 않는다.
 - 프론트는 **파일 경로를 넘기고 결과(JSON)를 받는다.** PDF 바이트는 표시용 읽기(`read_pdf`) 말고는 IPC를 오가지 않는다.
 

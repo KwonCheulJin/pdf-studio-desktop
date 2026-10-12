@@ -5,13 +5,12 @@
 
 ## 프로젝트 개요
 
-PDF Studio Desktop — PDF 병합·편집·TIFF 변환 데스크톱 앱. **Electron → Tauri v2 전환 중**이며 PDF 비교 기능을 새로 넣는다.
+PDF Studio Desktop — PDF 병합·편집·TIFF 변환 데스크톱 앱. **Electron에서 Tauri v2로 옮겼고(Electron 코드는 Step 14에서 제거)**, 남은 마이그레이션 Step과 PDF 비교 기능을 진행 중이다.
 - 계획서: `docs/plans/2026-10-tauri-migration-and-pdf-compare.md` / 진행 순서: `docs/plans/2026-10-step-guide.md`
-- 지금 코드: Electron Forge + Vite + React 19 + TypeScript + Tailwind CSS 4 + pnpm
-- 목표 구조: Tauri v2 셸 + Rust `crates/pdf-core`(pdfium) 처리 + pdf.js(웹뷰) 표시
+- 구조: Tauri v2 셸(`src-tauri`) + Rust `crates/pdf-core`(pdfium) 처리 + 렌더러 `src/renderer`(Vite + React 19 + TypeScript + Tailwind CSS 4, pdf.js 표시) + pnpm. 폴더 지도는 `docs/01-folder-structure.md`
 
 ```bash
-pnpm start                          # 개발 서버(Electron, 전환 전)
+pnpm tauri dev                      # 개발 실행(사용자용. 에이전트는 실행하지 않는다 — 작업 원칙 참고)
 pnpm validate                       # lint + typecheck + test
 pnpm lint:fix / format / format:check
 pnpm fetch:pdfium                   # 버전 고정 pdfium을 src-tauri/pdfium/ 에 받는다
@@ -70,4 +69,4 @@ pnpm tauri build                    # Tauri 빌드
 | `docs/rules/testing.md` | 테스트 작성·수정·삭제 |
 | `docs/06-design-system.md` | UI 토큰·FSD 세부 배치 |
 
-`docs/01`~`docs/05`는 Electron 기준 문서(`01-folder-structure.md`, `02-ipc-api-spec.md`는 Electron·Main Process 전제)라 Tauri 전환 뒤 기준과 다를 수 있다. 전환 기준은 계획서와 `docs/rules`가 우선한다.
+`docs/01-folder-structure.md`는 현재 폴더 배치다. `docs/04-ui-component-tree.md`·`docs/05-naming-conventions.md`는 전환 전에 쓴 문서라 다르면 계획서와 `docs/rules`가 우선한다. Tauri 커맨드 목록은 계획서 §5 P1-3 표와 생성 바인딩(`src/renderer/shared/api/bindings.ts`)이 정본이다.

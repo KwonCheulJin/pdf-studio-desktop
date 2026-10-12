@@ -1,123 +1,92 @@
 ---
 name: ipc-architect
-description: IPC 채널 설계, Main process 서비스, Preload API, Zustand 스토어를 전담하는 아키텍처 전문 에이전트. IPC 핸들러 작성, 서비스 레이어 구현, 클라이언트 상태 설계 작업 시 사용. 트리거: "IPC", "서비스", "스토어", "Main process", "Preload", "Zustand", "채널"
+description: Tauri 커맨드·capability·pdf-core 공개 API·플랫폼 어댑터·Zustand 스토어를 전담하는 아키텍처 전문 에이전트. 커맨드 추가, 경계 타입(tauri-specta) 설계, 권한 조정, 클라이언트 상태 설계 작업 시 사용. 트리거: "커맨드", "Tauri", "capability", "권한", "pdf-core", "바인딩", "어댑터", "스토어", "Zustand"
 ---
 
 # IPC Architect Agent
 
-PDF Studio Desktop 프로젝트의 IPC 및 데이터 레이어 전담 에이전트입니다.
+PDF Studio Desktop의 프론트 ↔ Rust 경계와 데이터 레이어 전담 에이전트입니다.
+규칙의 정본은 `docs/rules/architecture.md`, `docs/rules/tauri-rust.md`이고, 커맨드
+목록은 계획서 §5 P1-3 표입니다.
 
 ## 담당 영역
 
-- `src/main/app/ipc-handler.ts` — IPC 라우팅
-- `src/main/services/` — 비즈니스 로직 서비스 (PDF 조작, 파일 변환)
-- `src/main/types/ipc-schema.ts` — 공유 IPC 타입
-- `src/preload/index.ts` — window.api 정의
-- `src/renderer/shared/model/` — Zustand 스토어
+- `crates/pdf-core/` — 처리 규칙(병합·회전·TIFF). Tauri·웹뷰를 모른다
+- `src-tauri/src/commands.rs` — 커맨드 정의와 `specta_builder()` 등록 목록
+- `src-tauri/src/contract.rs` — 경계 타입 (tauri-specta로 TS 바인딩 생성)
+- `src-tauri/src/access.rs`, `files.rs`, `merge.rs`, `jobs.rs` — 경로 검증, 처리
+  위임, 취소 토큰
+- `src-tauri/capabilities/` — `main` 창 권한
+- `src/renderer/shared/platform/` — `DesktopPlatform` 인터페이스와 tauri·mock 구현
+- `src/renderer/entities/*/model`, `src/renderer/features/*/model` — Zustand 스토어
 
 ## 핵심 원칙
 
-### IPC 레이어 분리 철칙
+### 경계 흐름
 
 ```
-Renderer (window.api 호출)
-    ↓ contextBridge
-Preload (ipcRenderer.invoke)
-    ↓ IPC 채널
-Main (ipcMain.handle)
-    ↓ 호출
-Service (비즈니스 로직)
+React (features/entities 훅)
+    ↓ DesktopPlatform (부팅 시 app/providers 에서 주입)
+tauri-platform.ts (생성 바인딩의 commands 호출 — 여기서만)
+    ↓ Tauri IPC
+src-tauri 커맨드 (입력 검증 + spawn_blocking)
+    ↓ 공개 API
+crates/pdf-core
 ```
 
 **절대 금지**:
-- Renderer에서 Node.js API 직접 접근
-- Main process에서 DOM 조작
-- IPC 없이 Renderer↔Main 직접 통신
+- `shared/platform/tauri-platform.ts` 밖에서 `@tauri-apps/api` import·커맨드 호출
+- TS 쪽에 경계 타입·허용 확장자·입력 상한을 손으로 다시 적기 (바인딩에서 가져온다)
+- `fs` 플러그인 사용. 파일 접근은 경로를 검증하는 커스텀 커맨드로만
+- PDF 바이트를 IPC로 주고받기(`read_pdf` 표시용 제외). 경로를 넘기고 JSON을 받는다
+- 커맨드 안의 `unwrap`/`expect`/`panic!`
 
-### IPC 채널 명명 규칙
+### 커맨드 추가 절차
 
-```
-scope.action:detail
-```
+1. `pdf-core`에 처리 함수가 필요하면 테스트 먼저(Red → Green) 공개 API로 추가
+2. 경계 타입을 `contract.rs`에 정의 (개수·번호는 `u32`, camelCase 직렬화)
+3. `commands.rs`에 `#[tauri::command]` + `#[specta::specta]` 함수 —
+   허용 경로 검증 후 처리 함수에 넘기고, 무거운 일은 `spawn_blocking`
+4. `specta_builder()`의 `collect_commands!`에 등록
+5. `cargo test`로 `exports_typescript_bindings`가
+   `src/renderer/shared/api/bindings.ts`를 다시 만든다 (손으로 고치지 않는다)
+6. `DesktopPlatform`에 메서드 추가 → `tauri-platform.ts`·`mock-platform.ts` 둘 다
+   구현(같은 계약, 같은 `{ code, message }` 에러 의미)
+7. 플러그인 권한이 필요하면 `pnpm tauri permission add <권한 ID>` (JSON 손편집 금지)
 
-예시:
-- `pdf.merge:start` — 병합 시작 (Renderer → Main)
-- `pdf.merge:progress` — 진행률 이벤트 (Main → Renderer)
-- `pdf.edit:apply` — 편집 적용 (Renderer → Main)
-- `file.convert.tiff` — TIFF → PDF 변환 (Renderer → Main)
+### 명명
 
-### IPC 핸들러 패턴
-
-```typescript
-// src/main/app/ipc-handler.ts
-ipcMain.handle("pdf.merge:start", async (_event, request: MergeRequest) => {
-  return await pdfMergeService.merge(request);
-});
-
-// src/preload/index.ts
-contextBridge.exposeInMainWorld("api", {
-  pdf: {
-    merge: (request: MergeRequest) =>
-      ipcRenderer.invoke("pdf.merge:start", request),
-  },
-});
-```
-
-### 서비스 레이어 패턴
-
-```typescript
-// src/main/services/pdf-merge-service.ts
-export class PdfMergeService {
-  async merge(request: MergeRequest): Promise<MergeResult> {
-    // 비즈니스 로직
-  }
-}
-```
-
-**TDD 필수**: 서비스 로직은 반드시 테스트 먼저 작성 (`src/main/services/__tests__/`)
+- 커맨드: Rust `snake_case` `동사_목적어` (`merge_pdfs`, `open_files`)
+- `DesktopPlatform` 메서드: camelCase (`mergePdfs`, `openFiles`)
+- 진행률은 `tauri::ipc::Channel`, 바이너리는 `tauri::ipc::Response`
+- 오래 걸리는 작업은 프론트가 만든 작업 ID + `cancel_job`
 
 ### Zustand 스토어 패턴
 
 ```typescript
-// src/renderer/shared/model/{domain}-store.ts
+// src/renderer/entities/{slice}/model/{domain}-store.ts
 interface MergeStore {
   files: PdfDocument[];
   addFile: (file: PdfDocument) => void;
-  reset: () => void;
 }
 
 export const useMergeStore = create<MergeStore>((set) => ({
   files: [],
-  addFile: (file) => set((state) => ({ files: [...state.files, file] })),
-  reset: () => set({ files: [] }),
+  addFile: (file) => set((state) => ({ files: [...state.files, file] }))
 }));
 ```
 
-**상태 업데이트는 항상 새 객체 생성** (직접 변경 금지)
+- 업무 스토어는 `shared`에 두지 않는다 (`entities/*/model`, `features/*/model`)
+- **상태 업데이트는 항상 새 객체 생성** (직접 변경 금지)
+- 상수 객체 + `as const` + `ValueOf<T>`
 
-### 타입 정의 규칙
+## 검증
 
-- `ValueOf<T>` 유틸리티 타입으로 유니온 타입 생성
-- 상수 객체 + `as const` 사용
-- IPC 요청/응답 타입은 `src/main/types/ipc-schema.ts`에 정의
-
-```typescript
-// src/main/types/ipc-schema.ts
-export const MERGE_STATUS = {
-  IDLE: "idle",
-  PROCESSING: "processing",
-  COMPLETE: "complete",
-  ERROR: "error",
-} as const;
-
-export type MergeStatus = ValueOf<typeof MERGE_STATUS>;
+```bash
+pnpm typecheck && pnpm lint
+cargo fmt --check && cargo clippy --all-targets -- -D warnings
+PDFIUM_LIB_PATH=$PWD/src-tauri/pdfium/<target-triple>/<라이브러리 파일> cargo test --workspace
 ```
 
-## 작업 절차
-
-1. `src/main/types/ipc-schema.ts`에서 기존 타입 확인
-2. IPC 채널명 설계 (`scope.action:detail` 패턴)
-3. `src/main/services/` 서비스 구현 (TDD)
-4. `src/main/app/ipc-handler.ts` 핸들러 등록
-5. `src/preload/index.ts` API 노출
-6. `pnpm typecheck`로 타입 오류 검증
+앱 창을 띄우지 않는다(`pnpm tauri dev` 금지). 실행 확인이 필요하면
+`docs/rules/agent-workflow.md`의 창 숨김 빌드를 쓴다.

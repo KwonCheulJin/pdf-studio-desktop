@@ -2,8 +2,9 @@
 //!
 //! - OCR 토큰은 OCR 글자가 하나라도 든 토큰(`Token::confidence`가 있다)이다.
 //! - 확인 필요: 걸린 OCR 토큰 중 기준 미만이 있거나, OCR 토큰이 걸린 `Replace`가 띄어쓰기만 또는
-//!   문장부호(유니코드 P*)와 띄어쓰기만 다르다. OCR은 띄어쓰기를 자주 틀리고 끝 마침표·쉼표를 높은
-//!   신뢰도로 빠뜨리는데, 빠진 글자에는 신뢰도가 없어 기준으로는 잡히지 않는다.
+//!   문장부호(유니코드 P*)와 띄어쓰기만 다르거나, OCR 토큰만 걸린 `Insert`·`Delete`가 문장부호뿐이다.
+//!   OCR은 띄어쓰기를 자주 틀리고 끝 마침표·쉼표를 높은 신뢰도로 빠뜨리거나 따로 떨어뜨려 읽는데,
+//!   빠진 글자에는 신뢰도가 없어 기준으로는 잡히지 않는다.
 
 use unicode_properties::{GeneralCategoryGroup, UnicodeGeneralCategory};
 
@@ -36,15 +37,21 @@ pub(super) fn min_confidence(tokens: &[Token]) -> Option<f32> {
         .map(|confidence| confidence.clamp(MIN_CONFIDENCE_VALUE, MAX_CONFIDENCE_VALUE))
 }
 
-/// 변경이 확인 필요인가(ADR 0001 §5의 세 규칙). 문맥 토큰은 보지 않는다. 띄어쓰기만 다른
-/// 치환(규칙 2)은 문장부호를 뺀 글자열도 같으므로 규칙 3 비교 하나로 함께 본다.
+/// 변경이 확인 필요인가(ADR 0001 §5의 규칙). 문맥 토큰은 보지 않는다. 띄어쓰기만 다른
+/// 치환(규칙 2)은 문장부호를 뺀 글자열도 같으므로 규칙 3 비교 하나로 함께 본다. `Insert`·`Delete`는
+/// 한쪽이 비어 있으므로 같은 비교가 "걸린 토큰이 모두 문장부호"가 된다(규칙 4).
 pub(super) fn needs_review(kind: ChangeKind, before: &[Token], after: &[Token]) -> bool {
     let below_threshold = before.iter().chain(after).any(is_below_threshold);
-    let ocr_replace =
-        kind == ChangeKind::Replace && (has_ocr_token(before) || has_ocr_token(after));
+    let ocr_side = match kind {
+        ChangeKind::Replace => has_ocr_token(before) || has_ocr_token(after),
+        // OCR이 문장부호를 따로 떨어진 토큰으로 읽은 경우만: 걸린 토큰이 모두 OCR 토큰이다.
+        ChangeKind::Insert | ChangeKind::Delete => before
+            .iter()
+            .chain(after)
+            .all(|token| token.confidence.is_some()),
+    };
     below_threshold
-        || (ocr_replace
-            && letters_without_punctuation(before).eq(letters_without_punctuation(after)))
+        || (ocr_side && letters_without_punctuation(before).eq(letters_without_punctuation(after)))
 }
 
 fn is_below_threshold(token: &Token) -> bool {

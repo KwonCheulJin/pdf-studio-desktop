@@ -82,8 +82,19 @@ pub struct Token {
 
 /// 쪽들의 글자를 이어 토큰열로 만든다. 쪽은 받은 순서대로 잇고 쪽 사이는 줄바꿈으로 본다.
 pub fn tokenize(pages: &[ExtractedPage], options: NormalizeOptions) -> Vec<Token> {
+    tokenize_pages(pages, options, |_| {})
+}
+
+/// [`tokenize`]와 같다. 쪽마다 그 쪽까지의 토큰을 만든 뒤 `on_page(끝낸 쪽 수)`를 부른다(진행률).
+/// 쪽의 마지막 단어는 다음 쪽 첫 단어와 하이픈으로 이어질 수 있어 다음 쪽을 읽은 뒤 토큰으로 만든다.
+pub(super) fn tokenize_pages(
+    pages: &[ExtractedPage],
+    options: NormalizeOptions,
+    mut on_page: impl FnMut(usize),
+) -> Vec<Token> {
     let mut words = Words::default();
-    for page in pages {
+    let mut tokens = Vec::new();
+    for (index, page) in pages.iter().enumerate() {
         for extracted in &page.chars {
             match extracted.glyph {
                 None => words.boundary(is_line_break(extracted.ch)),
@@ -98,12 +109,18 @@ pub fn tokenize(pages: &[ExtractedPage], options: NormalizeOptions) -> Vec<Token
             }
         }
         words.boundary(true);
+        // 이어질 수 있는 것은 마지막 단어뿐이다(`Words::boundary`는 그것만 고친다).
+        let kept = usize::from(index + 1 < pages.len());
+        let ready = words.finished.len().saturating_sub(kept);
+        tokens.extend(
+            words
+                .finished
+                .drain(..ready)
+                .map(|word| to_token(&word.chars, options)),
+        );
+        on_page(index + 1);
     }
-    words
-        .finished
-        .iter()
-        .map(|word| to_token(&word.chars, options))
-        .collect()
+    tokens
 }
 
 /// 텍스트 레이어 글자 중 대체 문자·PUA 비율이 [`LOW_TEXT_CONFIDENCE_RATIO`] 이상인가

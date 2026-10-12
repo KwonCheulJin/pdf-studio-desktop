@@ -10,6 +10,7 @@ mod pages;
 mod pipeline;
 mod report;
 mod review;
+mod runner;
 mod tokenize;
 
 pub use diff::{DIFF_TIME_LIMIT, TokenDiff, diff_tokens};
@@ -32,6 +33,9 @@ pub use report::{
     preview_compare_report,
 };
 pub use review::{OCR_MIN_CONFIDENCE, OCR_MIN_CONFIDENCE_NUMERIC};
+pub use runner::{
+    CompareProgress, CompareRequest, CompareStage, ExtractionCache, ProgressDetail, compare_pdfs,
+};
 pub use tokenize::{
     LOW_TEXT_CONFIDENCE_RATIO, NormalizeOptions, Token, UnicodeForm, has_low_text_confidence,
     tokenize,

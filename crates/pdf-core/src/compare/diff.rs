@@ -60,10 +60,24 @@ pub struct TokenDiff {
 /// 두 토큰열을 비교해 변경 목록을 만든다. `time_limit`(보통 [`DIFF_TIME_LIMIT`])이 지나면 남은
 /// 정밀 diff를 하지 않는다.
 pub fn diff_tokens(before: &[Token], after: &[Token], time_limit: Duration) -> TokenDiff {
+    diff_tokens_with_progress(before, after, time_limit, |_, _| {})
+}
+
+/// [`diff_tokens`]와 같다. 앵커 사이 구간마다 비교를 시작하기 전에 `on_gap(끝낸 구간 수, 구간 수)`를
+/// 부르고, 변경까지 다 만든 뒤 `on_gap(구간 수, 구간 수)`를 부른다(진행률. 구간 수 = 앵커 수 + 1).
+pub(super) fn diff_tokens_with_progress(
+    before: &[Token],
+    after: &[Token],
+    time_limit: Duration,
+    mut on_gap: impl FnMut(usize, usize),
+) -> TokenDiff {
     let deadline = Instant::now().checked_add(time_limit);
     let (before_ids, after_ids, vocabulary) = intern_keys(before, after);
     let anchors = anchors(&before_ids, &after_ids, vocabulary);
-    let hunks = diff_between_anchors(&before_ids, &after_ids, &anchors, deadline);
+    let gaps = anchors.len() + 1;
+    let hunks = diff_between_anchors(&before_ids, &after_ids, &anchors, deadline, |done| {
+        on_gap(done, gaps);
+    });
     let matches = equal_pairs(before.len(), after.len(), &hunks);
     let equal_positions: Vec<usize> = matches.iter().map(|&(position, _)| position).collect();
 
@@ -123,6 +137,7 @@ pub fn diff_tokens(before: &[Token], after: &[Token], time_limit: Duration) -> T
             before_pages: before_pages.into_iter().collect(),
             after_pages: after_pages.into_iter().collect(),
         });
+    on_gap(gaps, gaps);
     TokenDiff {
         changes,
         truncated,
@@ -233,16 +248,20 @@ impl Hunks {
     }
 }
 
+/// 앵커 사이 구간(마지막은 문서 끝까지)을 차례로 비교한다. 구간마다 시작 전에 `on_gap(끝낸 구간 수)`.
 fn diff_between_anchors(
     before: &[usize],
     after: &[usize],
     anchors: &[(usize, usize)],
     deadline: Option<Instant>,
+    mut on_gap: impl FnMut(usize),
 ) -> Vec<Hunk> {
     let mut hunks = Hunks::default();
     let (mut before_start, mut after_start) = (0, 0);
     let document_end = (before.len(), after.len());
-    for &(before_anchor, after_anchor) in anchors.iter().chain([&document_end]) {
+    for (done, &(before_anchor, after_anchor)) in anchors.iter().chain([&document_end]).enumerate()
+    {
+        on_gap(done);
         diff_gap(
             before,
             before_start..before_anchor,

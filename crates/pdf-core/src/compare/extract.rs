@@ -14,7 +14,7 @@
 use std::path::Path;
 
 use pdfium_render::prelude::{
-    PdfPage, PdfPageRenderRotation, PdfPageTextChar, PdfRect, PdfiumError,
+    PdfDocument, PdfPage, PdfPageRenderRotation, PdfPageTextChar, PdfRect, PdfiumError,
 };
 use serde::Serialize;
 
@@ -69,6 +69,15 @@ pub fn extract_text_layer(
     path: &Path,
 ) -> Result<Vec<ExtractedPage>, DocumentError> {
     let document = open_document(engine.pdfium(), path)?;
+    extract_pages(&document, path).collect()
+}
+
+/// 열린 문서의 쪽을 차례로 읽는다(색인 = 쪽 번호). 쪽은 꺼낼 때 읽으므로 호출자가 쪽 사이에서
+/// 진행률을 알리거나 멈출 수 있다. `path`는 에러에 남길 문서 경로다.
+pub(super) fn extract_pages<'a>(
+    document: &'a PdfDocument<'_>,
+    path: &'a Path,
+) -> impl Iterator<Item = Result<ExtractedPage, DocumentError>> + 'a {
     let to_error = |source: PdfiumError| DocumentError::Pdfium {
         path: path.to_path_buf(),
         source,
@@ -76,8 +85,7 @@ pub fn extract_text_layer(
     // 쪽 수는 pdfium의 c_int 범위라 u32로 센다(ADR 0001 §1).
     (0_u32..)
         .zip(document.pages().iter())
-        .map(|(page_number, mut page)| extract_page(page_number, &mut page).map_err(to_error))
-        .collect()
+        .map(move |(page_number, mut page)| extract_page(page_number, &mut page).map_err(to_error))
 }
 
 fn extract_page(page_number: u32, page: &mut PdfPage) -> Result<ExtractedPage, PdfiumError> {

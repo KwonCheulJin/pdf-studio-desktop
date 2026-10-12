@@ -200,3 +200,46 @@ fn ocr_side_forces_nfkc_on_both_documents() {
             .map(|(before, after)| (before.to_owned(), after.to_owned()))
     );
 }
+
+/// OCR이 문장부호를 따로 떨어진 토큰으로 읽어 생긴 삽입·삭제(`.`만, `,`만)는 신뢰도가 높아도 확인
+/// 필요다. 텍스트 레이어 토큰의 문장부호 삽입과 OCR 쪽 낱말 삽입은 그대로 차이다.
+#[test]
+fn ocr_punctuation_only_insert_or_delete_needs_review() {
+    let plain = "계약 금액 끝";
+    let cases = [
+        // OCR B가 `.`을 따로 읽었다.
+        (
+            text_layer(plain),
+            ocr("계약 . 금액 끝", CONFIDENT),
+            (ChangeKind::Insert, "", ".", true, Some(CONFIDENT)),
+        ),
+        // OCR A가 `,`를 따로 읽었다.
+        (
+            ocr("계약 , 금액 끝", CONFIDENT),
+            text_layer(plain),
+            (ChangeKind::Delete, ",", "", true, None),
+        ),
+        (
+            text_layer(plain),
+            text_layer("계약 . 금액 끝"),
+            (ChangeKind::Insert, "", ".", false, None),
+        ),
+        (
+            text_layer(plain),
+            ocr("계약 총 금액 끝", CONFIDENT),
+            (ChangeKind::Insert, "", "총", false, Some(CONFIDENT)),
+        ),
+    ];
+    for (before, after, (kind, before_text, after_text, review, confidence)) in cases {
+        assert_eq!(
+            changes(&before, &after),
+            vec![(
+                kind,
+                before_text.to_owned(),
+                after_text.to_owned(),
+                review,
+                confidence
+            )]
+        );
+    }
+}

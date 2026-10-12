@@ -12,7 +12,8 @@
 | 항목 | 결정 |
 |---|---|
 | 런타임 | Electron → **Tauri v2** |
-| 처리 계층 | **Rust**(`crates/pdf-core`, pdfium-render 기반)가 병합, 회전 적용, 페이지 정보, TIFF 변환, **비교 엔진**(추출·diff·페이지 정렬·내보내기)을 맡는다. |
+| 처리 계층 | **Rust**(`crates/pdf-core`, pdfium-render 기반)가 병합, 회전 적용, 페이지 정보, TIFF 변환, **비교 엔진**(추출·OCR·diff·페이지 정렬·내보내기)을 맡는다. |
+| 비교 범위(이번 버전) | 목적은 **계약서를 정확하게 비교하는 것**이다. 우선순위는 ① **텍스트 비교** ② **스캔 계약서 OCR 비교**(§6.4) 두 가지다. 스타일(글꼴·굵기·색·밑줄)·레이아웃·이미지 비교는 Phase 5(§9)로 둔다. |
 | 표시 계층 | **pdf.js(웹뷰)** 가 썸네일, 미리보기, 비교 뷰어 렌더링을 맡는다. Rust가 돌려준 결과(PDF 좌표 박스)를 pdf.js 화면 위에 겹쳐 그린다. |
 | 데이터 흐름 | 프론트는 **파일 경로를 넘기고 결과(JSON)만 받는다.** PDF 바이트는 표시용 읽기(`read_pdf`)를 제외하면 IPC를 오가지 않는다. |
 | 진행 방식 | **마이그레이션을 먼저 순서대로 끝낸다:** Tauri 셸 먼저(Step 1 → 9 → 8 → 10 → 11 → 2 → 14 → 3 → 4 → 5 → 6 → 13 → 7 → 15, 가이드 0-3 참고). Tauri 스캐폴드(P1-1) → P1-0 pdfium 스파이크(게이트) → pdf-core·커맨드(P1-2~3) → Phase 0 정리(P0-2 등, Tauri 위에서) → Electron 제거. **그 뒤 병렬:** Track B(Rust 비교 엔진)와 Phase 4 일부 → Phase 3(비교 UI)에서 합류 |
@@ -21,13 +22,14 @@
 ### 처리 계층을 Rust로 두는 이유
 - **글자 단위 박스:** pdfium은 글자마다 위치를 준다. 비교 하이라이트가 pdf.js의 run 단위 근사보다 정확하다.
 - **성능과 메모리:** PDF 처리가 웹뷰 밖에서 일어난다. WKWebView 메모리 한계와 "파일 전체를 IPC로 반복 전송"하는 현재 병목이 사라진다.
-- **운영 단순성:** 사이드카(별도 프로세스, 포트, Python 런타임)가 없다. 추가로 번들할 것은 pdfium 동적 라이브러리 하나뿐이다.
+- **운영 단순성:** 사이드카(별도 프로세스, 포트, Python 런타임)가 없다. 추가로 번들할 것은 pdfium 동적 라이브러리와, OCR용 ONNX Runtime 동적 라이브러리·모델 파일(§6.4)뿐이다.
 - **일관성:** 병합, 정보, TIFF, 비교가 같은 PDF 엔진을 쓴다.
 
 ### 비용 (감수하는 부분)
 - 기존 TS 서비스와 테스트를 Rust로 재작성해야 한다.
 - pdfium 바이너리를 플랫폼별로 번들하고 서명해야 한다. **가장 먼저 검증한다(P1-0).**
 - 표시(pdf.js)와 처리(pdfium) 엔진이 다르다. 좌표계 일치를 Rust golden 테스트와 E2E로 보장한다(§6.2).
+- OCR 런타임과 모델 파일을 번들하므로 앱이 커진다. 상한을 OCR 스파이크(P2-2a)의 합격 기준으로 둔다(§6.4).
 
 ---
 
@@ -51,13 +53,16 @@
 | TIFF 디코드 | `tiff`, `image` | MIT / Apache-2.0 |
 | 에러, 직렬화, 타입 생성 | `thiserror`, `serde`, `tauri-specta` | MIT / Apache-2.0 |
 | 표시 | `pdfjs-dist` | Apache-2.0 |
+| OCR 추론(Rust) | `ort` (ONNX Runtime 바인딩) | MIT / Apache-2.0 |
+| OCR 런타임 바이너리 | ONNX Runtime | MIT |
+| OCR 모델 | PaddleOCR(PP-OCR) 한국어 검출·인식 모델의 ONNX 변환본 | Apache-2.0 |
 
 ### 1.3 레포 작업 규칙 (CLAUDE.md 유지)
 - 계획 → 확인 → 실행 → 보고
 - YAGNI/KISS, 매직 값 금지(Rust도 `const`/enum으로)
 - 테스트: Rust는 `crates/pdf-core`의 핵심 동작만(§6.3), 프론트는 새 단위 테스트 없이 Playwright E2E만(§10.2)
 - **커밋에 AI co-author 라인을 넣지 않는다.**
-- **설치·생성은 키트로 한다.** Tauri 스캐폴드, 플러그인, 권한(capability), 아이콘, 서명 키는 Tauri CLI(`tauri init`, `tauri add`, `tauri permission add`, `tauri capability new`, `tauri icon`, `tauri signer generate`)로 만들고, 생성된 결과를 최소한으로만 고친다. 의존성은 `pnpm add`와 `cargo add`로 넣는다(`package.json`, `Cargo.toml`, `lib.rs` 플러그인 등록, capability JSON을 손으로 쓰지 않는다). 직접 작성은 키트가 없는 경우(`fetch-pdfium.mjs`, 앱 고유 커맨드와 `pdf-core` 로직, Electron 제거)로 한정한다.
+- **설치·생성은 키트로 한다.** Tauri 스캐폴드, 플러그인, 권한(capability), 아이콘, 서명 키는 Tauri CLI(`tauri init`, `tauri add`, `tauri permission add`, `tauri capability new`, `tauri icon`, `tauri signer generate`)로 만들고, 생성된 결과를 최소한으로만 고친다. 의존성은 `pnpm add`와 `cargo add`로 넣는다(`package.json`, `Cargo.toml`, `lib.rs` 플러그인 등록, capability JSON을 손으로 쓰지 않는다). 직접 작성은 키트가 없는 경우(`fetch-pdfium.mjs`, `fetch-ocr.mjs`, 앱 고유 커맨드와 `pdf-core` 로직, Electron 제거)로 한정한다.
 
 ---
 
@@ -130,7 +135,7 @@ P1-2~3   pdf-core 기본 처리(병합/정보/TIFF) + Tauri 커맨드 (Step 10, 
    │
 Phase 0  Tauri 위에서 정리 (어댑터·FSD, Step 2) → Electron 제거 (Step 14) → 비파괴 회전·pdf.js 캐시·DnD·버그 (Step 3~6) → 보안·테마 (Step 13) → 디자인 토큰 (Step 7) → 아이콘·빌드 (Step 15) = 기능 동등성 (마이그레이션 완료)
    │
-   ├── Track B: Phase 2  pdf-core/compare (cargo만으로 개발·테스트)
+   ├── Track B: Phase 2  pdf-core/compare (cargo만으로 개발·테스트, OCR 스파이크 P2-2a ★ 게이트 포함)
    │
    └── Phase 4 일부  CI, 릴리스, 서명, 라이선스 (P4-1~P4-3, P4-5)
                        │
@@ -143,6 +148,7 @@ Phase 5  고도화
 - **실행 순서는 Step 1 → 9 → 8 → 10 → 11 → 2 → 14 → 3 → 4 → 5 → 6 → 13 → 7 → 15이다(Step 12는 Step 2에 흡수).** Step 번호는 그대로 두고 순서만 바꿨다. Step 9~2 사이에는 파일 처리 기능이 동작하지 않는다(D12).
 - **마이그레이션 구간은 순서대로 진행하고, 그동안 병렬 작업을 두지 않는다.** 비교 기능이 올라갈 FSD 배치, 계약 타입(tauri-specta), `pdf-core` 문서 API가 이 구간에서 정해지므로, 그 전에 나란히 진행하면 다시 고치게 된다.
 - Track B는 Tauri 없이 `cargo test`만으로 진행할 수 있으므로, Phase 1이 끝나면 Phase 4 일부(P4-1~P4-3, P4-5)와 나란히 진행한다.
+- **이번 버전의 비교 범위는 텍스트 비교와 스캔 계약서 OCR 비교다.** Phase 2는 텍스트 레이어 추출·diff에 OCR 경로(P2-2a 스파이크, P2-4a 연결)를 더해 끝낸다. 스타일·레이아웃·이미지 비교는 Phase 5에서 다룬다.
 
 규모 표기: S = 반나절~1일, M = 2~3일, L = 4일 이상
 
@@ -349,6 +355,8 @@ Phase 5  고도화
 ## 6. Phase 2 (Track B): Rust 비교 엔진 (`crates/pdf-core/src/compare/`)
 
 > Tauri와 무관하게 `cargo test`로 개발한다. Phase 1(마이그레이션)이 끝난 뒤 시작하고, `pdf-core`의 문서 열기 API(P1-2 `document.rs`)를 그대로 가져다 쓴다.
+>
+> 비교 기능의 목적은 계약서를 정확하게 비교하는 것이다. 이번 버전은 ① 텍스트 레이어 비교(§6.2) ② 스캔 계약서 OCR 비교(§6.4)를 한다. 한쪽은 텍스트 레이어, 다른 쪽은 스캔이어도 비교된다. 스타일·레이아웃·이미지 비교는 Phase 5(§9)다.
 
 ### 6.0 엔진 선택 기록
 
@@ -367,28 +375,35 @@ Phase 5  고도화
 pub enum Side { Before, After }
 pub struct TextBox { pub page: u32, pub x: f32, pub y: f32, pub w: f32, pub h: f32 } // PDF pt, 좌하단 원점, /Rotate 적용 전
 pub enum ChangeKind { Insert, Delete, Replace }
-pub struct ChangeSide { pub text: String, pub boxes: Vec<TextBox> }
+pub enum TextSource { TextLayer, Ocr }  // 페이지 글자를 어디서 얻었나
+pub struct ChangeSide {
+    pub text: String,
+    pub boxes: Vec<TextBox>,
+    pub min_confidence: Option<f32>, // OCR 토큰이 섞이면 그중 가장 낮은 신뢰도(0~1). 텍스트 레이어만이면 None
+}
 pub struct Change {
     pub id: String,                  // 안정 키: hash(정규화 텍스트 + 문맥) — 재실행해도 동일
     pub kind: ChangeKind,
     pub before: Option<ChangeSide>,
     pub after: Option<ChangeSide>,
     pub page_pair: (Option<u32>, Option<u32>),
+    pub needs_review: bool,          // OCR 신뢰도 기준 미만 토큰이 걸린 변경 = "확인 필요"(§6.4). 차이 개수와 따로 센다
 }
 pub struct CompareResult {
     pub changes: Vec<Change>,
     pub page_pairs: Vec<(Option<u32>, Option<u32>)>, // 삽입/삭제 페이지는 None
     pub page_sizes: PageSizes,                       // 좌우 각 페이지의 크기·회전·CropBox 원점
-    pub notices: Vec<Notice>,                        // LowTextConfidence, NoTextLayer, Truncated
+    pub page_sources: PageSources,                   // 좌우 각 페이지의 TextSource
+    pub notices: Vec<Notice>,                        // LowTextConfidence, NoTextLayer(OCR도 못 한 쪽), Truncated
 }
 ```
-좌표는 PDF 원본 좌표로 저장한다. 화면 변환은 pdf.js `viewport.convertToViewportRectangle`이 담당한다. 회전이나 확대가 바뀌어도 결과를 다시 계산할 필요가 없다.
+좌표는 PDF 원본 좌표로 저장한다. 화면 변환은 pdf.js `viewport.convertToViewportRectangle`이 담당한다. 회전이나 확대가 바뀌어도 결과를 다시 계산할 필요가 없다. OCR로 얻은 글자 상자도 같은 좌표 규칙으로 바꿔 넣는다(§6.4).
 
 ### 6.2 파이프라인
 1. **추출 (P2-2, M)**
    - pdfium 페이지 텍스트에서 글자별 `{ char, bounds, font_size, font_name }`을 얻는다. 박스는 tight bounds를 기본으로 한다.
    - **좌표계 일치 검증(중요):** pdfium 좌표와 pdf.js 화면 좌표가 CropBox/MediaBox 원점 오프셋, `/Rotate` 페이지, `UserUnit`에서 일치하는지 pdfium 박스는 Rust golden 테스트로 고정하고, 화면 박스와의 일치는 E2E로 확인한다. 필요하면 `page_sizes`에 원점 오프셋을 포함해 프론트에서 보정한다.
-   - 텍스트가 없는 페이지(스캔본)는 `NoTextLayer`로 알린다. OCR은 범위 밖이다.
+   - 텍스트 레이어가 없거나 글자 수가 `OCR_MIN_TEXT_CHARS` 미만인 페이지(스캔본)는 OCR 경로(P2-4a, §6.4)로 글자를 얻는다. OCR로도 글자를 얻지 못하면(모델 파일 없음, OCR 실패) `NoTextLayer`로 알린다.
 2. **정규화와 토큰화 (P2-3, M)**
    - Unicode 정규화(NFC/NFKC 옵션, `unicode-normalization`), 공백과 줄바꿈 정리, 하이픈 줄바꿈 결합, 대소문자 무시 옵션
    - 토큰 단위는 **단어**(공백 기준, 한글 포함)이고, 각 토큰은 구성 글자의 박스 목록을 가진다. replace 구간 내부는 **글자 단위 2차 diff**로 정밀 하이라이트한다.
@@ -404,18 +419,19 @@ pub struct CompareResult {
    - 반복 줄 제외는 **머리말, 꼬리말, 쪽번호를 따로** 켠다(상단/하단 N pt 밴드, 쪽번호는 하단 밴드 안의 숫자만 있는 줄). 양쪽 문서에 같이 적용한다. 자동 머리글 감지는 Phase 5로 미룬다.
    - 대소문자 무시.
 6. **작업 실행기 (P2-7, S)**
-   - 진행 단계를 `Channel`로 보고하고, 취소 토큰을 단계마다(추출은 쪽마다) 확인한다.
-   - **진행률 이벤트(작업별 %):** `Progress { job_id, stage, done, total, stage_percent, overall_percent, detail }`. 화면(시안 9)은 단계마다 %와 막대, 위에 전체 %를 보인다.
+   - 진행 단계를 `Channel`로 보고하고, 취소 토큰을 단계마다(추출과 OCR은 쪽마다) 확인한다.
+   - **진행률 이벤트(작업별 %):** `Progress { job_id, stage, done, total, stage_percent, overall_percent, detail }`. 화면(시안 9)은 단계마다 %와 막대, 위에 전체 %를 보인다. 단계는 6개다.
      | 단계 `stage` | 화면 이름 | `done / total` 단위 | 전체 가중치 |
      |---|---|---|---|
-     | `extract_a` | A 문서 읽기 | 쪽 | 30 |
-     | `extract_b` | B 문서 읽기 | 쪽 | 30 |
-     | `normalize` | 글자 정리 | 쪽 | 10 |
-     | `diff` | 차이 찾기 | 앵커 사이 구간 | 20 |
+     | `extract_a` | A 문서 읽기 | 쪽 | 20 |
+     | `extract_b` | B 문서 읽기 | 쪽 | 20 |
+     | `ocr` | 스캔 쪽 글자 읽기 | OCR 대상 쪽(A·B 합) | 30 |
+     | `normalize` | 글자 정리 | 쪽 | 5 |
+     | `diff` | 차이 찾기 | 앵커 사이 구간 | 15 |
      | `align_pages` | 쪽 맞추기 | 페이지 쌍 행 | 10 |
-   - `overall_percent = Σ(stage_percent × 가중치) / 100`. 가중치는 `pdf-core`의 상수이고, 실제 소요 시간을 측정해 조정한다. 추출 캐시가 맞으면 그 단계는 바로 100%로 보고한다.
+   - `overall_percent = Σ(stage_percent × 가중치) / 100`. 가중치는 `pdf-core`의 상수이고, 실제 소요 시간을 측정해 조정한다. 추출 캐시가 맞으면 그 단계는 바로 100%로 보고한다. OCR 대상 쪽이 없거나 모든 쪽이 OCR 캐시에 맞으면 `ocr` 단계도 바로 100%로 보고한다.
    - 이벤트는 단계 안에서 최소 1% 단위로만 보낸다(쪽마다 보내면 큰 문서에서 IPC가 넘친다). `%`는 정수로 내림해 100%는 실제로 끝났을 때만 보인다.
-   - **추출 결과 캐시:** (파일 경로, 크기, mtime) 또는 해시를 키로 메모리 LRU에 둔다. 옵션만 바꿔 다시 실행할 때 추출을 건너뛴다.
+   - **추출 결과 캐시:** (파일 경로, 크기, mtime) 또는 해시를 키로 메모리 LRU에 둔다. 옵션만 바꿔 다시 실행할 때 추출을 건너뛴다. OCR 결과는 파일 해시를 키로 앱 캐시 디렉터리에 따로 저장한다(§6.4).
 7. **리포트 내보내기 (P2-8, M)**
    - **비교 PDF:** pdfium으로 새 문서를 만들고 A4 가로 한 장에 좌우 페이지를 배치한다. 옵션: 배치(`side_by_side | a_only | b_only`), 차이 있는 쪽만(`changed_pages_only`), 색 상자 넣기(`draw_boxes`). 화면의 필터(숨긴 종류)를 그대로 받는다.
    - **주석 PDF:** B 문서를 복사해 변경 영역마다 Highlight/Square 주석(색, 내용=변경 전후 텍스트)을 단다. 원본은 건드리지 않는다.
@@ -424,10 +440,103 @@ pub struct CompareResult {
 ### 6.3 테스트 전략
 - **픽스처:** 작은 PDF를 레포에 커밋하고(`crates/pdf-core/tests/fixtures/`), 생성 스크립트도 함께 둔다. 원본과 변형(단어 삽입/삭제/치환, 문단 이동, 페이지 삽입/삭제, 회전 페이지, CropBox 오프셋)을 만들고 기대 결과 JSON(golden)과 비교한다.
 - **한글:** OFL 폰트(예: Noto Sans KR 서브셋)를 임베드한 픽스처로 CID 폰트 경로를 검증한다.
+- **스캔본:** 가상 계약서 텍스트 PDF를 렌더해 만든 스캔 픽스처로 OCR 경로를 검증한다(§6.4).
 - **좌표 일치:** pdfium 박스는 Rust golden 테스트로 고정한다. pdf.js 화면 박스와의 일치는 E2E로 확인한다(같은 픽스처를 띄워 하이라이트 박스 위치를 확인, CropBox 오프셋·회전 페이지 포함).
 - **쓰지 않는 테스트:** 상수 값 확인, 단순 getter, 자명한 enum↔문자열 매핑, 라이브러리 자체 동작, 중복 확인. 「이 테스트를 실패시킬 production 변경」을 한 줄로 말할 수 없으면 쓰지 않는다.
 - **프론트:** 새 단위 테스트(Vitest)를 쓰지 않는다. 검증은 Playwright E2E로 한다(§10.2).
 - **성능 회귀:** 500페이지 합성 문서의 처리 시간과 메모리를 기록한다(`cargo test --release`, CI에서는 완화된 기준).
+
+### 6.4 스캔 계약서 OCR (P2-2a 스파이크 ★, P2-4a 연결)
+
+텍스트 레이어가 없는 스캔 계약서도 텍스트 비교와 같은 결과(`CompareResult`)로 비교한다. OCR은 추출 단계의 한 경로다. 그 뒤의 정규화·토큰화·diff·페이지 짝짓기는 텍스트 레이어와 같은 코드를 쓴다.
+
+**엔진 선택**
+- **채택: PaddleOCR(PP-OCR) 한국어 검출+인식 모델을 ONNX로 변환한 것 + ONNX Runtime(Rust `ort` 크레이트).**
+  - Mac과 Windows가 같은 모델·같은 런타임을 쓰므로 같은 입력에 같은 결과가 나온다. 계약서 비교는 정확도가 중요해서 플랫폼마다 결과가 달라지면 안 된다.
+  - 한국어 인식 모델이 따로 있어 한국어 정확도가 높다.
+  - 라이선스가 화이트리스트 안이다(모델 Apache-2.0, ONNX Runtime MIT, `ort` MIT/Apache-2.0, §1.2).
+  - 처리가 기기 안에서 끝난다. 계약서가 밖으로 나가지 않는다.
+- 실제 모델 이름·버전, ONNX 변환 방식(공개된 변환본을 받을지, 변환 도구로 미리 변환해 둘지), `ort`의 버전과 기능 플래그는 스파이크(P2-2a)에서 확정해 이 절에 기록한다. 변환은 앱 빌드 때 하지 않고, 변환된 ONNX 파일의 출처·버전·SHA-256을 고정한다.
+
+| 버린 대안 | 이유 |
+|---|---|
+| macOS Vision + Windows.Media.Ocr (OS 내장) | Windows의 한국어 품질이 낮고 한국어 언어 팩 설치가 필요하다. 플랫폼마다 엔진이 달라 같은 계약서의 결과가 달라진다. |
+| Tesseract | 한국어 정확도가 낮다. |
+| 클라우드 OCR | 계약서를 외부로 보낼 수 없다. |
+
+**파이프라인**
+1. **OCR 대상 판정:** 추출(P2-2)에서 페이지의 텍스트 레이어 글자 수가 `OCR_MIN_TEXT_CHARS` 미만이면 OCR 대상으로 표시한다. 스캐너가 넣은 숨은 글자층(검색 가능한 PDF)은 텍스트 레이어로 취급한다(품질이 낮으면 `LowTextConfidence`).
+2. **렌더:** pdfium으로 페이지를 고정 해상도 `OCR_RENDER_DPI`(시작값 300dpi)로 렌더한다. 렌더만 pdfium 작업 스레드에서 하고 추론은 별도 작업 스레드에서 한다. OCR이 pdfium 큐를 오래 잡아 병합을 막지 않게 하기 위해서다. 렌더 이미지는 메모리에만 두고 디스크에 쓰지 않는다.
+3. **기울기 보정(필요 시):** 기울기를 추정해 `OCR_DESKEW_MIN_DEGREES` 이상이면 바로 세우고, 보정 변환을 좌표 되돌리기용으로 기록한다. 방법은 스파이크에서 정한다. 보정 없이 합격 기준을 넘으면 넣지 않는다.
+4. **검출 → 인식:** 검출 모델로 줄 상자를 찾고, 인식 모델로 줄마다 글자와 신뢰도를 얻는다. 결과는 단어/글자별 `{ text, bounds, confidence }`다. 글자 위치는 인식 결과의 글자별 위치 정보로 줄 상자를 나눠 얻는다. 글자 단위가 안 되면 단어 단위 상자로 낮춘다(그 경우 하이라이트가 단어 단위가 된다). 어느 쪽인지 스파이크에서 확인한다.
+5. **좌표 되돌리기:** 렌더 픽셀 좌표를 텍스트 추출과 같은 좌표 규칙(§6.1: PDF pt, 좌하단 원점, `/Rotate` 적용 전)으로 바꾼다. 순서는 기울기 보정의 역변환 → `× 72 / OCR_RENDER_DPI`와 y 뒤집기(픽셀은 좌상단 원점) → 렌더에 적용된 `/Rotate` 되돌리기 → CropBox 원점 오프셋 더하기다.
+6. **이후 단계:** OCR 글자를 텍스트 레이어 글자와 같은 형태로 만들어 기존 정규화·토큰화(P2-3), diff(P2-4), 페이지 짝짓기(P2-5)에 그대로 넣는다. 페이지마다 출처(`TextSource`)를 `page_sources`에 기록한다. 한쪽은 텍스트 레이어, 다른 쪽은 스캔이어도 비교된다.
+
+**신뢰도와 "확인 필요"**
+- 토큰 신뢰도는 토큰을 이루는 글자 신뢰도의 최솟값이다. 변경의 각 쪽에는 그중 가장 낮은 값을 `min_confidence`로 담는다.
+- 기준은 일반 토큰 `OCR_MIN_CONFIDENCE`(시작값 0.80), 숫자·금액·날짜 토큰 `OCR_MIN_CONFIDENCE_NUMERIC`(시작값 0.95)이다. 계약서에서 중요한 숫자는 더 엄격하게 본다. 숫자가 하나라도 든 토큰을 숫자 토큰으로 본다. 두 값은 스파이크에서 측정 후 확정한다.
+- 기준 미만 토큰이 걸린 변경은 `needs_review = true`다. 화면은 이를 차이 개수와 따로 "확인 필요"로 보인다. 오인식이 차이처럼 보이지 않게 하기 위해서다.
+- OCR 쪽이 섞인 변경 중 띄어쓰기만 다른 치환도 `needs_review`로 둔다. OCR은 띄어쓰기를 자주 틀린다.
+- 신뢰도가 높은데 틀린 글자(조용한 오인식)는 이 장치로 걸러지지 않는다. 그래서 스파이크 합격 기준에 숫자 토큰의 조용한 오인식 0건을 둔다.
+
+**성능, 취소, 캐시**
+- OCR은 비교 작업 실행기(P2-7)의 `ocr` 단계다. OCR 대상 쪽이 없으면 그 단계는 즉시 100%다.
+- 쪽마다(렌더 뒤, 추론 뒤) 취소 토큰을 확인한다. 렌더 이미지는 메모리에만 있으므로 취소해도 남는 임시 파일이 없다.
+- **OCR 캐시:** 쪽별 OCR 결과를 `(파일 SHA-256, 쪽 번호, 모델 버전, OCR_RENDER_DPI)`를 키로 앱 캐시 디렉터리에 저장한다. 옵션만 바꾼 재실행과 같은 파일의 다음 비교에서 다시 OCR하지 않는다. 모델이나 DPI가 바뀌면 키가 달라져 다시 읽는다. 캐시 디렉터리 경로는 `src-tauri`가 넘긴다(`pdf-core`는 Tauri 경로 API를 모른다). 용량 상한 `MAX_OCR_CACHE_BYTES`를 넘으면 오래된 것부터 지운다.
+- 추론 스레드 수는 측정 후 조정한다. 쪽당 처리 시간 상한은 스파이크 합격 기준으로 둔다.
+
+**배포**
+- `scripts/fetch-ocr.mjs`: `fetch-pdfium.mjs`처럼 **버전을 고정**해 타깃별 ONNX Runtime 동적 라이브러리와 OCR 모델 파일을 내려받고 SHA-256으로 검증한다. 라이브러리는 `src-tauri/onnxruntime/<target-triple>/`, 모델은 `src-tauri/ocr-models/`에 둔다(gitignore).
+- 번들: macOS는 ONNX Runtime dylib를 `bundle.macOS.frameworks`(`Contents/Frameworks/`)에, 모델은 `bundle.resources`에 넣는다. Windows/Linux는 둘 다 `bundle.resources`다.
+- 런타임 로드: `ort`의 동적 로드 방식으로 라이브러리 경로를 지정한다. 경로 결정은 pdfium처럼 `pdf-core` 한 곳에서 하고, 개발·테스트는 환경변수 `ONNXRUNTIME_LIB_PATH`, `OCR_MODEL_DIR`을 우선한다. 런타임이나 모델이 없으면 OCR 대상 쪽은 `NoTextLayer`로 알리고 비교는 계속한다.
+- macOS 서명은 pdfium과 같다. hardened runtime을 켜 두고 기존 `com.apple.security.cs.disable-library-validation` entitlement를 그대로 쓴다. ONNX Runtime dylib도 앱과 같은 identity로 서명한다(P4-3).
+- 제3자 고지(L1, P4-5)에 PaddleOCR 모델(Apache-2.0)과 ONNX Runtime(MIT)을 넣는다.
+- 앱 크기가 커진다. 증가량 상한을 스파이크 합격 기준에 둔다(§12).
+
+**픽스처(클린룸)**
+- 공개 레포이므로 실제 계약서를 쓰지 않는다. 직접 쓴 **가상 계약서** 문구(조항 번호, 금액, 날짜, 당사자 이름 자리)로 텍스트 PDF를 만들고(OFL 한글 폰트 임베드), 이를 렌더해 스캔본처럼 만든다.
+- 변형: 300dpi와 200dpi, 약간의 기울기(0.5°~2°), 노이즈, 도장 같은 붉은 원 겹침. 이미지를 페이지에 넣어 텍스트 레이어 없는 PDF로 저장한다.
+- 원본 텍스트 PDF가 정답이다. 정답 글자열(CER 계산)과 정답 상자(좌표 되돌리기 검증)를 원본에서 얻는다.
+- 비교용 짝: 같은 계약서의 텍스트본 ↔ 스캔본(차이 0), 금액·날짜·조항 문구를 바꾼 텍스트본 ↔ 스캔본, 스캔본 ↔ 스캔본.
+- 생성 스크립트를 픽스처와 함께 커밋한다. 레포 크기를 줄이려고 쪽 수를 적게 두고 이미지는 압축한다.
+
+**P2-2a OCR 스파이크 ★ (M, 게이트)**
+
+pdfium 스파이크(P1-0)처럼 연결 작업(P2-4a) 전에 끝까지 검증한다. Rust(`crates/pdf-core`)만 다루므로 Phase 2의 다른 작업과 병렬로 할 수 있다.
+1. `scripts/fetch-ocr.mjs`로 ONNX Runtime과 모델을 받고, `ort`는 `cargo add -p pdf-core ort`로 넣는다(기능 플래그는 스파이크에서 정한다).
+2. 픽스처 생성 스크립트로 스캔 픽스처를 만든다.
+3. 렌더 → (기울기 보정) → 검출 → 인식을 돌려 아래 기준을 측정한다.
+4. ad-hoc 서명된 `.app`에서 ONNX Runtime이 로드되고 추론이 도는지 확인한다.
+5. 확정한 모델 이름·버전·ONNX 출처·SHA-256과 측정값을 이 절에 기록한다.
+
+합격 기준(수치는 시작값이다. 스파이크에서 측정 후 확정한다):
+
+| 항목 | 기준 | 측정 조건 |
+|---|---|---|
+| 한국어 글자 오류율(CER) | 300dpi ≤ 1.5%, 200dpi ≤ 3% | 가상 계약서 픽스처 전체, 기울기·노이즈 포함, 공백 제외 |
+| 도장 겹친 줄 CER | ≤ 5% | 붉은 원이 겹친 줄만 |
+| 숫자·금액·날짜 토큰 완전 일치율 | 300dpi ≥ 99.5%, 200dpi ≥ 99% | 숫자가 든 토큰 전체 |
+| 숫자 토큰 조용한 오인식 | 0건 | 틀린 숫자 토큰 중 신뢰도가 `OCR_MIN_CONFIDENCE_NUMERIC` 이상인 것 |
+| 쪽당 처리 시간 | ≤ 2초 | A4 1쪽, 300dpi, Mac M 시리즈, release 빌드, 렌더 + 추론 |
+| 번들 증가량 | 플랫폼별 ≤ 60MB | ONNX Runtime 라이브러리 + 모델 파일 |
+| 플랫폼 간 결과 | 같은 픽스처의 OCR 글자열이 Mac·Windows에서 같다 | Windows는 CI(P4-1)에서 확인 |
+| 서명된 `.app`에서 로드 | `codesign --verify --deep --strict` 통과 후 추론 성공 | ad-hoc 서명 |
+
+**실패하면 P2-4a를 진행하지 않고 멈추고 보고한다.** 기준별 대안:
+- CER·숫자 기준 미달: 더 큰(서버용) 인식 모델로 바꾼다, `OCR_RENDER_DPI`를 올린다, 이진화·기울기 보정 같은 전처리를 더한다, 숫자 토큰 신뢰도 기준을 올려 확인 필요로 더 많이 돌린다.
+- 처리 시간 초과: 더 작은(모바일용) 모델로 바꾼다, 검출 입력 해상도를 낮춘다, 추론 스레드 수를 조정한다.
+- 번들 증가량 초과: 더 작은 모델로 바꾼다. 또는 모델을 첫 사용 때 버전 고정 주소에서 받아 SHA-256으로 검증하는 방식으로 바꾼다(계약서는 보내지 않는다. 오프라인 첫 사용에서는 OCR을 못 한다).
+- Mac에서만 한국어 품질이 모자람: macOS는 Vision을 병행하는 안을 검토한다. 플랫폼 간 결과 일치를 포기하는 설계 결정이므로 사용자 확인 뒤에만 간다.
+- 서명·로드 실패: ONNX Runtime 링크 방식(동적/정적)과 번들 위치를 다시 검토한다.
+- 대안으로도 통과하지 못하면 OCR 비교를 이번 버전에서 뺄지 사용자가 정한다. 그때까지 스캔 쪽은 `NoTextLayer`로 알린다.
+
+**P2-4a OCR 연결 (M)**
+- 추출 단계에 OCR 경로를 잇는다: OCR 대상 판정, 렌더·검출·인식, 좌표 되돌리기, 신뢰도와 `needs_review`, `page_sources`, OCR 캐시.
+- 테스트(핵심 동작만, golden 픽스처):
+  - 텍스트본 ↔ 스캔본 비교에서 차이가 0이고, 금액·날짜·조항을 바꾼 짝에서는 바꾼 곳만 변경으로 나온다.
+  - OCR 상자를 PDF pt로 되돌린 결과가 원본 텍스트 PDF의 상자와 `OCR_BOX_TOLERANCE_PT` 안에서 맞는다(CropBox 오프셋, 회전 페이지 포함).
+  - 신뢰도 기준 미만 토큰이 걸린 변경이 `needs_review`로 분류된다.
+  - 같은 파일을 다시 비교하면 OCR을 다시 돌리지 않는다(캐시).
 
 ---
 
@@ -460,18 +569,20 @@ pages/compare              옵션 화면 / 결과 화면 조립
 - **P3-3 실행 전 옵션 (M, 시안 3 아래쪽):** 접을 수 있는 "실행 전 옵션" 카드.
   - 머리: 요약 배지(켠 비교 대상, 뺀 줄 수, 전체/범위 지정), "기본값으로"(이미 기본값이면 비활성).
   - **페이지 범위는 A·B 따로** 입력한다(`"1,3-5"`, 비우면 전체). 입력칸 끝에 `/ N쪽`. 쪽수를 넘으면 빨간 테두리와 이유 문구.
-  - **비교 대상 표:** 글자(기본, 켬) + 하위 옵션 대소문자 무시. 스타일·레이아웃·그림은 Phase 5라 "준비 중"으로 꺼 둔 채 보여 준다.
+  - **비교 대상 표:** 글자(기본, 켬) + 하위 옵션 대소문자 무시. 글자층이 없는 쪽은 자동으로 OCR한다(따로 켜는 옵션은 두지 않는다). 스타일·레이아웃·그림은 Phase 5라 "준비 중"으로 꺼 둔 채 보여 준다.
   - **반복 줄 제외 표:** 머리말, 꼬리말, 쪽번호를 따로 고른다. 옆에 작은 페이지 그림으로 빠지는 줄을 표시. 양쪽 문서에 같이 적용.
   - 바닥: 실행할 수 없는 이유(또는 "A 18쪽 · B 19쪽을 비교해요") / 취소 / ▶ 비교 실행(이유가 있으면 비활성).
 - **P3-3a 비교 진행 화면 (S, 시안 9):** 실행하면 옵션 화면 자리에 진행 카드가 뜬다.
   - 위: A → B 파일 이름, **전체 진행률 %**(큰 숫자)와 막대, 경과 시간.
-  - 가운데: **작업별 행**(A 문서 읽기 / B 문서 읽기 / 글자 정리 / 차이 찾기 / 쪽 맞추기). 행마다 상태 점(완료 ✓ · 진행 중 회전 · 대기 번호), 이름, 세부(`12 / 19쪽` 등), **작업별 %**, 얇은 막대. 완료 막대는 `success`, 진행 중은 `primary`.
+  - 가운데: **작업별 행**(A 문서 읽기 / B 문서 읽기 / 스캔 쪽 글자 읽기 / 글자 정리 / 차이 찾기 / 쪽 맞추기). OCR 대상 쪽이 없으면 "스캔 쪽 글자 읽기"는 바로 완료로 보인다. 행마다 상태 점(완료 ✓ · 진행 중 회전 · 대기 번호), 이름, 세부(`12 / 19쪽` 등), **작업별 %**, 얇은 막대. 완료 막대는 `success`, 진행 중은 `primary`.
   - 아래: 취소(옵션 화면으로 돌아감). 다른 모드로 가도 작업은 계속되고, 상태바에 `비교 중 49%`를 보인다.
   - 모든 막대에 `role="progressbar"`와 `aria-valuenow`, 상태바는 `role="status"`.
 - **P3-4 결과 미리보기 (L, 시안 4)**
   - 머리: 뒤로(옵션으로), 제목(A → B), A/B 파일 이름·쪽수·소요 시간, "새 비교", "내보내기", ⋯(다시 실행).
   - 툴바: 종류 칩(추가·삭제·변경, 개수 표시, 끈 칩은 회색+취소선, "n개 숨김"), 이전/다음 이동(`3 / 17`, 키보드 ↑↓·j/k), 보기 방식 `나란히 | A만 | B만`, 확대·축소·맞춤, 현재 쪽.
-  - 안내 띠: `notices`(머리말 제외, 글자층 없는 쪽 등)를 한 줄로, "자세히"로 펼침.
+  - 안내 띠: `notices`(머리말 제외, 글자층 없는 쪽 등)와 OCR로 읽은 쪽 수를 한 줄로, "자세히"로 펼침.
+  - **OCR 표시:** `page_sources`가 `Ocr`인 쪽은 페이지 캡션과 차이 목록의 쪽 머리에 "OCR" 배지를 단다.
+  - **확인 필요 표시:** `needs_review` 변경은 종류 칩 옆 "확인 필요" 칩으로 따로 세고(차이 개수에 넣지 않는다), 페이지에서는 차이 하이라이트와 구별되는 모양으로 표시한다. 색은 토큰 문서에 있는 것만 쓴다.
   - 본문: 왼쪽 **차이 목록**(340px, 쪽별 묶기, 고른 항목은 변경 전/후 상자로 펼침, 접으면 좁은 레일) / 가운데 **페이지 영역**(A·B 캡션 행 + `A 페이지 | 거터 | B 페이지` 행, 변경 상자에 번호 태그, 거터에 **연결선**) / 오른쪽 **미니맵**(34px, 변경 위치 눈금 + 현재 화면 틀).
   - **스크롤 컨테이너는 하나다.** `page_pairs`의 한 쌍이 한 행(`A 페이지 | 거터 | B 페이지`)이 되고, virtuoso가 행 단위로 가상화한다. 좌우가 따로 스크롤하지 않으므로 동기 스크롤 코드가 필요 없다. 짝이 없는 페이지는 반대편에 자리표시자를 둔다. A만/B만 보기에서는 거터와 반대편을 숨긴다.
   - 보이는 행만 pdf.js로 렌더(P0-4 캐시 재사용), SVG 오버레이 하이라이트(Rust가 준 PDF 좌표 → viewport 변환).
@@ -536,7 +647,7 @@ A의 변경 상자와 B의 대응 상자를 거터를 가로지르는 곡선으�
 - 확대·축소와 창 크기 변경 후에도 끝점이 상자 중앙에 붙어 있다. 스크롤 중 연결선이 사라졌다가 멈추면 다시 나타난다.
 
 ### 완료 기준
-- 100페이지 문서 쌍을 Mac(M 시리즈)에서 5초 안에 비교한다(목표치이며 Phase 2 측정 후 확정).
+- 100페이지 문서 쌍을 Mac(M 시리즈)에서 5초 안에 비교한다(텍스트 레이어 문서 기준, 목표치이며 Phase 2 측정 후 확정). 스캔 문서는 쪽당 처리 시간이 P2-2a 합격 기준 안이다.
 - 비교 중에도 스크롤과 취소가 가능하다.
 
 ---
@@ -548,7 +659,7 @@ A의 변경 상자와 B의 대응 상자를 거터를 가로지르는 곡선으�
   - `macos-latest`(aarch64-apple-darwin, 필요하면 `universal-apple-darwin`)
   - `windows-latest`
   - `ubuntu-22.04`(`libwebkit2gtk-4.1-dev` 등)
-- 각 잡에서 `scripts/fetch-pdfium.mjs`를 실행한다(버전 고정, 캐시).
+- 각 잡에서 `scripts/fetch-pdfium.mjs`와 `scripts/fetch-ocr.mjs`(P2-2a 이후)를 실행한다(버전 고정, 캐시).
 - `Swatinem/rust-cache`, pnpm 캐시, `NODE_AUTH_TOKEN`(GitHub Packages)을 유지한다.
 - PR에서는 `pnpm validate` + `cargo fmt --check` + `cargo clippy -D warnings` + `cargo test`를 실행한다.
 - Windows 설치 파일은 **NSIS**(`bundle.targets`에 `nsis`) 하나로 한다. 사용자 단위 설치라 관리자 권한이 필요 없다.
@@ -562,20 +673,22 @@ A의 변경 상자와 B의 대응 상자를 거터를 가로지르는 곡선으�
 | macOS ad-hoc (`signingIdentity: "-"`) | 무료 | 다운로드한 앱은 Gatekeeper 경고가 뜬다(우클릭 → 열기 또는 `xattr -dr com.apple.quarantine`). **개인용 1차 권장.** |
 | Developer ID + 공증 | Apple Developer 연 $99 | 경고가 없다. tauri-action에 `APPLE_CERTIFICATE`, `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` 시크릿을 넣는다. |
 | Windows | 미서명 | SmartScreen 경고가 뜬다. 개인용으로는 허용한다. |
-- 어느 옵션이든 **`Frameworks/libpdfium.dylib`도 앱과 같은 identity로 서명**돼야 한다. `codesign --verify --deep --strict`로 확인한다.
+- 어느 옵션이든 **`Frameworks/libpdfium.dylib`와 ONNX Runtime dylib(§6.4)도 앱과 같은 identity로 서명**돼야 한다. `codesign --verify --deep --strict`로 확인한다.
 
 ### P4-4 (선택) 자동 업데이트
 - `pnpm tauri add updater`로 플러그인을 넣고, 서명 키는 `pnpm tauri signer generate -w ~/.tauri/pdfstudio.key`로 만든다(개인 키는 레포에 넣지 않고 GitHub 시크릿 `TAURI_SIGNING_PRIVATE_KEY`로만 둔다). tauri-action이 GitHub Releases에 `latest.json`을 생성한다.
 
 ### P4-5 라이선스와 고지 (S, L1)
 - 루트에 `LICENSE`(MIT) 파일을 둔다.
-- `THIRD_PARTY_NOTICES.md`를 만들어 앱과 함께 번들한다: pdfium(BSD-3/Apache-2.0), pdf.js(Apache-2.0), IBM Plex(OFL), Rust·npm 의존성. `cargo-about`과 `license-checker`류로 생성하고 CI에서 §1.2 허용 목록 밖 라이선스가 들어오면 실패시킨다.
+- `THIRD_PARTY_NOTICES.md`를 만들어 앱과 함께 번들한다: pdfium(BSD-3/Apache-2.0), pdf.js(Apache-2.0), IBM Plex(OFL), ONNX Runtime(MIT), PaddleOCR 모델(Apache-2.0), Rust·npm 의존성. `cargo-about`과 `license-checker`류로 생성하고 CI에서 §1.2 허용 목록 밖 라이선스가 들어오면 실패시킨다.
 - 앱 정보 화면(또는 메뉴 "PDF Studio 정보")에서 고지를 열 수 있게 한다.
 
 ---
 
 ## 9. Phase 5: 고도화 후보 (필요할 때)
-- **그래픽 diff 레이어:** pdfium으로 짝 페이지를 같은 스케일로 렌더해 픽셀 비교 후 연결 요소로 영역 박스를 만든다. 페이지 크기가 같을 때만 수행한다. 또는 페이지 객체(path/image)를 직접 비교한다.
+- **스타일 비교:** 글꼴·굵기·색·밑줄 차이. 텍스트 레이어 쪽에서만 할 수 있다(OCR 쪽에는 글꼴 정보가 없다).
+- **레이아웃 비교:** 같은 글자의 위치·줄바꿈·정렬 변화.
+- **그래픽(이미지) diff 레이어:** pdfium으로 짝 페이지를 같은 스케일로 렌더해 픽셀 비교 후 연결 요소로 영역 박스를 만든다. 페이지 크기가 같을 때만 수행한다. 또는 페이지 객체(path/image)를 직접 비교한다.
 - **이동 감지:** 같은 텍스트의 delete/insert 쌍을 `Moved`로 접는다.
 - **머리글/바닥글 자동 감지:** 여러 페이지에서 같은 위치에 반복되는 텍스트를 찾는다.
 - **폴더 일괄 비교:** 파일명 유사도로 짝을 짓고, 사용자가 수정한 뒤 순차 실행해 리포트 ZIP을 만든다.
@@ -600,6 +713,9 @@ git clone https://github.com/KwonCheulJin/pdf-studio-desktop && cd pdf-studio-de
 pnpm i && pnpm validate
 node scripts/fetch-pdfium.mjs            # P1-0 이후
 export PDFIUM_LIB_PATH=$PWD/src-tauri/pdfium/aarch64-apple-darwin/libpdfium.dylib
+node scripts/fetch-ocr.mjs               # P2-2a 이후 (ONNX Runtime, OCR 모델)
+export ONNXRUNTIME_LIB_PATH=$PWD/src-tauri/onnxruntime/aarch64-apple-darwin/<라이브러리 파일>
+export OCR_MODEL_DIR=$PWD/src-tauri/ocr-models
 cargo test -p pdf-core                   # P1-2 이후
 pnpm tauri dev                           # P1-1 이후
 ```
@@ -608,7 +724,7 @@ pnpm tauri dev                           # P1-1 이후
 - **경로:** TS에서는 문자열로 `/`나 `\`를 직접 다루지 않고 `@tauri-apps/api/path`를 쓴다. Rust에서는 `PathBuf`만 쓴다.
 - **WebView 차이:** macOS는 WKWebView(Safari), Windows는 WebView2(Chromium), Linux는 WebKitGTK다. pdf.js 렌더와 캔버스는 Safari 기준으로 확인하고, Safari 캔버스 메모리 상한에 맞춰 LRU 상한을 보수적으로 잡는다.
 - **파일 잠금:** Windows 공유 위반 재시도는 Rust에서 `cfg(windows)`로만 수행한다.
-- **pdfium 라이브러리 경로:** 개발(`PDFIUM_LIB_PATH`), 테스트, 번들(`Frameworks`/resources)마다 다르다. 결정 로직을 `pdf-core` 한 곳에 둔다.
+- **pdfium·OCR 라이브러리 경로:** 개발(`PDFIUM_LIB_PATH`, `ONNXRUNTIME_LIB_PATH`, `OCR_MODEL_DIR`), 테스트, 번들(`Frameworks`/resources)마다 다르다. 결정 로직을 `pdf-core` 한 곳에 둔다.
 - **단축키:** `⌘`/`Ctrl`을 추상화한다(`isMac ? metaKey : ctrlKey`).
 - **E2E:** `tauri-driver`(WebDriver)는 **macOS를 지원하지 않는다.** 프론트 검증은 Playwright E2E만 쓴다: Vite dev + `mock-platform` + WebKit 엔진 헤드리스(창이 뜨지 않고 Mac WKWebView와 엔진을 맞춘다). 처리 로직은 핵심 동작만 `cargo test`로 검증한다.
 
@@ -635,6 +751,7 @@ pnpm tauri dev                           # P1-1 이후
 | D12 | Tauri 셸을 먼저(실행 순서 1 → 9 → 8 → 10 → 11 → 2 → 14 → 3 → 4 → 5 → 6 → 13 → 7 → 15) | Electron 위에서 Phase 0 정리 + 임시 `electron-platform.ts` | 버려질 임시 어댑터·계약 코드를 만들지 않는다. 대가로 Step 9~2 사이에는 파일 처리 기능이 동작하지 않는다. |
 | D13 | 허용 경로 목록: 파일 열기·저장 다이얼로그를 Rust 커맨드로 열고, 다이얼로그·드롭으로 받은 경로를 `State`에 기록해 파일 커맨드는 목록에 있는 경로(와 앱 임시 폴더)만 허용 | 프론트가 `plugin-dialog`를 직접 열고 경로를 넘김 | Rust가 "사용자가 고른 경로"를 알 수단이 없으면 경로 검증이 형식만 남는다 |
 | D14 | 파일 추가 처리 = Rust `open_files` | TS `ingestPaths` 통합 | 같은 분기가 3벌 중복(B2의 원인)이고, 확장자 화이트리스트는 어차피 Rust가 검사한다 |
+| D15 | 스캔 계약서 OCR = PaddleOCR(PP-OCR) 한국어 모델 ONNX 변환본 + ONNX Runtime(`ort`) (§6.4) | macOS Vision + Windows.Media.Ocr, Tesseract, 클라우드 OCR | Mac·Windows가 같은 결과, 한국어 정확도, 라이선스 화이트리스트 안, 계약서가 기기 밖으로 나가지 않음 |
 
 ## 12. 리스크
 
@@ -644,7 +761,13 @@ pnpm tauri dev                           # P1-1 이후
 | pdfium과 pdf.js 좌표 불일치(CropBox, 회전) | 하이라이트 위치 어긋남 | §6.3 Rust golden 테스트 + E2E 박스 위치 확인, `page_sizes`에 원점 오프셋 포함 |
 | `tiff` 크레이트의 압축 방식 미지원(CCITT G4 등) | 일부 TIFF 변환 실패 | 원본 스트림 그대로 넣는 경로, 미지원 시 명확한 에러 |
 | pdfium 직렬화로 인한 처리 대기 | 병합과 비교를 동시에 하면 대기 | 작업 큐 + 진행률 표시. 측정 후 필요하면 Phase 5 병렬화 |
-| ToUnicode가 깨진 PDF, 스캔 PDF | 비교 품질 저하 | `LowTextConfidence`/`NoTextLayer` 안내. 그래픽 diff는 Phase 5 |
+| ToUnicode가 깨진 PDF | 비교 품질 저하 | `LowTextConfidence` 안내. 그래픽 diff는 Phase 5 |
+| 스캔 PDF의 OCR 오인식(특히 숫자·금액·날짜) | 오인식이 차이로 보이거나, 실제 차이를 놓침 | 신뢰도 기준 미만은 "확인 필요"로 분리(숫자는 더 엄격), P2-2a 게이트에서 CER·숫자 일치율·조용한 오인식 0건 확인 (§6.4) |
+| OCR 띄어쓰기 오류 | 단어 토큰이 갈라져 거짓 차이 | OCR 쪽이 섞인 띄어쓰기만 다른 치환은 "확인 필요"로 분리 |
+| OCR 런타임·모델 번들·서명 실패 | 스캔본 비교 불가 | **P2-2a를 게이트로** 두고 서명된 `.app`에서 로드 확인. 런타임·모델이 없으면 `NoTextLayer`로 알리고 비교는 계속 |
+| OCR 런타임·모델로 앱 크기 증가 | 다운로드·설치 크기 증가 | P2-2a 합격 기준에 증가량 상한. 넘으면 작은 모델 또는 첫 사용 때 모델 받기 |
+| OCR 처리 시간 | 스캔본 비교가 느림 | 쪽당 시간 상한(P2-2a), 진행률 `ocr` 단계, 쪽마다 취소, 파일 해시 기준 OCR 캐시 |
+| 스캐너가 넣은 저품질 숨은 글자층 | 텍스트 레이어로 취급되어 품질 저하 | `LowTextConfidence` 안내. 글자층을 무시하고 OCR하는 옵션은 필요해지면 Phase 5 |
 | Rust 학습 비용 | 진행 속도 | `pdf-core`를 작은 모듈로 나누고 테스트 우선. 기존 TS 테스트 케이스를 명세로 사용 |
 | pdf.js 5 최소 브라우저 요구 | 구형 macOS에서 동작 불가 | `minimumSystemVersion`을 명시하고 실기기에서 검증 |
 | Windows HTML5 DnD 차단 | 재정렬 불가 | P0-5 선행 |
@@ -671,8 +794,10 @@ pnpm tauri dev                           # P1-1 이후
 - [ ] P1-7 아이콘과 로컬 빌드
 - [ ] P2-1 결과 모델 ADR
 - [ ] P2-2 추출 (+ 좌표 일치 검증)
+- [ ] **P2-2a OCR 스파이크 (CER·숫자 일치율·쪽당 시간·번들 증가·서명된 `.app` 로드)**
 - [ ] P2-3 정규화와 토큰화
 - [ ] P2-4 정렬과 diff
+- [ ] P2-4a OCR 연결 (신뢰도·좌표 되돌리기·캐시)
 - [ ] P2-5 페이지 짝짓기
 - [ ] P2-6 옵션
 - [ ] P2-7 작업 실행기 (진행률·취소·캐시)

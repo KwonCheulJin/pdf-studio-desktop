@@ -220,19 +220,23 @@ pnpm i && pnpm start                                           # 현재 Electron
 ## Phase 2: Rust 비교 엔진 (Track B)
 
 > Step 15(마이그레이션 완료) 이후 시작한다. Tauri 없이 `cargo test`로만 개발하며, Phase 4의 Step 30~32, 34와 나란히 진행할 수 있다(git worktree와 세션을 따로 둔다).
+>
+> 이번 버전의 비교 범위는 **① 텍스트 비교 ② 스캔 계약서 OCR 비교**다(계획서 §6.4). 스타일·레이아웃·이미지 비교는 Phase 5다. Step 17-a(OCR 스파이크)는 Rust만 다루므로 Step 15 이후 Phase 2의 다른 Step과 병렬로 진행할 수 있다. **Step 17-a는 게이트다:** 실패하면 Step 19-a를 진행하지 않고 멈추고 보고한다(Step 8과 같다).
 
 | Step | 계획서 | 브랜치 | 완료 기준 | |
 |---|---|---|---|---|
-| 16 | P2-1 결과 모델 ADR | `docs/adr-compare-result` | `CompareResult` 타입과 좌표 규칙이 ADR로 고정 | [ ] |
+| 16 | P2-1 결과 모델 ADR | `docs/adr-compare-result` | `CompareResult` 타입과 좌표 규칙이 ADR로 고정. 페이지별 텍스트 출처(`page_sources`: 텍스트 레이어/OCR), OCR 신뢰도(`min_confidence`), "확인 필요"(`needs_review`) 필드 포함 | [ ] |
 | 17 | P2-2 추출 + 좌표 일치 | `feat/compare-extract` | pdfium 박스 Rust golden 테스트 통과 + pdf.js 화면 박스 위치 E2E 통과(CropBox 오프셋, 회전 페이지 포함) | [ ] |
+| 17-a | ★ P2-2a OCR 스파이크 (게이트) | `spike/ocr` | 계획서 §6.4 합격 기준 표 전부 통과(한국어 CER, 숫자·금액·날짜 토큰 일치율, 숫자 조용한 오인식 0건, 쪽당 처리 시간, 번들 증가량), ad-hoc 서명 `.app`에서 ONNX Runtime 로드·추론, 확정한 모델 이름·버전·ONNX 출처·SHA-256과 측정값을 §6.4에 기록. Mac·Windows 결과 일치는 Step 30 CI에서 확인 | [ ] |
 | 18 | P2-3 정규화·토큰화 | `feat/compare-tokenize` | 한글 픽스처 토큰화 golden 통과 | [ ] |
 | 19 | P2-4 정렬과 diff | `feat/compare-diff` | 삽입·삭제·치환·문단 이동 golden 통과 | [ ] |
+| 19-a | P2-4a OCR 연결 | `feat/compare-ocr` | Step 17-a 통과 후 시작. 텍스트본 ↔ 스캔본 차이 0, 금액·날짜·조항을 바꾼 짝에서 바꾼 곳만 변경 golden 통과, OCR 상자 → PDF pt 되돌리기가 원본 상자와 허용 오차 안(CropBox 오프셋, 회전 페이지 포함), 신뢰도 기준 미만 토큰이 걸린 변경이 `needs_review`로 분류, 같은 파일 재비교에서 OCR 생략(캐시) | [ ] |
 | 20 | P2-5 페이지 짝짓기 | `feat/compare-page-pairs` | 페이지 삽입·삭제 픽스처에서 짝이 맞음 | [ ] |
 | 21 | P2-6 옵션 | `feat/compare-options` | A·B 따로 페이지 범위(초과 시 `InvalidRange`), 머리말·꼬리말·쪽번호 따로 제외, 대소문자 무시 테스트 통과 | [ ] |
-| 22 | P2-7 작업 실행기 | `feat/compare-runner` | 5단계 `Progress` 이벤트(단계별 %·전체 %, 1% 단위, 100%는 끝났을 때만), 취소, 옵션만 바꾼 재실행에서 추출 생략(그 단계 즉시 100%) | [ ] |
+| 22 | P2-7 작업 실행기 | `feat/compare-runner` | 6단계 `Progress` 이벤트(단계별 %·전체 %, 1% 단위, 100%는 끝났을 때만), 취소(추출·OCR은 쪽마다 확인), 옵션만 바꾼 재실행에서 추출·OCR 생략(그 단계 즉시 100%), OCR 대상 쪽이 없으면 `ocr` 단계 즉시 100% | [ ] |
 | 23 | P2-8 리포트 내보내기 | `feat/compare-report` | 비교 PDF(배치 3종, 차이 쪽만, 색 상자)와 주석 PDF 생성, 미리보기 렌더 | [ ] |
 
-- 읽을 곳: 계획서 §6 전체. Step 17의 좌표 일치는 이후 모든 하이라이트의 기반이므로 건너뛰지 않는다.
+- 읽을 곳: 계획서 §6 전체. Step 17의 좌표 일치는 이후 모든 하이라이트의 기반이므로 건너뛰지 않는다. Step 17-a·19-a는 §6.4.
 
 ---
 
@@ -244,8 +248,8 @@ pnpm i && pnpm start                                           # 현재 Electron
 |---|---|---|---|---|
 | 24 | P3-1 앱 모드와 홈 | 1, 2 | 홈 카드 2장에서 모드 진입(누르기·드롭), 툴바 `[병합 \| 비교]` 탭 전환 시 각 모드 상태 유지, 병합 화면은 탭 외 변화 없음 | [ ] |
 | 25 | P3-2 파일 슬롯 | 3 위 | A/B 빈·채운 상태, 드롭·다이얼로그, A↔B 맞바꾸기 | [ ] |
-| 26 | P3-3 실행 전 옵션 + P3-3a 진행 화면 | 3 아래, 9 | A·B 페이지 범위 검증 문구, 반복 줄 3종, 대소문자, 실행 불가 이유와 버튼 비활성 / 실행 후 **전체 %와 작업별 %(5단계)**, 상태 점, 취소, 다른 모드에서도 상태바에 % | [ ] |
-| 27 | P3-4 결과 미리보기 | 4 | 차이 목록(쪽별 묶기, 펼침), 종류 칩 필터, 이전/다음·키보드, 나란히/A만/B만, 페이지 쌍 행 하나의 스크롤, 미니맵 | [ ] |
+| 26 | P3-3 실행 전 옵션 + P3-3a 진행 화면 | 3 아래, 9 | A·B 페이지 범위 검증 문구, 반복 줄 3종, 대소문자, 실행 불가 이유와 버튼 비활성 / 실행 후 **전체 %와 작업별 %(6단계, 스캔 쪽 글자 읽기 포함)**, 상태 점, 취소, 다른 모드에서도 상태바에 % | [ ] |
+| 27 | P3-4 결과 미리보기 | 4 | 차이 목록(쪽별 묶기, 펼침), 종류 칩 필터, 이전/다음·키보드, 나란히/A만/B만, 페이지 쌍 행 하나의 스크롤, 미니맵, OCR로 읽은 쪽에 "OCR" 배지, `needs_review` 변경은 "확인 필요" 칩으로 차이 개수와 따로 세고 페이지에서 차이와 구별해 표시(E2E) | [ ] |
 | 28 | P3-4 연결선 | 4 | 계획서 §7.1 완료 기준 | [ ] |
 | 29 | P3-5 내보내기 | 5 | 비교 PDF(배치·차이 쪽만·색 상자)와 주석 PDF, 저장 위치, 미리보기 넘기기 | [ ] |
 
@@ -253,7 +257,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 - 시안: Claude Design 캔버스 "PDF Studio 메인 화면"(https://claude.ai/artifact/DypiUsrVJh56yhBuv4tSvV). 같은 claude.ai 계정으로 Mac 브라우저에서 열 수 있다. 화면을 만들 때 해당 아트보드를 열어 두고 맞춘다.
   - 1 홈 · 2 병합 · 3 비교 옵션 · 4 비교 결과 · 5 내보내기 · 6 병합 삭제·복원 · 7 병합 진행·취소 · 8 병합 실패 · 9 비교 진행
 - 디자인 규칙: 하이라이트는 `diff-insert`(밑줄), `diff-delete`(취소선), `diff-change`(점선)와 각 `-fill`만 쓴다. 범례에는 칩과 낱말을 함께 둔다. 페이지는 `paper` + `radius-paper` + `shadow-paper`, 뒤는 `canvas`.
-- Phase 3 완료 기준: 100페이지 문서 쌍을 Mac에서 5초 안에 비교, 비교 중 스크롤과 취소 가능
+- Phase 3 완료 기준: 100페이지 문서 쌍(텍스트 레이어)을 Mac에서 5초 안에 비교, 스캔 문서는 쪽당 처리 시간이 Step 17-a 합격 기준 안, 비교 중 스크롤과 취소 가능
 
 ---
 
@@ -263,7 +267,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 |---|---|---|---|
 | 30 | P4-1 CI 매트릭스 | PR에서 `pnpm validate` + `cargo fmt --check` + `cargo clippy -D warnings` + `cargo test`, Windows는 NSIS 설치 파일 | [ ] |
 | 31 | P4-2 릴리스 흐름 | 태그 푸시로 Draft Release(기존 워크플로는 Step 1에서 제거됨) | [ ] |
-| 32 | P4-3 서명 | ad-hoc 서명 `.app`과 `libpdfium.dylib`가 같은 identity, `codesign --verify --deep --strict` 통과 | [ ] |
+| 32 | P4-3 서명 | ad-hoc 서명 `.app`과 `libpdfium.dylib`·ONNX Runtime dylib가 같은 identity, `codesign --verify --deep --strict` 통과 | [ ] |
 | 33 | P4-4 자동 업데이트(선택) | `pnpm tauri add updater`, 키는 `pnpm tauri signer generate`로 생성(개인 키는 시크릿에만), `latest.json` 생성, 업데이트 동작 | [ ] |
 | 34 | P4-5 라이선스와 고지 | `LICENSE`, `THIRD_PARTY_NOTICES.md` 번들, 허용 목록 밖 라이선스면 CI 실패, 앱 정보에서 고지 열림 | [ ] |
 
@@ -272,5 +276,6 @@ pnpm i && pnpm start                                           # 현재 Electron
 ## 막혔을 때
 
 - **Step 8 실패**: Step 10 이후를 멈추고, 실패 원인(로드, 번들 위치, 서명 중 어디인지)을 계획서 §12에 한 줄로 기록한다.
+- **Step 17-a 실패**: Step 19-a를 멈추고, 어느 합격 기준에서 실패했는지와 측정값을 계획서 §6.4에 기록한 뒤 §6.4의 대안 중 무엇을 할지 보고한다. 텍스트 비교 Step(18~23)은 계속 진행한다.
 - **화면이 이상해짐(Step 7)**: 커밋 2(값 교체)만 되돌리면 이전 값으로 돌아간다. 커밋을 셋으로 나누는 이유다.
 - **계획과 다르게 가야 할 때**: 코드를 먼저 바꾸지 말고 계획서나 토큰 문서를 먼저 고친 뒤 진행한다.

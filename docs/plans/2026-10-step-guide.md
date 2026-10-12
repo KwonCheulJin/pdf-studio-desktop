@@ -172,7 +172,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 - 읽을 곳: 계획서 §5 P1-2
 - 순서: `document.rs` → `info.rs` → `merge.rs` → `tiff.rs`. 모듈마다 테스트 먼저 이식하고 구현한다.
 - 완료 기준: `cargo test -p pdf-core` 통과(회전, 멀티페이지 TIFF, CCITT G4, 북마크 원본 병합 케이스 포함). 회전 절대값 설정·정규화(-90, 450 → 0/90/180/270), 병합 요청 검증(빈 소스, 페이지 인덱스 범위), TIFF `display_name` 테스트 포함
-- [ ] Step 10
+- [x] Step 10
 
 ### Step 11. Tauri 커맨드와 작업 큐 (M)
 - 실행 순서: 5번째 (앞: Step 10, 뒤: Step 2-b)

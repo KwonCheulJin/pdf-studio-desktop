@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
+import type { PdfDocument } from "@/renderer/entities/merge-plan";
 import { ipcClient } from "@/renderer/shared/lib/ipc-client";
-import { PREVIEW_CONFIG } from "@/renderer/shared/constants/preview";
-import type { PdfDocument } from "@/renderer/shared/model/pdf-document";
+import { PREVIEW_CONFIG } from "../config/preview";
 
 interface PageDimensions {
   width: number;

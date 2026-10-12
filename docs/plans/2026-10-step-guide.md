@@ -30,6 +30,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 ### 0-3. 진행 순서
 - **Step 1~15(마이그레이션)는 순서대로 하나씩 진행한다.** 병렬 작업은 Step 15 이후 Phase 2(Step 16~23)와 Phase 4 일부(Step 30~32, 34)에서만 한다.
 - **실행 순서는 Step 번호와 다르다(Tauri 셸 먼저):** 1 → 9 → 8 → 10 → 11 → 2 → 14 → 3 → 4 → 5 → 6 → 13 → 7 → 15 (Step 12는 Step 2에 흡수)
+  - Step 2는 2-a(FSD 재배치·스타일)와 2-b(플랫폼 어댑터)로 나눈다. **2-a는 Step 10과 병렬로 먼저 진행**하고, 위 순서의 2는 2-b를 뜻한다.
   - 번호는 계획서·CLAUDE.md가 참조하므로 그대로 두고 순서만 바꿨다. 각 Step 제목 아래 "실행 순서" 줄에 앞뒤 Step을 적었다.
   - 이유: Electron 위에서 Step 2~7을 하면 Electron IPC를 감싼 임시 어댑터와 손으로 쓴 계약 타입을 만들어야 하고, 곧 버려진다. 이를 만들지 않으려고 Tauri 셸을 먼저 세운다.
   - 대가: Step 9부터 Step 2 전까지는 앱의 파일 처리 기능이 동작하지 않는다.
@@ -61,19 +62,31 @@ pnpm i && pnpm start                                           # 현재 Electron
 - [x] Step 1
 
 ### Step 2. 플랫폼 어댑터, 계약 분리, FSD 정리, 스타일 폴더 이동 (M)
-- 실행 순서: 6번째 (앞: Step 11, 뒤: Step 14)
-- 브랜치: `refactor/platform-adapter-fsd`
+- 두 부분으로 나눠 진행한다. 2-a(FSD 재배치·스타일 이동)는 Tauri와 무관하므로 먼저 하고, 2-b(플랫폼 어댑터·계약 연결)는 Step 11의 커맨드와 tauri-specta 생성물이 있어야 하므로 그 뒤에 한다.
 - 읽을 곳: 계획서 §4 P0-2, 토큰 문서 §3과 §4의 1단계
+
+#### Step 2-a. FSD 재배치, 스타일 폴더 이동 (M)
+- 실행 순서: Step 10과 병렬로 먼저 진행
+- 브랜치: `refactor/fsd-structure`
 - 할 일
-  0. ~~먼저 특성 테스트~~(계획서 T2): `merge-store`·`selection-store`의 지금 동작을 테스트로 고정한다. **완료(PR #8, `src/renderer/shared/model/__tests__/`).**
+  0. ~~먼저 특성 테스트~~(계획서 T2): `merge-store`·`selection-store`의 지금 동작을 테스트로 고정한다. **완료(PR #8).**
+  1. `shared/hooks`의 업무 훅 → `features/*/model`, `merge-store` → `entities/merge-plan`(상태·전이·선택자) + `features/pdf-merge/model`(사용자 행동 훅). 슬라이스마다 `index.ts` 공개 API
+  2. `src/renderer/styles/` → `src/renderer/app/styles/`로 옮기고 `tokens.css`, `theme.css`, `base.css`로 나눈다. **값은 그대로 둔다.**
+  3. `components.json` 경로 수정(`app/styles/index.css`, `components` 별칭)
+- `shared/lib/ipc-client.ts`와 `window.api` 호출은 위치·동작을 그대로 둔다(2-b에서 바꾼다).
+- 완료 기준: `shared`가 상위 레이어를 import하지 않음(`@/main`은 2-b 전까지 `ipc-client.ts`만 예외), 같은 레이어 슬라이스끼리 import하지 않음, 특성 테스트가 기대값 변경 없이 통과, 스타일 이동 전후 `vite build`의 CSS 결과가 같음
+- [x] Step 2-a
+
+#### Step 2-b. 플랫폼 어댑터, 계약 연결 (M)
+- 실행 순서: 6번째 (앞: Step 11, 뒤: Step 14)
+- 브랜치: `refactor/platform-adapter`
+- 할 일
   1. 손으로 쓴 `src/shared/contracts`를 만들지 않는다. Step 11에서 만든 tauri-specta 생성물을 계약 타입으로 쓴다. renderer의 `@/main/*` import 제거
   2. `shared/platform/`에 `DesktopPlatform` 인터페이스와 `tauri-platform.ts`, `mock-platform.ts`. **Electron용 임시 어댑터는 만들지 않는다.** 어댑터 단위 테스트(`mockIPC`)를 여기서 쓴다(구 Step 12)
-  3. `shared/hooks`의 업무 훅 → `features/*/model`, `merge-store` → `entities/merge-plan` + `features/pdf-merge/model`
-  4. `src/renderer/styles/` → `src/renderer/app/styles/`로 옮기고 `tokens.css`, `theme.css`, `base.css`로 나눈다. **값은 그대로 둔다.**
-  5. `components.json` 경로 수정(`app/styles/index.css`, `components` 별칭)
-- 커밋을 넷으로 나눈다: 어댑터(+계약 연결, `mockIPC` 테스트) / FSD 이동 / 스타일 이동 / `components.json` (특성 테스트 커밋은 이미 끝남)
-- 완료 기준: `window.api` 참조 0, `@tauri-apps/api` import는 `shared/platform/tauri-platform.ts`에만, `shared`가 상위 레이어나 `@/main`을 import하지 않음, `mockIPC` 테스트 통과, 스타일 이동 전후 화면이 같음(라이트·다크 스크린샷 비교)
-- [ ] Step 2
+  3. `ipc-client.ts`·`window.api` 호출을 `DesktopPlatform`으로 바꾼다
+- 커밋을 나눈다: 어댑터(+계약 연결, `mockIPC` 테스트) / 호출부 교체
+- 완료 기준: `window.api` 참조 0, `@tauri-apps/api` import는 `shared/platform/tauri-platform.ts`에만, `shared`가 `@/main`을 import하지 않음, `mockIPC` 테스트 통과
+- [ ] Step 2-b
 
 ### Step 3. 비파괴 회전 (S)
 - 실행 순서: 8번째 (앞: Step 14, 뒤: Step 4)
@@ -161,7 +174,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 - [ ] Step 10
 
 ### Step 11. Tauri 커맨드와 작업 큐 (M)
-- 실행 순서: 5번째 (앞: Step 10, 뒤: Step 2)
+- 실행 순서: 5번째 (앞: Step 10, 뒤: Step 2-b)
 - 브랜치: `feat/tauri-commands`
 - 읽을 곳: 계획서 §5 P1-3
 - 화면 시안: 7 "병합: 진행·취소", 8 "병합: 실패"
@@ -171,8 +184,8 @@ pnpm i && pnpm start                                           # 현재 Electron
 
 ### Step 12. Tauri 어댑터와 드롭 (M)
 - 실행 순서: 없음 (Step 2에 흡수)
-- 이 Step은 Step 2에 흡수됨. 어댑터(`tauri-platform.ts`)와 `mockIPC` 단위 테스트는 Step 2에서 한다. 외부 파일 드롭(`onDragDropEvent`, `devicePixelRatio` 보정, `elementFromPoint` 판정)은 Step 5에서 한다.
-- 체크박스는 Step 2와 함께 체크한다.
+- 이 Step은 Step 2-b에 흡수됨. 어댑터(`tauri-platform.ts`)와 `mockIPC` 단위 테스트는 Step 2-b에서 한다. 외부 파일 드롭(`onDragDropEvent`, `devicePixelRatio` 보정, `elementFromPoint` 판정)은 Step 5에서 한다.
+- 체크박스는 Step 2-b와 함께 체크한다.
 - [ ] Step 12
 
 ### Step 13. 보안, 테마, 창 (S)
@@ -184,10 +197,10 @@ pnpm i && pnpm start                                           # 현재 Electron
 - [ ] Step 13
 
 ### Step 14. Electron 제거와 문서 갱신 (S)
-- 실행 순서: 7번째 (앞: Step 2, 뒤: Step 3)
+- 실행 순서: 7번째 (앞: Step 2-b, 뒤: Step 3)
 - 브랜치: `chore/remove-electron`
 - 읽을 곳: 계획서 §5 P1-6
-- 순서: Step 2 직후에 한다. Step 2 이후 Electron은 동작하지 않으므로 바로 제거한다.
+- 순서: Step 2-b 직후에 한다. Step 2-b 이후 Electron은 동작하지 않으므로 바로 제거한다.
 - 함께 할 일: `docs/01-folder-structure.md`를 토큰 문서 §3의 FSD 배치에 맞춰 갱신
 - 완료 기준: `electron`, `pdf-lib`, `sharp`, `fs-extra`가 의존성에 없음, 계획서 §5의 "Phase 1 완료 기준" 체크리스트 전부 통과
 - [ ] Step 14

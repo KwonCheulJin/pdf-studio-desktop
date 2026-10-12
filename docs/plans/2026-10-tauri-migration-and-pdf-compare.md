@@ -177,6 +177,7 @@ Phase 5  고도화
   - 어댑터 단위 테스트는 `@tauri-apps/api/mocks`의 `mockIPC`로 쓴다.
   - 앱 부팅 시 하나를 주입한다(`app/providers`).
 - FSD를 정리한다. `shared/hooks`의 업무 훅을 `features/*/model`로, `shared/model/merge-store`는 `entities/merge-plan` + `features/pdf-merge/model`로 나눈다.
+- 진행은 둘로 나눈다. FSD 재배치·스타일 이동(Step 2-a)은 Tauri와 무관하므로 Step 10과 병렬로 먼저 하고, 어댑터·계약 연결(Step 2-b)은 P1-3(Step 11) 뒤에 한다.
 - **완료 기준:** `window.api` 참조 0, `@tauri-apps/api` import는 `shared/platform/tauri-platform.ts`에만, `shared`가 상위 레이어나 `@/main`을 import하지 않음, `mockIPC` 테스트 통과.
 
 ### P0-3 비파괴 회전 (S, B1)

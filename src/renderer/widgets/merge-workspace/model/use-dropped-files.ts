@@ -1,6 +1,8 @@
 import { useState, useCallback } from "react";
-import { useMergeStore } from "@/renderer/shared/model/merge-store";
-import { createPdfDocument } from "@/renderer/shared/model/pdf-document";
+import {
+  useMergeStore,
+  createPdfDocument
+} from "@/renderer/entities/merge-plan";
 import { ipcClient } from "@/renderer/shared/lib/ipc-client";
 import { ACCEPTED_FILE_TYPES } from "@/renderer/shared/constants/app";
 

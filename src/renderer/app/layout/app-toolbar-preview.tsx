@@ -1,5 +1,11 @@
 import { useState, useCallback } from "react";
 import { ArrowLeft, Download } from "lucide-react";
+import { useDownloadMergedFile } from "@/renderer/features/pdf-merge";
+import {
+  MERGE_VIEW,
+  useMergeStore,
+  useMergedDocument
+} from "@/renderer/entities/merge-plan";
 import {
   Button,
   Tooltip,
@@ -10,13 +16,7 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/renderer/shared/ui";
-import {
-  useMergeStore,
-  useMergedDocument
-} from "@/renderer/shared/model/merge-store";
-import { MERGE_VIEW } from "@/renderer/shared/model/merge-state";
 import { ipcClient } from "@/renderer/shared/lib/ipc-client";
-import { useDownloadMergedFile } from "@/renderer/shared/hooks/use-download-merged-file";
 
 export function AppToolbarPreview() {
   const mergedDocument = useMergedDocument();

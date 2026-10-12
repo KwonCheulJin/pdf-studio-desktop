@@ -1,11 +1,11 @@
 import { useCallback, useRef, type HTMLAttributes, type Ref } from "react";
 import { Virtuoso } from "react-virtuoso";
 import { Loader2 } from "lucide-react";
-import { PreviewPageItem } from "./preview-page-item";
-import { usePreviewPages } from "../model/use-preview-pages";
-import { PREVIEW_CONFIG } from "@/renderer/shared/constants/preview";
-import type { PdfDocument } from "@/renderer/shared/model/pdf-document";
+import type { PdfDocument } from "@/renderer/entities/merge-plan";
 import { cn } from "@/renderer/shared/lib/utils";
+import { usePreviewPages } from "../model/use-preview-pages";
+import { PREVIEW_CONFIG } from "../config/preview";
+import { PreviewPageItem } from "./preview-page-item";
 
 /**
  * 고정 아이템 높이 설정

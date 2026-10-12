@@ -1,16 +1,18 @@
 import { useCallback } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import { Button, Checkbox, Tooltip } from "@/renderer/shared/ui";
 import {
+  useAddFiles,
+  useSelectAll,
+  useMergeExecution,
+  useSelectionStore
+} from "@/renderer/features/pdf-merge";
+import {
+  MERGE_STATUS,
   useMergeFiles,
   useMergeStatus,
   useMergeStore
-} from "@/renderer/shared/model/merge-store";
-import { MERGE_STATUS } from "@/renderer/shared/model/merge-state";
-import { useAddFiles } from "@/renderer/shared/hooks/use-add-files";
-import { useSelectAll } from "@/renderer/shared/hooks/use-select-all";
-import { useMergeExecution } from "@/renderer/shared/hooks/use-merge-execution";
-import { useSelectionStore } from "@/renderer/shared/model/selection-store";
+} from "@/renderer/entities/merge-plan";
+import { Button, Checkbox, Tooltip } from "@/renderer/shared/ui";
 
 export function AppToolbar() {
   const files = useMergeFiles();

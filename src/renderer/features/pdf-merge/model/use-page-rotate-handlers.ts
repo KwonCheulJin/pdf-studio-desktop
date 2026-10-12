@@ -1,0 +1,67 @@
+import { useCallback } from "react";
+import { ROTATION_DEGREES } from "@/main/types/ipc-schema";
+import { useMergeStore, type PdfPage } from "@/renderer/entities/merge-plan";
+import { ipcClient } from "@/renderer/shared/lib/ipc-client";
+
+interface UsePageRotateHandlersParams {
+  fileId: string;
+  page: PdfPage;
+  filePath: string;
+}
+
+interface UsePageRotateHandlersResult {
+  handleRotateCw: (event: React.MouseEvent) => void;
+  handleRotateCcw: (event: React.MouseEvent) => void;
+}
+
+/**
+ * 개별 페이지 카드의 시계 방향/반시계 방향 회전 핸들러
+ * PageThumbnail, ExpandedPageCard 등에서 공통으로 사용
+ */
+export function usePageRotateHandlers({
+  fileId,
+  page,
+  filePath
+}: UsePageRotateHandlersParams): UsePageRotateHandlersResult {
+  const rotatePage = useMergeStore((state) => state.rotatePage);
+
+  const handleRotateCw = useCallback(
+    (event: React.MouseEvent) => {
+      event.stopPropagation();
+      rotatePage(fileId, page.id, ROTATION_DEGREES.CW_90);
+      ipcClient.edit
+        .rotatePage({
+          filePath,
+          pageIndex: page.sourcePageIndex,
+          rotationDegrees: ROTATION_DEGREES.CW_90
+        })
+        .catch((error: unknown) => {
+          ipcClient.log.error(
+            `페이지 회전 파일 저장 실패: 페이지 ${page.sourcePageIndex + 1} - ${String(error)}`
+          );
+        });
+    },
+    [fileId, page.id, page.sourcePageIndex, filePath, rotatePage]
+  );
+
+  const handleRotateCcw = useCallback(
+    (event: React.MouseEvent) => {
+      event.stopPropagation();
+      rotatePage(fileId, page.id, ROTATION_DEGREES.CW_270);
+      ipcClient.edit
+        .rotatePage({
+          filePath,
+          pageIndex: page.sourcePageIndex,
+          rotationDegrees: ROTATION_DEGREES.CW_270
+        })
+        .catch((error: unknown) => {
+          ipcClient.log.error(
+            `페이지 회전 파일 저장 실패: 페이지 ${page.sourcePageIndex + 1} - ${String(error)}`
+          );
+        });
+    },
+    [fileId, page.id, page.sourcePageIndex, filePath, rotatePage]
+  );
+
+  return { handleRotateCw, handleRotateCcw };
+}

@@ -1,6 +1,6 @@
 import { Upload } from "lucide-react";
 import { Button } from "@/renderer/shared/ui";
-import { useAddFiles } from "@/renderer/shared/hooks/use-add-files";
+import { useAddFiles } from "../model/use-add-files";
 
 export function EmptyState() {
   const { handleAddFiles } = useAddFiles();

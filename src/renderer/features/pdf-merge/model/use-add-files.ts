@@ -1,5 +1,4 @@
 import { useCallback } from "react";
-import { toast } from "sonner";
 import { useErrorSnapshot } from "@kwoncheulJin/error-snapshot";
 import {
   useMergeStore,
@@ -7,42 +6,56 @@ import {
 } from "@/renderer/entities/merge-plan";
 import {
   getPlatform,
-  LOG_LEVEL,
-  PlatformError
+  PlatformError,
+  toPlatformError
 } from "@/renderer/shared/platform";
 import { getFileBaseName } from "@/renderer/shared/lib/file-utils";
 import { getErrorSnapshot } from "@/renderer/shared/lib/error-snapshot";
-import { openDocuments } from "../lib/open-documents";
+import { notifyFailure } from "../lib/notify-failure";
+import { openDocuments, type OpenDocumentsResult } from "../lib/open-documents";
 
 type OpenPaths = (paths: string[]) => Promise<PdfDocument[]>;
 
-/** 경로를 열어 문서로 만든다. 열지 못한 파일은 로그·토스트·에러 스냅샷으로 알린다. */
+const ADD_FILES_FAILED_TITLE = "파일을 추가하지 못했습니다.";
+
+/**
+ * 경로를 열어 문서로 만든다. 열지 못한 파일은 작업 공간에 넣지 않고(B16)
+ * 파일마다 로그·토스트·에러 스냅샷으로 알린다. 요청 자체가 실패하면 빈 목록이다.
+ */
 function useOpenPaths(): OpenPaths {
   const { captureError } = useErrorSnapshot(getErrorSnapshot());
 
   return useCallback(
     async (paths) => {
-      const platform = getPlatform();
-      const { documents, failures } = await openDocuments({ paths });
-
-      for (const { sourcePath: filePath, error } of failures) {
-        const fileName = getFileBaseName(filePath);
-        platform.log({
-          level: LOG_LEVEL.ERROR,
-          message: `파일 로드 실패: ${filePath} - ${error.message}`
+      let opened: OpenDocumentsResult;
+      try {
+        opened = await openDocuments({ paths });
+      } catch (error) {
+        notifyFailure({
+          title: ADD_FILES_FAILED_TITLE,
+          error: toPlatformError(error),
+          context: `파일 열기 요청 실패: ${paths.join(", ")}`
         });
-        toast.error(`"${fileName}" 파일을 열 수 없습니다.`, {
-          description: error.message
+        return [];
+      }
+
+      for (const { sourcePath: filePath, error } of opened.failures) {
+        const fileName = getFileBaseName(filePath);
+        const platformError = new PlatformError(error);
+        notifyFailure({
+          title: `"${fileName}" 파일을 열 수 없습니다.`,
+          error: platformError,
+          context: `파일 로드 실패: ${filePath}`
         });
         // Error Snapshot 캡처 (파일 로드 실패 정보 포함)
-        captureError(new PlatformError(error), {
+        captureError(platformError, {
           source: "file-load",
           filePath,
           fileName
         });
       }
 
-      return documents;
+      return opened.documents;
     },
     [captureError]
   );
@@ -62,7 +75,17 @@ export function useAddFiles(): UseAddFilesResult {
   const openPaths = useOpenPaths();
 
   const handleAddFiles = useCallback(async () => {
-    const filePaths = await getPlatform().pickFiles();
+    let filePaths: string[];
+    try {
+      filePaths = await getPlatform().pickFiles();
+    } catch (error) {
+      notifyFailure({
+        title: ADD_FILES_FAILED_TITLE,
+        error: toPlatformError(error),
+        context: "파일 선택 다이얼로그 실패"
+      });
+      return;
+    }
     if (filePaths.length === 0) return;
 
     addFiles(await openPaths(filePaths));

@@ -1,10 +1,16 @@
-import type { MergeRequest } from "@/renderer/shared/api/bindings";
+import type {
+  MergeProgress,
+  MergeRequest,
+  OpenedFile
+} from "@/renderer/shared/api/bindings";
+import { ERROR_CODE } from "@/renderer/shared/config/error-messages";
 import {
   getPdfCacheStats,
   type PdfCacheStats
 } from "@/renderer/shared/lib/pdfjs";
 import {
   createMockPlatform,
+  PlatformError,
   type CopyFileParams,
   type DesktopPlatform,
   type MockPdfFile,
@@ -22,13 +28,31 @@ export interface E2eMockFile extends Omit<MockPdfFile, "bytes"> {
   bytesBase64?: string;
 }
 
-export interface E2eMockSeed {
-  files: E2eMockFile[];
+/** 일부러 실패시킬 호출. 코드는 Rust `AppError.code`와 같은 값을 쓴다. */
+export interface E2eMockFailures {
+  /** 경로 → `openFiles`가 그 파일에 돌려줄 오류 코드(파일별 실패) */
+  openFiles?: Record<string, string>;
+  /** 있으면 `copyFile`이 이 코드로 실패한다. */
+  copyFile?: string;
 }
 
-/** 파일을 쓰거나 지우는 플랫폼 호출 */
+/** `mergePdfs` 한 번의 흉내. 진행률을 차례로 보낸 뒤 `failCode`가 있으면 그 코드로 실패한다. */
+export interface E2eMergeScript {
+  progress: MergeProgress[];
+  failCode?: string;
+}
+
+export interface E2eMockSeed {
+  files: E2eMockFile[];
+  failures?: E2eMockFailures;
+  /** `mergePdfs`를 부를 때마다 앞에서부터 하나씩 쓴다. 다 쓰면 mock 그대로 성공한다. */
+  mergeScripts?: E2eMergeScript[];
+}
+
+/** 파일을 쓰거나 지우거나 작업을 멈추는 플랫폼 호출 */
 export const E2E_WRITE_METHOD = {
   MERGE_PDFS: "mergePdfs",
+  CANCEL_JOB: "cancelJob",
   COPY_FILE: "copyFile",
   DISCARD_TEMP: "discardTemp"
 } as const;
@@ -36,6 +60,11 @@ export const E2E_WRITE_METHOD = {
 interface MergePdfsCall {
   method: typeof E2E_WRITE_METHOD.MERGE_PDFS;
   request: MergeRequest;
+}
+
+interface CancelJobCall {
+  method: typeof E2E_WRITE_METHOD.CANCEL_JOB;
+  jobId: string;
 }
 
 interface CopyFileCall extends CopyFileParams {
@@ -47,7 +76,11 @@ interface DiscardTempCall {
   path: string;
 }
 
-export type E2eWriteCall = MergePdfsCall | CopyFileCall | DiscardTempCall;
+export type E2eWriteCall =
+  | MergePdfsCall
+  | CancelJobCall
+  | CopyFileCall
+  | DiscardTempCall;
 
 declare global {
   interface Window {
@@ -61,7 +94,10 @@ declare global {
     __E2E_PDF_CACHE_STATS__?: () => PdfCacheStats;
     /** 창 밖 파일 드래그·드롭을 흉내 낸다. 좌표는 물리 픽셀(CSS 픽셀 × `devicePixelRatio`) */
     __E2E_FILE_DROP__?: (event: NativeFileDropEvent) => void;
-    /** 테스트가 넣으면 병합 요청을 이 Promise가 풀릴 때까지 붙잡는다(진행 오버레이 확인용) */
+    /**
+     * 테스트가 넣으면 병합 요청을 이 Promise가 풀릴 때까지 붙잡는다(진행 오버레이 확인용).
+     * 붙잡힌 동안 `cancelJob`이 오면 바로 `CANCELLED`로 실패한다.
+     */
     __E2E_HOLD_MERGE__?: Promise<void>;
     /** `__E2E_HOLD_MERGE__`를 푸는 함수. 테스트가 함께 넣는다. */
     __E2E_RELEASE_MERGE__?: () => void;
@@ -76,6 +112,10 @@ function toMockFile({ bytesBase64, ...file }: E2eMockFile): MockPdfFile {
   return bytesBase64 ? { ...file, bytes: decodeBase64(bytesBase64) } : file;
 }
 
+function seededError(code: string, detail: string): PlatformError {
+  return new PlatformError({ code, message: `E2E 시드 실패: ${detail}` });
+}
+
 /** 쓰기 계열 호출을 위임 전에 기록한다. 거부된 요청도 남는다. */
 function recordWrites(
   platform: DesktopPlatform,
@@ -88,8 +128,11 @@ function recordWrites(
         method: E2E_WRITE_METHOD.MERGE_PDFS,
         request: params.request
       });
-      await window.__E2E_HOLD_MERGE__;
       return platform.mergePdfs(params);
+    },
+    cancelJob: (jobId) => {
+      writes.push({ method: E2E_WRITE_METHOD.CANCEL_JOB, jobId });
+      return platform.cancelJob(jobId);
     },
     copyFile: (params) => {
       writes.push({ method: E2E_WRITE_METHOD.COPY_FILE, ...params });
@@ -98,6 +141,73 @@ function recordWrites(
     discardTemp: (path) => {
       writes.push({ method: E2E_WRITE_METHOD.DISCARD_TEMP, path });
       return platform.discardTemp(path);
+    }
+  };
+}
+
+interface InjectFailuresParams {
+  platform: DesktopPlatform;
+  failures: E2eMockFailures;
+  mergeScripts: E2eMergeScript[];
+}
+
+/**
+ * 시드대로 실패·진행률을 흉내 낸다. `mergePdfs`는 스크립트의 진행률을 보낸 뒤
+ * `__E2E_HOLD_MERGE__`를 기다리고, 그동안 같은 작업의 `cancelJob`이 오면
+ * Rust처럼 `CANCELLED`로 실패한다.
+ */
+function injectFailures({
+  platform,
+  failures,
+  mergeScripts
+}: InjectFailuresParams): DesktopPlatform {
+  const openFailures = failures.openFiles ?? {};
+  const cancelledJobs = new Set<string>();
+  const cancelWaiters = new Map<string, () => void>();
+
+  const toSeededResult = (opened: OpenedFile): OpenedFile => {
+    const code = openFailures[opened.sourcePath];
+    if (code === undefined) return opened;
+    return {
+      status: "error",
+      sourcePath: opened.sourcePath,
+      error: { code, message: `E2E 시드 실패: ${opened.sourcePath}` }
+    };
+  };
+
+  return {
+    ...platform,
+    openFiles: async (paths) =>
+      (await platform.openFiles(paths)).map(toSeededResult),
+    mergePdfs: async (params) => {
+      const { jobId } = params.request;
+      const script = mergeScripts.shift();
+      for (const progress of script?.progress ?? []) {
+        params.onProgress?.(progress);
+      }
+      const cancelled = new Promise<void>((resolve) => {
+        cancelWaiters.set(jobId, resolve);
+      });
+      await Promise.race([window.__E2E_HOLD_MERGE__, cancelled]);
+      cancelWaiters.delete(jobId);
+      if (cancelledJobs.has(jobId)) {
+        throw seededError(ERROR_CODE.CANCELLED, jobId);
+      }
+      if (script?.failCode !== undefined) {
+        throw seededError(script.failCode, jobId);
+      }
+      return platform.mergePdfs(params);
+    },
+    cancelJob: async (jobId) => {
+      cancelledJobs.add(jobId);
+      cancelWaiters.get(jobId)?.();
+      await platform.cancelJob(jobId);
+    },
+    copyFile: async (params) => {
+      if (failures.copyFile !== undefined) {
+        throw seededError(failures.copyFile, params.destination);
+      }
+      await platform.copyFile(params);
     }
   };
 }
@@ -133,8 +243,13 @@ export function createE2ePlatform(): DesktopPlatform {
     files: seed.files.map(toMockFile)
   });
   window.__E2E_FILE_DROP__ = mockPlatform.simulateFileDrop;
+  const seededPlatform = injectFailures({
+    platform: mockPlatform,
+    failures: seed.failures ?? {},
+    mergeScripts: [...(seed.mergeScripts ?? [])]
+  });
   return recordReads({
-    platform: recordWrites(mockPlatform, writes),
+    platform: recordWrites(seededPlatform, writes),
     reads
   });
 }

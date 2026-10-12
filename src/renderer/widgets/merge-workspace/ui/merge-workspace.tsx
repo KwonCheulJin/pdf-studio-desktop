@@ -60,7 +60,8 @@ export function MergeWorkspace() {
 
   const handleMergeSelected = useCallback(async () => {
     setIsMergePreviewOpen(true);
-    await startSelectedMerge();
+    const isMerged = await startSelectedMerge();
+    if (!isMerged) setIsMergePreviewOpen(false);
   }, [startSelectedMerge]);
 
   const handleCloseMergePreview = useCallback(() => {
@@ -71,16 +72,18 @@ export function MergeWorkspace() {
   // 어떤 경로로든 지워진 파일·페이지는 선택에서 뺀다
   useDeselectDeleted();
 
-  // 선택 단축키 (모달·병합 진행·카드 집기 중에는 끈다)
+  // 선택 단축키 (모달·병합 진행/실패 오버레이·카드 집기 중에는 끈다)
   const [isReordering, setIsReordering] = useState(false);
-  const isMerging = useMergeStatus() === MERGE_STATUS.MERGING;
+  const mergeStatus = useMergeStatus();
+  const isMergeOverlayOpen =
+    mergeStatus === MERGE_STATUS.MERGING || mergeStatus === MERGE_STATUS.ERROR;
   const { selectAllItems } = useSelectAll();
   useSelectionShortcuts({
     isEnabled:
       hasFiles &&
       !isPreviewOpen &&
       !isMergePreviewOpen &&
-      !isMerging &&
+      !isMergeOverlayOpen &&
       !isReordering,
     onDelete: handleDeleteSelected,
     onSelectAll: selectAllItems,

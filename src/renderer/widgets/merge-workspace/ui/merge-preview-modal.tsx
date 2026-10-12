@@ -1,7 +1,10 @@
 import { useCallback } from "react";
 import { Loader2, Download } from "lucide-react";
 import type { PdfDocument } from "@/renderer/entities/merge-plan";
-import { useDownloadMergedFile } from "@/renderer/features/pdf-merge";
+import {
+  discardMergedFile,
+  useDownloadMergedFile
+} from "@/renderer/features/pdf-merge";
 import { VirtuosoPreviewList } from "@/renderer/features/pdf-preview";
 import {
   Dialog,
@@ -11,7 +14,6 @@ import {
   DialogFooter,
   Button
 } from "@/renderer/shared/ui";
-import { getPlatform } from "@/renderer/shared/platform";
 
 interface MergePreviewModalProps {
   isOpen: boolean;
@@ -37,14 +39,14 @@ export function MergePreviewModal({
     if (!mergedDocument) return;
     const result = await download(mergedDocument);
     if (result.success) {
-      await getPlatform().discardTemp(mergedDocument.path);
+      await discardMergedFile(mergedDocument.path);
       onClose();
     }
   }, [mergedDocument, download, onClose]);
 
   const handleClose = useCallback(async () => {
     if (mergedDocument) {
-      await getPlatform().discardTemp(mergedDocument.path);
+      await discardMergedFile(mergedDocument.path);
     }
     onClose();
   }, [mergedDocument, onClose]);

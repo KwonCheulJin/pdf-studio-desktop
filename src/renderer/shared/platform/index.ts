@@ -16,7 +16,11 @@ export {
   type Unsubscribe
 } from "./desktop-platform";
 export { getPlatform, setPlatform } from "./current-platform";
-export { PLATFORM_ERROR_CODE, PlatformError } from "./platform-error";
+export {
+  PLATFORM_ERROR_CODE,
+  PlatformError,
+  toPlatformError
+} from "./platform-error";
 export { createTauriPlatform, isTauriRuntime } from "./tauri-platform";
 export {
   createMockPlatform,

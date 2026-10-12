@@ -171,6 +171,8 @@ function writeTarget(call: E2eWriteCall): string | null {
       return call.destination;
     case "discardTemp":
       return call.path;
+    case "cancelJob":
+      return null;
   }
 }
 

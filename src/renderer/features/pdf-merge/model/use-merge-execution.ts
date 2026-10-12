@@ -1,81 +1,126 @@
 import { useCallback } from "react";
+import { toast } from "sonner";
 import { useErrorSnapshot } from "@kwoncheulJin/error-snapshot";
+import type { MergeSource } from "@/renderer/shared/api/bindings";
 import {
   MERGE_STATUS,
   MERGE_VIEW,
   useMergeStore,
   createPdfDocument
 } from "@/renderer/entities/merge-plan";
-import { getPlatform, MERGE_OUTPUT_KIND } from "@/renderer/shared/platform";
+import {
+  ERROR_CODE,
+  getErrorMessage
+} from "@/renderer/shared/config/error-messages";
+import {
+  getPlatform,
+  LOG_LEVEL,
+  MERGE_OUTPUT_KIND,
+  toPlatformError
+} from "@/renderer/shared/platform";
 import { getErrorSnapshot } from "@/renderer/shared/lib/error-snapshot";
 import { buildMergeSources } from "../lib/build-merge-request";
+import { discardMergedFile } from "../lib/discard-merged-file";
+import { findFailedSourcePath } from "../lib/find-failed-source-path";
+import { useMergeRunStore } from "./merge-run-store";
 
-export function useMergeExecution() {
+interface UseMergeExecutionResult {
+  /** 작업 공간 전체를 병합한다. */
+  startMerge: () => Promise<void>;
+  /** 실패한 병합과 같은 소스로 다시 병합한다. */
+  retryMerge: () => Promise<void>;
+}
+
+/** 전체 병합 실행. 진행률·실패는 merge-run-store, 화면 상태는 merge-store에 둔다. */
+export function useMergeExecution(): UseMergeExecutionResult {
   const { captureError } = useErrorSnapshot(getErrorSnapshot());
   const files = useMergeStore((state) => state.files);
   const mergeOrder = useMergeStore((state) => state.mergeOrder);
   const setStatus = useMergeStore((state) => state.setStatus);
-  const setProgress = useMergeStore((state) => state.setProgress);
-  const setError = useMergeStore((state) => state.setError);
   const setView = useMergeStore((state) => state.setView);
   const setMergedDocument = useMergeStore((state) => state.setMergedDocument);
 
+  const runMerge = useCallback(
+    async (sources: MergeSource[]) => {
+      const jobId = crypto.randomUUID();
+      const { startRun, updateProgress, endRun, failRun } =
+        useMergeRunStore.getState();
+      startRun({ jobId, sources });
+      setStatus(MERGE_STATUS.MERGING);
+      setView(MERGE_VIEW.WORKSPACE);
+      setMergedDocument(null);
+
+      const platform = getPlatform();
+      try {
+        const result = await platform.mergePdfs({
+          request: {
+            jobId,
+            sources,
+            output: { kind: MERGE_OUTPUT_KIND.TEMP }
+          },
+          onProgress: (progress) => updateProgress({ jobId, progress })
+        });
+        if (useMergeRunStore.getState().isCancelRequested) {
+          // 취소를 누른 뒤에 끝난 결과는 보이지 않고 지운다.
+          await discardMergedFile(result.outputPath);
+          endRun();
+          setStatus(MERGE_STATUS.IDLE);
+          return;
+        }
+        setMergedDocument(
+          createPdfDocument(result.outputPath, result.pageCount)
+        );
+        endRun();
+        setStatus(MERGE_STATUS.COMPLETE);
+        setView(MERGE_VIEW.PREVIEW);
+      } catch (error) {
+        const platformError = toPlatformError(error);
+        const { progress, isCancelRequested } = useMergeRunStore.getState();
+        if (platformError.code === ERROR_CODE.CANCELLED || isCancelRequested) {
+          // 취소는 오류가 아니다. 조용히 작업 공간으로 돌아간다.
+          endRun();
+          setStatus(MERGE_STATUS.IDLE);
+          return;
+        }
+        platform.log({
+          level: LOG_LEVEL.ERROR,
+          message: `병합 실패: [${platformError.code}] ${platformError.message}`
+        });
+        failRun({
+          code: platformError.code,
+          stage: progress?.stage ?? null,
+          sourcePath: findFailedSourcePath({
+            code: platformError.code,
+            progress,
+            sources
+          })
+        });
+        setStatus(MERGE_STATUS.ERROR);
+        captureError(platformError, {
+          source: "merge",
+          code: platformError.code,
+          sourceCount: sources.length
+        });
+      }
+    },
+    [captureError, setMergedDocument, setStatus, setView]
+  );
+
   const startMerge = useCallback(async () => {
     if (files.length === 0) return;
-
     const sources = buildMergeSources({ files, mergeOrder });
     if (sources.length === 0) {
-      setError("병합할 페이지가 없습니다.");
-      setStatus(MERGE_STATUS.ERROR);
-      setProgress(0);
+      toast.error(getErrorMessage(ERROR_CODE.EMPTY_REQUEST));
       return;
     }
+    await runMerge(sources);
+  }, [files, mergeOrder, runMerge]);
 
-    setError(null);
-    setStatus(MERGE_STATUS.MERGING);
-    setProgress(0);
-    setView(MERGE_VIEW.WORKSPACE);
-    setMergedDocument(null);
+  const retryMerge = useCallback(async () => {
+    const { sources } = useMergeRunStore.getState();
+    if (sources.length === 0) return;
+    await runMerge(sources);
+  }, [runMerge]);
 
-    try {
-      const result = await getPlatform().mergePdfs({
-        request: {
-          jobId: crypto.randomUUID(),
-          sources,
-          output: { kind: MERGE_OUTPUT_KIND.TEMP }
-        },
-        onProgress: (progress) => setProgress(progress.overallPercent)
-      });
-      const mergedDocument = createPdfDocument(
-        result.outputPath,
-        result.pageCount
-      );
-      setMergedDocument(mergedDocument);
-      setProgress(100);
-      setStatus(MERGE_STATUS.COMPLETE);
-      setView(MERGE_VIEW.PREVIEW);
-    } catch (error) {
-      setError("병합 요청에 실패했습니다.");
-      setStatus(MERGE_STATUS.ERROR);
-      setProgress(0);
-      // Error Snapshot 캡처 (병합 실패 정보 포함)
-      const err = error instanceof Error ? error : new Error(String(error));
-      captureError(err, {
-        source: "merge",
-        fileCount: files.length,
-        mergeOrderCount: mergeOrder.length
-      });
-    }
-  }, [
-    captureError,
-    files,
-    mergeOrder,
-    setError,
-    setMergedDocument,
-    setProgress,
-    setStatus,
-    setView
-  ]);
-
-  return { startMerge };
+  return { startMerge, retryMerge };
 }

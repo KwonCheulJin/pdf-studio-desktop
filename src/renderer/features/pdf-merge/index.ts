@@ -1,4 +1,4 @@
-export { EmptyState, FileGrid } from "./ui";
+export { EmptyState, FileGrid, MergeProgressOverlay } from "./ui";
 export {
   useSelectionStore,
   useSelectedCount,
@@ -14,4 +14,5 @@ export { useSelectionActions } from "./model/use-selection-actions";
 export { useSelectionShortcuts } from "./model/use-selection-shortcuts";
 export { useDeselectDeleted } from "./model/use-deselect-deleted";
 export { useSelectedMerge } from "./model/use-selected-merge";
+export { discardMergedFile } from "./lib/discard-merged-file";
 export { SELECTION_TYPE, type SelectionType } from "./config/selection-type";

@@ -11,7 +11,7 @@ interface OpenDocumentsParams {
   paths: string[];
 }
 
-interface OpenDocumentsResult {
+export interface OpenDocumentsResult {
   documents: PdfDocument[];
   failures: OpenedFileFailure[];
 }

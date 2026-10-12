@@ -121,6 +121,7 @@
 | D2 | 미사용 코드: `@dnd-kit`(P0-5에서 사용 예정), `zod`, `electron-squirrel-startup`, edit delete/reorder, `merge-state.ts`, 스토어 액션 `expandAll`/`collapseAll`/`reorderFiles`(실행 시 페이지 순서 유실)/`reorderPageWithinFile`/`movePage`/`resetZoom`/`reset`, `generatePreview`/`generatePageThumbnail`, `Card`/`Icon`, `useActivePages`, 미사용 AbortController 등. **`selectRange`(B11)와 `restorePage`(B10)는 살려서 쓴다.** | P0-6 / P1-6 |
 | F1 | `shared/hooks`, `shared/model`에 도메인 로직이 있다(FSD 위반). renderer가 `@/main/types`를 import한다. | P0-2 |
 | T1 | Node 버전 불일치(.tool-versions 25 / CI 22 / README 18). 버전이 이중 bump된다. README와 docs가 낡았다. `.claude` 훅이 Mac 절대경로다. | P0-1, P4 |
+| B17 | pdfium 페이지 가져오기는 북마크(`/Outlines`)를 복사하지 않아 병합 결과에서 원본 북마크가 사라진다. 현재 동작은 `tests/merge.rs`의 특성 테스트로 고정. | Phase 5 (고도화 후보) |
 
 ---
 

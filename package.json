@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
     "validate": "pnpm lint && pnpm typecheck && pnpm test",
     "release:patch": "pnpm version patch --no-git-tag-version && node scripts/release.mjs patch",
     "release:minor": "pnpm version minor --no-git-tag-version && node scripts/release.mjs minor",
@@ -30,6 +31,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.5",
     "@eslint/js": "^9.39.4",
+    "@playwright/test": "^1.64.0",
     "@tailwindcss/vite": "^4.2.2",
     "@tauri-apps/cli": "^2.12.2",
     "@testing-library/dom": "^10.4.1",

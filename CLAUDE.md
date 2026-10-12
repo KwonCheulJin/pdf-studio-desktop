@@ -46,7 +46,7 @@ pnpm tauri build                    # Tauri 빌드
 
 - Rust는 핵심 동작만 테스트한다(Red → Green → Refactor). 「이 테스트를 실패시킬 production 변경」을 한 줄로 말할 수 없으면 쓰지 않는다.
 - 프론트는 새 단위 테스트(Vitest)를 쓰지 않고 Playwright E2E(mock-platform + WebKit 헤드리스)로 검증한다. 기존 Vitest는 리팩터링 중 동작 고정용으로 유지한다.
-- E2E 명령은 첫 E2E를 추가하는 Step에서 여기에 적는다.
+- E2E: `pnpm test:e2e`(Playwright가 E2E 전용 포트로 Vite 개발 서버를 띄우고 `e2e/`를 WebKit 헤드리스로 돌린다. 창이 뜨지 않는다). 처음 한 번 `pnpm exec playwright install webkit`. 시드·기록 방법은 `docs/rules/testing.md`.
 
 ## Git
 

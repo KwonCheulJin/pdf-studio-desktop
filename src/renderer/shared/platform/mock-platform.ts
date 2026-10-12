@@ -6,7 +6,8 @@ import { PlatformError } from "./platform-error";
 export interface MockPdfFile {
   path: string;
   displayName: string;
-  pageCount: number;
+  /** `openFiles`가 돌려줄 쪽별 크기·원본 회전. 쪽 수는 이 길이다. */
+  pages: PageInfo[];
   title?: string;
   bytes?: Uint8Array;
 }
@@ -26,17 +27,6 @@ const MOCK_DIRECTORY = {
   TEMP: "/mock/temp",
   SAVE: "/mock/saved"
 } as const;
-
-/** A4(pt) */
-const MOCK_PAGE_BOX = { left: 0, bottom: 0, right: 595, top: 842 } as const;
-
-const MOCK_PAGE_INFO: PageInfo = {
-  widthPt: MOCK_PAGE_BOX.right,
-  heightPt: MOCK_PAGE_BOX.top,
-  rotation: 0,
-  mediaBox: MOCK_PAGE_BOX,
-  cropBox: MOCK_PAGE_BOX
-};
 
 const PERCENT_COMPLETE = 100;
 
@@ -92,9 +82,9 @@ export function createMockPlatform({
       pdfPath: path,
       displayName: file.displayName,
       info: {
-        pageCount: file.pageCount,
+        pageCount: file.pages.length,
         title: file.title ?? null,
-        pages: Array.from({ length: file.pageCount }, () => MOCK_PAGE_INFO)
+        pages: file.pages
       }
     };
   };

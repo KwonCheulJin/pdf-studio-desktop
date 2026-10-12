@@ -159,7 +159,10 @@ export function DocumentCard({
 
   return (
     // group 클래스를 전체 컨테이너에 적용 → 텍스트 영역 호버도 감지
-    <div className="group flex h-full w-full flex-col">
+    <div
+      data-testid="document-card"
+      className="group flex h-full w-full flex-col"
+    >
       {/* 카드 본문 - 스택 효과 포함, flex-1로 남은 공간 채우기 */}
       <div className="relative flex-1">
         {/* 스택 효과 (접힘 상태에서만) - Adobe thumbnailBorder 스타일 */}

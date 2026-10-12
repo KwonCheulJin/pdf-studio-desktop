@@ -13,7 +13,7 @@
     "isolatedModules": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "types": ["node", "electron", "vite/client", "react", "react-dom"],
+    "types": ["node", "vite/client", "react", "react-dom"],
     "paths": {
       "@/*": ["./src/*"]
     }

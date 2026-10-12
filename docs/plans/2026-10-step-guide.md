@@ -205,13 +205,14 @@ pnpm i && pnpm start                                           # 현재 Electron
 - 순서: Step 2-b 직후에 한다. Step 2-b 이후 Electron은 동작하지 않으므로 바로 제거한다.
 - 함께 할 일: `docs/01-folder-structure.md`를 토큰 문서 §3의 FSD 배치에 맞춰 갱신
 - 완료 기준: `electron`, `pdf-lib`, `sharp`, `fs-extra`가 의존성에 없음, 계획서 §5의 "Phase 1 완료 기준" 체크리스트 전부 통과
-- [ ] Step 14
+- [x] Step 14
 
 ### Step 15. 아이콘과 로컬 빌드 (S)
 - 실행 순서: 14번째 (앞: Step 7)
 - 브랜치: `chore/tauri-icons-build`
 - 읽을 곳: 계획서 §5 P1-7
 - 할 일(키트): 1024px PNG 원본으로 `pnpm tauri icon` → `pnpm tauri build`
+  - PNG 원본은 루트 `icon.icns`(Step 14에서 이 용도로 남겨 둠)에서 추출하고, `pnpm tauri icon` 뒤 루트 `icon.icns`를 지운다.
 - 완료 기준: Mac에서 `.dmg` 생성 후 설치·실행
 - [ ] Step 15
 

@@ -10,9 +10,8 @@
 | React 컴포넌트  | **PascalCase**             | `MergeWorkspace`, `DocumentCard`            |
 | 함수/훅/변수    | **camelCase**              | `useMergeCommand`, `handleFileDrop`         |
 | 타입/인터페이스 | **PascalCase**             | `MergeRequest`, `PdfDocument`               |
-| IPC 채널        | **scope.action:detail**    | `pdf.merge:start`, `file.convert.tiff`      |
-| 메인 서비스     | **PascalCase + Service**   | `PdfMergeService`                           |
-| 워커 파일       | **kebab-case + worker.ts** | `merge-worker.ts`                           |
+| Tauri 커맨드    | **snake_case 동사_목적어** | `merge_pdfs`, `open_files`                  |
+| 서비스 클래스   | **PascalCase + Service**   | `PdfMergeService`                           |
 
 ---
 
@@ -25,7 +24,7 @@
 pdf-merge-service.ts
 document-card.tsx
 use-merge-command.ts
-ipc-schema.ts
+tauri-platform.ts
 
 ❌ 잘못된 예시
 PdfMergeService.ts
@@ -36,7 +35,7 @@ useMergeCommand.ts
 **규칙:**
 
 - 모든 폴더와 파일명은 **kebab-case** 사용
-- 확장자 앞에 역할 suffix 가능: `-service.ts`, `-worker.ts`, `-provider.tsx`
+- 확장자 앞에 역할 suffix 가능: `-store.ts`, `-platform.ts`, `-provider.tsx`
 
 ### 2. React 컴포넌트
 
@@ -97,31 +96,29 @@ type merge_status = ...
 - `I` prefix (헝가리안 표기법) 지양
 - Props 타입: `ComponentNameProps` 형식 권장
 
-### 5. IPC 채널명
+### 5. Tauri 커맨드명
 
-```typescript
-// ✅ 올바른 예시
-'pdf.merge:start';
-'pdf.merge:progress';
-'pdf.merge:complete';
-'pdf.edit:apply';
-'file.convert.tiff';
-'file.meta.get-pdf-info';
-'dialog.show-open';
-'app.log';
+```rust
+// ✅ 올바른 예시 (Rust 함수 이름이 곧 커맨드 이름)
+merge_pdfs
+open_files
+pick_save_path
+cancel_job
 
 // ❌ 잘못된 예시
-'pdfMergeStart';
-'PDF_MERGE_START';
-'merge-pdf';
+mergePdfs
+pdf.merge:start
+merge
 ```
 
 **규칙:**
 
-- 패턴: `scope.action:detail` 또는 `scope.action.detail`
-- scope: 도메인 영역 (`pdf`, `file`, `dialog`, `app`)
-- action: 동작 (`merge`, `edit`, `convert`)
-- detail: 세부 액션 (`start`, `progress`, `complete`)
+- Rust 함수 명명(`snake_case`)을 그대로 쓰고 `동사_목적어`로 짓는다.
+- 프론트는 커맨드를 직접 부르지 않는다. 생성 바인딩의 `commands`는
+  `shared/platform/tauri-platform.ts`에서만 호출하고, 나머지는 `DesktopPlatform`
+  메서드(camelCase)를 쓴다.
+- 커맨드 목록과 시그니처의 정본은 계획서 §5 P1-3 표와
+  `src/renderer/shared/api/bindings.ts`(tauri-specta 생성물)다.
 
 ### 6. 서비스 클래스
 
@@ -142,25 +139,6 @@ class MergeService { ... }     // 도메인 prefix 누락
 - **PascalCase + Service** suffix
 - 도메인 prefix 포함 (`Pdf`, `File`)
 
-### 7. 워커 파일
-
-```typescript
-// ✅ 올바른 예시
-// 파일: merge-worker.ts
-export function processMerge() { ... }
-
-// 파일: convert-worker.ts
-export function processConvert() { ... }
-
-// 파일: edit-worker.ts
-export function processEdit() { ... }
-```
-
-**규칙:**
-
-- 파일명: **kebab-case + `-worker.ts`**
-- 내부 함수: camelCase
-
 ---
 
 ## FSD 레이어별 네이밍
@@ -170,7 +148,7 @@ export function processEdit() { ... }
 | `entities` | `pdf-document/`, `pdf-page/` | `document-card.tsx`, `use-pdf-metadata.ts`  |
 | `features` | `pdf-merge/`, `pdf-edit/`    | `use-merge-command.ts`, `merge-toolbar.tsx` |
 | `widgets`  | `merge-workspace/`           | `merge-workspace.tsx`                       |
-| `shared`   | `ui/`, `lib/`, `model/`      | `ipc-client.ts`, `pdf-document.ts`          |
+| `shared`   | `ui/`, `lib/`, `platform/`   | `tauri-platform.ts`, `file-utils.ts`        |
 
 ---
 
@@ -194,4 +172,4 @@ export function processEdit() { ... }
 | `Provider`           | Context Provider     | `MergeProvider`               |
 | `Context`            | React Context        | `MergeContext`                |
 | `Props`              | 컴포넌트 Props 타입  | `DocumentCardProps`           |
-| `Request` / `Result` | IPC 페이로드         | `MergeRequest`, `MergeResult` |
+| `Request` / `Result` | 커맨드 요청·결과     | `MergeRequest`, `MergeResult` |

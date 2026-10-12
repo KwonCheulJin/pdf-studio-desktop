@@ -333,7 +333,7 @@ Phase 5  고도화
   - 처음 실행할 때 오류 보고를 안내하고, 설정에서 끌 수 있게 한다(`plugin-store`에 저장).
 
 ### P1-6 Electron 제거와 문서 갱신 (S)
-- 삭제: `forge.config.mts`, `src/main`, `src/preload`, electron 관련 deps, **`pdf-lib`, `sharp`, `fs-extra`**, `icon.*`(→ `src-tauri/icons`)
+- 삭제: `forge.config.mts`, `src/main`, `src/preload`, electron 관련 deps, **`pdf-lib`, `sharp`, `fs-extra`**, `icon.ico`. 루트 `icon.icns`는 P1-7의 아이콘 원본이라 그때 추출한 뒤 지운다(→ `src-tauri/icons`).
 - 갱신: `README`, `docs/01~05`(IPC 스펙 → Tauri 커맨드 스펙), `.claude/agents/ipc-architect.md` → Tauri 커맨드/capability/pdf-core 기준, `implement`/`check` 스킬의 검증 명령(`cargo fmt --check`, `cargo clippy -D warnings`, `cargo test` 추가)
 
 ### P1-7 아이콘, 로컬 빌드 (S)

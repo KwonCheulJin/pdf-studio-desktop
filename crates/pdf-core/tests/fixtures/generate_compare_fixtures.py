@@ -13,6 +13,9 @@
   호환 문자(NFKC로 바뀌는 ㈜·™·²), 대소문자, 연속 공백, 하이픈 줄바꿈(pdfium이 잇는 것과
   줄바꿈으로 남기는 것, 쪽 경계)을 담는다. 3쪽은 ToUnicode가 PUA를 가리킨다(깨진 텍스트 레이어
   흉내, LowTextConfidence 대상).
+- diff-base.pdf·diff-edit.pdf·diff-move.pdf·diff-rewrap.pdf(Step 19): 같은 한글 글꼴로 쓴 가상
+  계약서 원본과 변형 셋(단어 삽입·삭제·치환과 숫자 치환, 쪽 경계를 넘는 문단 이동, 줄바꿈 위치만
+  다른 판).
 
     python3 crates/pdf-core/tests/fixtures/generate_compare_fixtures.py
 
@@ -714,12 +717,94 @@ def tokenize_korean_pdf() -> bytes:
     return build_document(TOKENIZE_PAGES, objects, font.encode)
 
 
+# --- diff(Step 19) -----------------------------------------------------------------
+
+# 원본 계약서(2쪽). 변형은 이 문구에서 바꾼 곳만 다르다.
+DIFF_BASE_PAGES = [
+    [
+        "제1조(목적) 이 계약은 갑과 을 사이의 용역 제공에 관한",
+        "권리와 의무를 정함을 목적으로 한다.",
+        "제2조(계약 기간) 계약 기간은 2026년 1월 1일부터",
+        "2026년 12월 31일까지로 한다.",
+        "제3조(대금) 갑은 을에게 용역 대금으로 금 1,000,000원을",
+        "지급하고, 지연 이자는 연 5%로 한다.",
+    ],
+    [
+        "제4조(비밀 유지) 을은 업무 중 알게 된 갑의 정보를",
+        "제3자에게 누설하지 아니한다.",
+        "제5조(해지) 어느 한쪽이 계약을 위반하면 상대방은 서면으로",
+        "통지한 후 이 계약을 해지할 수 있다.",
+        "제6조(관할) 이 계약에 관한 분쟁은 서울중앙지방법원을",
+        "관할 법원으로 한다.",
+    ],
+]
+
+# 단어 삽입(14일 전에, 두 줄에 걸친 문장)·삭제(용역)·치환(서울중앙→수원), 날짜(2026년 12월 31일 →
+# 2027년 6월 30일)·금액(1,000,000 → 1,500,000)·비율(5% → 15%) 숫자 치환. 줄은 공백에서만 바꾼다.
+DIFF_EDIT_PAGES = [
+    [
+        "제1조(목적) 이 계약은 갑과 을 사이의 용역 제공에 관한",
+        "권리와 의무를 정함을 목적으로 한다.",
+        "제2조(계약 기간) 계약 기간은 2026년 1월 1일부터",
+        "2027년 6월 30일까지로 한다.",
+        "제3조(대금) 갑은 을에게 대금으로 금 1,500,000원을",
+        "지급하고, 지연 이자는 연 15%로 한다.",
+    ],
+    [
+        "제4조(비밀 유지) 을은 업무 중 알게 된 갑의 정보를",
+        "제3자에게 누설하지 아니한다. 이 의무는 계약이 끝난",
+        "후에도 3년간 유지된다.",
+        "제5조(해지) 어느 한쪽이 계약을 위반하면 상대방은 14일 전에",
+        "서면으로 통지한 후 이 계약을 해지할 수 있다.",
+        "제6조(관할) 이 계약에 관한 분쟁은 수원지방법원을",
+        "관할 법원으로 한다.",
+    ],
+]
+
+# 문단 이동: 1쪽의 제2조를 2쪽 제4조 뒤로 옮긴다(쪽 경계를 넘는 이동).
+DIFF_MOVE_PAGES = [
+    DIFF_BASE_PAGES[0][:2] + DIFF_BASE_PAGES[0][4:],
+    DIFF_BASE_PAGES[1][:2] + DIFF_BASE_PAGES[0][2:4] + DIFF_BASE_PAGES[1][2:],
+]
+
+# 같은 문구를 다른 위치에서 줄바꿈하고 쪽 경계도 옮긴다. 한글 단어 중간에서 하이픈 없이 바꾼 줄
+# (제공|에, 31일까|지로, 통지|한, 서울중앙지방|법원을)이 있어 토큰 경계는 다르지만 차이는 0이어야 한다.
+DIFF_REWRAP_PAGES = [
+    [
+        "제1조(목적) 이 계약은 갑과 을 사이의 용역 제공",
+        "에 관한 권리와 의무를 정함을 목적으로 한다. 제2조(계약",
+        "기간) 계약 기간은 2026년 1월 1일부터 2026년 12월 31일까",
+        "지로 한다.",
+        "제3조(대금) 갑은 을에게 용역 대금으로 금",
+    ],
+    [
+        "1,000,000원을 지급하고, 지연 이자는 연 5%로 한다.",
+        "제4조(비밀 유지) 을은 업무 중 알게 된 갑의 정보를 제3자에게",
+        "누설하지 아니한다.",
+        "제5조(해지) 어느 한쪽이 계약을 위반하면 상대방은 서면으로 통지",
+        "한 후 이 계약을 해지할 수 있다.",
+        "제6조(관할) 이 계약에 관한 분쟁은 서울중앙지방",
+        "법원을 관할 법원으로 한다.",
+    ],
+]
+
+
+def diff_pdf(pages: list[list[str]]) -> bytes:
+    specs = [PageSpec(media_box=A4_MEDIA_BOX, runs=tokenize_runs(lines)) for lines in pages]
+    font = korean_font(specs)
+    return build_document(specs, font.objects, font.encode)
+
+
 def main() -> None:
     fixtures = {
         "text-geometry.pdf": text_geometry_pdf(),
         "rotation-order.pdf": rotation_order_pdf(),
         "korean-text.pdf": korean_text_pdf(),
         "tokenize-korean.pdf": tokenize_korean_pdf(),
+        "diff-base.pdf": diff_pdf(DIFF_BASE_PAGES),
+        "diff-edit.pdf": diff_pdf(DIFF_EDIT_PAGES),
+        "diff-move.pdf": diff_pdf(DIFF_MOVE_PAGES),
+        "diff-rewrap.pdf": diff_pdf(DIFF_REWRAP_PAGES),
     }
     for name, data in fixtures.items():
         (OUTPUT_DIR / name).write_bytes(data)

@@ -439,7 +439,7 @@ pub struct CompareResult {
    - 토큰 경계, 하이픈 줄바꿈 결합 규칙, 정규화 뒤 글자별 상자 대응, `LOW_TEXT_CONFIDENCE_RATIO` 값은 [ADR 0001](../adr/0001-compare-result-model.md) §9가 정본이다.
 3. **정렬과 diff (P2-4, L)**
    - 문서 전체 토큰열끼리 비교해 페이지 경계를 넘는 이동이나 밀림에 대응한다.
-   - 대용량 대응: ① 단락/줄 해시로 **유일 매칭 앵커**를 잡고(Patience) ② 앵커 사이 구간만 Myers diff를 돌린다(`similar`의 `Algorithm::Patience`/`Myers`, 시간 제한(deadline) 설정).
+   - 대용량 대응: ① 양쪽에 한 번씩만 나오는 **토큰 키**로 Patience 앵커(LIS)를 잡고 ② 앵커 사이 구간은 앞뒤 공통 토큰을 떼어 낸 뒤 `similar` Myers로 비교한다(시간 제한 `DIFF_TIME_LIMIT`). 띄어쓰기만 다른 묶음은 변경에서 제외한다. 정본은 [ADR 0001](../adr/0001-compare-result-model.md) §10.
    - 인접한 delete와 insert는 replace로 묶는다. 같은 줄에서 인접한 박스는 병합한다.
 4. **페이지 짝짓기 (P2-5, M)**
    - 페이지 쌍별 매칭 토큰 수 행렬을 만들고, 단조 증가 최대 가중 경로(LIS 계열)로 짝을 짓는다. 남는 페이지는 삽입 또는 삭제 페이지가 된다.

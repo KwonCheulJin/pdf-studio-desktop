@@ -7,6 +7,8 @@
 - Rust 핵심 코어는 **Red → Green → Refactor.** 실패하는 테스트를 먼저 쓰고, 통과시키는 최소 코드를 쓰고, 그다음 정리한다. 버그는 재현 테스트부터 쓴다.
 - 비교 엔진·연결선 묶기는 golden JSON 픽스처로 Rust에서 검증한다.
   - golden은 `crates/pdf-core/tests/golden/`에 둔다. 픽스처나 규칙을 바꾸면 `UPDATE_GOLDEN=1 PDFIUM_LIB_PATH=<라이브러리 파일> cargo test -p pdf-core --test <테스트 파일>`로 다시 쓰고, 바뀐 값을 눈으로 확인한 뒤 E2E까지 통과시킨다. 비교 픽스처는 `crates/pdf-core/tests/fixtures/generate_compare_fixtures.py`로 만든다(한글 글꼴을 `node_modules`의 OFL 글꼴에서 읽으므로 `pnpm install` 뒤에 돌린다).
+  - 시간에 따라 달라지는 동작(diff 시간 제한)은 이미 지난 제한(`Duration::ZERO`)으로 결정적으로 확인한다. 실제 시간을 재서 단언하는 테스트는 두지 않고, 측정값은 ADR·상수 주석에 남긴다.
+  - 해시처럼 규칙으로 계산하는 값(`Change.id`)은 기대값을 테스트 대상 코드가 아닌 다른 구현(Python `hashlib` 등)으로 구해 리터럴로 둔다.
 - **프론트는 새 단위 테스트(Vitest)를 쓰지 않는다.** 검증은 Playwright E2E로 한다: Vite dev 서버 + `mock-platform` + WebKit 엔진 헤드리스(창이 뜨지 않는다). 어댑터(`tauri-platform.ts`)에도 단위 테스트를 따로 두지 않고 계약 타입과 typecheck로 형태를 맞추고 동작은 E2E로 확인한다.
 - 기존 프론트 Vitest(특성 테스트 포함)는 리팩터링 중 동작 고정용으로 유지한다. 대상 코드를 다시 쓰거나 지우는 Step에서 같은 동작을 E2E가 확인하게 되면 그 테스트도 함께 지운다.
 - 공개 인터페이스로 테스트한다. 구현 세부(private 함수, 내부 상태)를 테스트하지 않는다.

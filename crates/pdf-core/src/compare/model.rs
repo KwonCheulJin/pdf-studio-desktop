@@ -29,7 +29,8 @@ pub struct TextBox {
     pub h: f32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum ChangeKind {
     /// `before`가 `None`, `after`가 `Some`
     Insert,
@@ -46,7 +47,8 @@ pub enum TextSource {
     Ocr,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ChangeSide {
     /// 변경에 걸린 토큰을 공백 하나로 이은 원문 글자(NFC만 적용, 대소문자 그대로)
     pub text: String,
@@ -59,7 +61,8 @@ pub struct ChangeSide {
 /// `(A 쪽, B 쪽)`. 0부터 센 쪽 번호이고, 그 문서에 해당하는 쪽이 없으면 `None`이다.
 pub type PagePair = (Option<u32>, Option<u32>);
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Change {
     /// 같은 입력·옵션이면 다시 실행해도 같은 키(ADR 0001의 계산 규칙)
     pub id: String,

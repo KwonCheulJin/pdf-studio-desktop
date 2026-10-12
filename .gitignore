@@ -101,3 +101,7 @@ typings/
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+
+# OCR 런타임·모델 (scripts/fetch-ocr.mjs 가 받는다)
+/src-tauri/onnxruntime/
+/src-tauri/ocr-models/

@@ -1,0 +1,9 @@
+file	page	dpi	skew_degrees	stamps
+contract-a-scan-300dpi.pdf	1	300	0.7	-
+contract-a-scan-300dpi.pdf	2	300	-1.2	-
+contract-a-scan-200dpi.pdf	1	200	-0.5	-
+contract-a-scan-200dpi.pdf	2	200	1.6	-
+contract-a-scan-stamp.pdf	1	300	1.0	220.00,360.86,30
+contract-a-scan-stamp.pdf	2	300	-0.8	413.00,286.49,30;413.00,335.24,30
+contract-b-scan-300dpi.pdf	1	300	2.0	-
+contract-b-scan-300dpi.pdf	2	300	-0.6	-

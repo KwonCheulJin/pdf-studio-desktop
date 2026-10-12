@@ -669,14 +669,15 @@ A의 변경 상자와 B의 대응 상자를 거터를 가로지르는 곡선으�
 ## 8. Phase 4: 빌드, 배포, 서명
 
 ### P4-1 CI
-- `tauri-apps/tauri-action` 매트릭스
+- `.github/workflows/ci.yml` 매트릭스(PR·`main` 푸시). 릴리스용 `tauri-apps/tauri-action`은 P4-2에서 쓴다.
   - `macos-latest`(aarch64-apple-darwin, 필요하면 `universal-apple-darwin`)
   - `windows-latest`
   - `ubuntu-22.04`(`libwebkit2gtk-4.1-dev` 등)
 - 각 잡에서 `scripts/fetch-pdfium.mjs`와 `scripts/fetch-ocr.mjs`(P2-2a 이후)를 실행한다(버전 고정, 캐시).
 - `Swatinem/rust-cache`, pnpm 캐시, `NODE_AUTH_TOKEN`(GitHub Packages)을 유지한다.
 - PR에서는 `pnpm validate` + `cargo fmt --check` + `cargo clippy -D warnings` + `cargo test`를 실행한다.
-- Windows 설치 파일은 **NSIS**(`bundle.targets`에 `nsis`) 하나로 한다. 사용자 단위 설치라 관리자 권한이 필요 없다.
+- E2E(`pnpm test:e2e`)는 macOS 잡에서만 돈다. Tauri macOS 웹뷰와 엔진이 같고, 한글 CID 픽스처가 쓰는 시스템 한글 글꼴이 이미 있다.
+- Windows 설치 파일은 **NSIS**(`bundle.targets`에 `nsis`) 하나로 한다. 사용자 단위 설치라 관리자 권한이 필요 없다. CI의 Windows 잡이 `pnpm tauri build`로 만들어 아티팩트로 올린다. `pdfium.dll`은 `--config`로 `bundle.resources`에 넣어 설치 폴더(`resource_dir`)에 둔다. macOS `.dmg`는 PR마다 만들지 않는다(P4-2 릴리스에서).
 
 ### P4-2 릴리스 흐름 정리 (T1)
 - 기존 Electron용 워크플로(`build.yml`, `release.yml`, `auto-version.yml`)는 Step 1에서 모두 제거했다. 여기서 새로 만든다: `pnpm release:*` → 태그 푸시 → `release.yml`이 tauri-action으로 Draft Release를 만들고 아티팩트를 업로드한다.

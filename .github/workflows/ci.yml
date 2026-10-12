@@ -1,0 +1,122 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  # @kwoncheulJin/error-snapshot (GitHub Packages) 설치
+  packages: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  check:
+    name: check (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            pdfium-library: aarch64-apple-darwin/libpdfium.dylib
+          - os: windows-latest
+            pdfium-library: x86_64-pc-windows-msvc/pdfium.dll
+          - os: ubuntu-22.04
+            pdfium-library: x86_64-unknown-linux-gnu/libpdfium.so
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Linux 시스템 의존성 (Tauri v2)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .tool-versions
+          cache: pnpm
+
+      # .npmrc의 @kwoncheulJin 스코프 레지스트리에 토큰을 붙인다(값은 환경변수로만 들어간다).
+      - name: GitHub Packages 인증
+        run: echo "//npm.pkg.github.com/:_authToken=\${NODE_AUTH_TOKEN}" >> "$HOME/.npmrc"
+
+      - run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: pdfium 캐시
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/pdfium
+          key: pdfium-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/fetch-pdfium.mjs') }}
+
+      - run: pnpm fetch:pdfium
+
+      # Windows에서도 구분자가 맞는 절대 경로가 되도록 node로 푼다.
+      - name: PDFIUM_LIB_PATH 설정
+        run: |
+          library_path=$(node -p "require('node:path').resolve('src-tauri/pdfium/${{ matrix.pdfium-library }}')")
+          echo "PDFIUM_LIB_PATH=$library_path" >> "$GITHUB_ENV"
+
+      - run: pnpm validate
+
+      - run: cargo fmt --check
+
+      - run: cargo clippy --all-targets -- -D warnings
+
+      - run: cargo test
+
+      - name: Playwright WebKit 설치
+        if: runner.os == 'macOS'
+        run: pnpm exec playwright install webkit
+
+      - name: E2E
+        if: runner.os == 'macOS'
+        run: pnpm test:e2e
+
+      - name: E2E 실패 기록 업로드
+        if: failure() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results
+          path: test-results/
+          if-no-files-found: ignore
+
+      # pdfium.dll을 설치 폴더(resource_dir)에 넣는다. 앱은 거기서 바인딩한다(src-tauri/src/pdf_engine.rs).
+      # JSON을 인자로 넘기면 Windows 셸 인용에 깨지므로 파일로 넘긴다.
+      - name: Windows NSIS 설치 파일 빌드
+        if: runner.os == 'Windows'
+        run: |
+          echo '{"bundle":{"resources":{"pdfium/x86_64-pc-windows-msvc/pdfium.dll":"pdfium.dll"}}}' > target/windows-bundle.conf.json
+          pnpm tauri build --config target/windows-bundle.conf.json
+
+      - name: NSIS 설치 파일 업로드
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf-studio-windows-nsis
+          path: target/release/bundle/nsis/*-setup.exe
+          if-no-files-found: error

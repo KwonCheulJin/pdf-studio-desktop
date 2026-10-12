@@ -195,7 +195,7 @@ Phase 5  고도화
 ### P0-3 비파괴 회전 (S, B1)
 - 회전은 `PdfPage.rotation`(스토어)으로만 관리하고, `MergeRequest.sources[].pages[].rotation`에 담아 병합 시 적용한다.
 - 병합은 Rust(`merge_pdfs`, P1-2~3)가 요청의 페이지별 rotation을 적용한다. 프론트에서 원본을 덮어쓰는 편집·회전 호출(`pdf.edit:apply`, `pdf.page:rotate`에 해당)을 없애고, 회전은 스토어 상태로만 들고 있다가 `MergeRequest`에 담는다.
-- **완료 기준:** 어떤 조작을 해도 원본 파일의 mtime과 해시가 변하지 않는다(E2E로 확인).
+- **완료 기준:** 어떤 조작을 해도 원본 파일이 바뀌지 않는다. 원본 바이트·mtime 불변은 Rust 테스트(`crates/pdf-core/tests/merge.rs`, `src-tauri` 병합·복사 테스트)가 실제 파일로 확인하고, 프론트가 원본 경로에 쓰기를 요청하지 않음과 회전이 절대값(화면에 보인 최종 각도)으로 병합 요청에 담김은 E2E(`e2e/non-destructive-rotation.spec.ts`, mock 플랫폼 호출 기록)로 확인한다.
 
 ### P0-4 pdf.js 로더 단일화와 렌더 캐시 (M, P1)
 - `shared/lib/pdfjs/`

@@ -6,7 +6,7 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['src/**/__tests__/**/*.test.ts'],
-    exclude: ['node_modules', 'dist', '.vite'],
+    exclude: ['node_modules', 'dist', '.vite', 'e2e/**'],
     fileParallelism: false, // 테스트 파일 순차 실행 (파일 시스템 충돌 방지)
     testTimeout: 30000,
     coverage: {

@@ -93,8 +93,8 @@ pnpm i && pnpm start                                           # 현재 Electron
 - 브랜치: `fix/non-destructive-rotation`
 - 읽을 곳: 계획서 §4 P0-3 (버그 B1)
 - 할 일: 병합은 Rust(`merge_pdfs`, Step 10·11)가 요청의 페이지별 rotation을 적용한다. 프론트에서 원본을 덮어쓰는 편집·회전 호출(`pdf.edit:apply`, `pdf.page:rotate`에 해당하는 호출)을 없애고, 회전은 스토어 상태로만 들고 있다가 `MergeRequest`에 담는다.
-- 완료 기준: 어떤 조작 후에도 원본 파일의 mtime과 해시가 그대로라는 E2E 시나리오 통과
-- [ ] Step 3
+- 완료 기준: 원본 바이트·mtime 불변은 Rust 테스트(`crates/pdf-core/tests/merge.rs`, `src-tauri` 병합·복사 테스트)로, 회전·삭제·병합·저장 후에도 프론트가 원본 경로에 쓰기를 요청하지 않음과 회전이 화면에 보인 최종 절대값으로 병합 요청에 담김은 E2E(`pnpm test:e2e`, mock 플랫폼 호출 기록)로 통과
+- [x] Step 3
 
 ### Step 4. pdf.js 로더 단일화와 렌더 캐시 (M)
 - 실행 순서: 9번째 (앞: Step 3, 뒤: Step 5)

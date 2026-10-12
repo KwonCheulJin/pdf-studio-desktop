@@ -10,4 +10,6 @@
 - 기존 프론트 Vitest(특성 테스트 포함)는 리팩터링 중 동작 고정용으로 유지한다. 대상 코드를 다시 쓰거나 지우는 Step에서 같은 동작을 E2E가 확인하게 되면 그 테스트도 함께 지운다.
 - 공개 인터페이스로 테스트한다. 구현 세부(private 함수, 내부 상태)를 테스트하지 않는다.
 - 위치: Rust 단위 테스트는 같은 파일 `#[cfg(test)] mod tests`, 통합 테스트는 `crates/*/tests/`, 픽스처는 `crates/pdf-core/tests/fixtures/`, E2E는 `e2e/`. 기존 Vitest는 대상과 같은 폴더의 `__tests__/`에 있다.
-- E2E 실행 명령은 첫 E2E를 추가하는 Step에서 `CLAUDE.md`에 적는다.
+- **E2E 실행:** `pnpm test:e2e`. `playwright.config.ts`가 E2E 전용 포트(1430)로 Vite 개발 서버(`pnpm dev:web`)를 띄우고 WebKit 헤드리스 프로젝트 하나로 `e2e/*.spec.ts`를 돈다. 처음 한 번 `pnpm exec playwright install webkit`. 실패하면 `test-results/`에 trace가 남는다(`pnpm exec playwright show-trace <trace.zip>`).
+- **E2E 시드·기록:** 브라우저에는 실제 파일이 없으므로 테스트가 `page.addInitScript`로 `window.__E2E_MOCK_SEED__ = { files }`를 넣는다. 파일마다 경로·표시 이름·쪽별 `PageInfo`(크기·원본 회전)·썸네일용 PDF 바이트(base64)를 준다. PDF는 `e2e/fixtures/`의 작은 합성 파일(`crates/pdf-core/tests/fixtures/` 사본)만 쓰고 실제 문서는 쓰지 않는다. 앱은 쓰기 계열 호출(`mergePdfs`·`copyFile`·`discardTemp`)을 위임 전에 `window.__E2E_MOCK_WRITES__`에 기록하고, 테스트는 `page.evaluate`로 읽는다. 구현은 `app/providers/e2e-platform.ts`이고 개발 서버에서만(`import.meta.env.DEV`) 쓰여 프로덕션 번들에는 들어가지 않는다.
+- E2E 셀렉터는 역할·접근 가능한 이름(`getByRole`) 우선이고, 없을 때만 `data-testid`를 최소로 둔다(지금은 `document-card`, `page-card`).

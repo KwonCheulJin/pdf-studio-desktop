@@ -1,5 +1,6 @@
 import { Channel, isTauri } from "@tauri-apps/api/core";
 import { documentDir, join } from "@tauri-apps/api/path";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import {
   error as writeErrorLog,
   info as writeInfoLog,
@@ -15,6 +16,7 @@ import {
   type DesktopPlatform,
   type LogLevel
 } from "./desktop-platform";
+import { toFileDropEvent } from "./native-file-drop";
 import { toPlatformError } from "./platform-error";
 
 interface CommandSuccess<T> {
@@ -30,6 +32,9 @@ interface CommandFailure {
 type CommandResult<T> = CommandSuccess<T> | CommandFailure;
 
 type LogWriter = (message: string) => Promise<void>;
+
+/** WebView2 사용자 에이전트에 들어 있는 OS 이름 */
+const WINDOWS_USER_AGENT_TOKEN = "Windows";
 
 const LOG_WRITERS: Record<LogLevel, LogWriter> = {
   [LOG_LEVEL.INFO]: writeInfoLog,
@@ -51,6 +56,17 @@ async function unwrap<T>(command: Promise<CommandResult<T>>): Promise<T> {
     throw toPlatformError(result.error);
   }
   return result.data;
+}
+
+/**
+ * 드롭 좌표 1 CSS 픽셀에 해당하는 좌표 단위 수. 타입은 `PhysicalPosition`이지만
+ * 실제 단위는 웹뷰마다 다르다(wry 0.57): WebView2(Windows)는 클라이언트 영역 물리 픽셀,
+ * WKWebView(macOS)·WebKitGTK(Linux)는 이미 논리(CSS) 픽셀이다.
+ */
+function dropPositionPixelRatio(): number {
+  return navigator.userAgent.includes(WINDOWS_USER_AGENT_TOKEN)
+    ? window.devicePixelRatio
+    : 1;
 }
 
 /** Tauri 웹뷰는 초기화 스크립트로 `isTauri` 전역을 넣는다. 브라우저·테스트에서는 false */
@@ -88,6 +104,26 @@ export function createTauriPlatform(): DesktopPlatform {
       LOG_WRITERS[level](message).catch((error: unknown) => {
         console.error(`로그 기록 실패: ${String(error)}`, message);
       });
+    },
+    onFileDrop: (handler) => {
+      const listening = getCurrentWebview().onDragDropEvent(({ payload }) => {
+        handler(
+          toFileDropEvent({
+            event: payload,
+            pixelRatio: dropPositionPixelRatio()
+          })
+        );
+      });
+      listening.catch((error: unknown) => {
+        console.error(`파일 드롭 구독 실패: ${String(error)}`);
+      });
+      return () => {
+        listening
+          .then((stopListening) => stopListening())
+          .catch(() => {
+            // 구독이 실패했으면 끊을 것이 없다(위에서 기록함).
+          });
+      };
     }
   };
 }

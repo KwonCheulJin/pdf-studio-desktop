@@ -5,7 +5,7 @@ export {
   useSelectionType
 } from "./model/selection-store";
 export { useZoomStore, useCardSize } from "./model/zoom-store";
-export { useAddFiles } from "./model/use-add-files";
+export { useAddFiles, useAddDroppedFiles } from "./model/use-add-files";
 export { useSelectAll } from "./model/use-select-all";
 export { useMergeExecution } from "./model/use-merge-execution";
 export { useDownloadMergedFile } from "./model/use-download-merged-file";

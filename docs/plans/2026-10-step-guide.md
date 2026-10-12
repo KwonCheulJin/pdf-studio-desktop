@@ -108,9 +108,9 @@ pnpm i && pnpm start                                           # 현재 Electron
 - 실행 순서: 10번째 (앞: Step 4, 뒤: Step 6)
 - 브랜치: `refactor/dnd-kit`
 - 읽을 곳: 계획서 §4 P0-5, §5 P1-4
-- 할 일: 내부 정렬은 dnd-kit, 외부 파일 드롭은 `platform.onFileDrop`(Tauri `onDragDropEvent`)으로 구현한다. `position`(PhysicalPosition)은 `/ window.devicePixelRatio`로 CSS 좌표로 바꾸고, `document.elementFromPoint`로 드롭 대상을 판정한다.
-- 완료 기준: HTML5 DnD 이벤트(`onDragStart` 등) 의존 0, 파일·페이지 재정렬과 외부 파일 드롭이 동작(드롭 위치에 정확히 삽입, Retina에서 `devicePixelRatio` 보정 확인), **키보드만으로 재정렬 가능**(Space 집기 → 방향키 → Space 놓기), `.claude/quality-gate.json` test 명령의 `layout-calculator.test.ts` 제외 해제
-- [ ] Step 5
+- 할 일: 내부 정렬은 dnd-kit, 외부 파일 드롭은 `platform.onFileDrop`(Tauri `onDragDropEvent`)으로 구현한다. `position`은 타입이 PhysicalPosition이지만 단위가 웹뷰마다 다르다(wry 0.57): WebView2(Windows)는 물리 픽셀이라 `/ window.devicePixelRatio`로 CSS 좌표로 바꾸고, WKWebView(macOS)·WebKitGTK는 이미 CSS 좌표라 그대로 쓴다. `document.elementFromPoint`로 드롭 대상을 판정한다. 드롭 경로는 Rust가 웹뷰보다 먼저 받아 허용 경로 목록에 기록한다(D13).
+- 완료 기준: HTML5 DnD 이벤트(`onDragStart` 등) 의존 0, 파일·페이지 재정렬과 외부 파일 드롭이 동작(드롭 위치에 정확히 삽입, 물리 픽셀 좌표의 `devicePixelRatio` 보정은 mock 드롭 E2E(dpr 2)로 확인, 실제 OS 드롭과 Windows 고DPI는 Step 30 CI·수동 확인), **키보드만으로 재정렬 가능**(Space 집기 → 방향키 → Space 놓기, Esc 취소), `.claude/quality-gate.json` test 명령의 `layout-calculator.test.ts` 제외 해제
+- [x] Step 5
 
 ### Step 6. 버그 수정과 정리 (M)
 - 실행 순서: 11번째 (앞: Step 5, 뒤: Step 13)

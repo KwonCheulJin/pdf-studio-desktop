@@ -19,7 +19,6 @@
 ## 품질 게이트
 
 - 설정은 `.claude/quality-gate.json`이다. 고친 파일의 eslint, 전체 typecheck, 관련 테스트를 돌린다.
-- 기존에 깨진 `layout-calculator.test.ts`는 Step 5(dnd-kit)에서 다시 쓰므로 그때까지 제외하고, Step 5에서 제외를 푼다.
 
 ## 앱 창(GUI)을 띄우지 않는다
 

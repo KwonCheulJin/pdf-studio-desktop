@@ -7,7 +7,8 @@ import {
   createMockPlatform,
   type CopyFileParams,
   type DesktopPlatform,
-  type MockPdfFile
+  type MockPdfFile,
+  type NativeFileDropEvent
 } from "@/renderer/shared/platform";
 
 /**
@@ -58,6 +59,8 @@ declare global {
     __E2E_MOCK_READS__?: string[];
     /** pdf.js 캐시 상태(살아 있는 문서, 렌더 캐시 항목) 조회 */
     __E2E_PDF_CACHE_STATS__?: () => PdfCacheStats;
+    /** 창 밖 파일 드래그·드롭을 흉내 낸다. 좌표는 물리 픽셀(CSS 픽셀 × `devicePixelRatio`) */
+    __E2E_FILE_DROP__?: (event: NativeFileDropEvent) => void;
   }
 }
 
@@ -121,11 +124,12 @@ export function createE2ePlatform(): DesktopPlatform {
   window.__E2E_MOCK_WRITES__ = writes;
   window.__E2E_MOCK_READS__ = reads;
   window.__E2E_PDF_CACHE_STATS__ = getPdfCacheStats;
+  const mockPlatform = createMockPlatform({
+    files: seed.files.map(toMockFile)
+  });
+  window.__E2E_FILE_DROP__ = mockPlatform.simulateFileDrop;
   return recordReads({
-    platform: recordWrites(
-      createMockPlatform({ files: seed.files.map(toMockFile) }),
-      writes
-    ),
+    platform: recordWrites(mockPlatform, writes),
     reads
   });
 }

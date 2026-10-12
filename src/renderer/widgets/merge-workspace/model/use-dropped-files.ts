@@ -1,54 +1,46 @@
-import { useState, useCallback } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
+import { useAddDroppedFiles } from "@/renderer/features/pdf-merge";
+import {
+  FILE_DROP_EVENT_TYPE,
+  getPlatform,
+  type FileDropEvent
+} from "@/renderer/shared/platform";
 
-/**
- * 드래그 데이터가 외부 파일인지 확인
- * - 외부 파일: dataTransfer.types에 'Files'가 포함됨
- * - 내부 카드 드래그: 'Files'가 없고 'text/plain' 등만 포함
- */
-function isExternalFileDrag(dataTransfer: DataTransfer): boolean {
-  return dataTransfer.types.includes("Files");
+interface UseDroppedFilesParams {
+  /** 빈 작업 공간일 때만 받는다. 파일이 있으면 그리드가 받는다. */
+  isEnabled: boolean;
 }
 
 interface UseDroppedFilesResult {
   isDragOver: boolean;
-  handleDragOver: (e: React.DragEvent<HTMLDivElement>) => void;
-  handleDragLeave: (e: React.DragEvent<HTMLDivElement>) => void;
-  handleDrop: (e: React.DragEvent<HTMLDivElement>) => void;
 }
 
-/**
- * 빈 작업 공간의 외부 파일 드래그 표시를 관리하는 훅
- * - 외부 파일 경로는 HTML5 drop 이벤트가 주지 않는다. 경로는 플랫폼 드롭 이벤트로 받는다.
- */
-export function useDroppedFiles(): UseDroppedFilesResult {
+/** 빈 작업 공간에 창 밖에서 끌어온 파일을 받아 차례로 추가한다. */
+export function useDroppedFiles({
+  isEnabled
+}: UseDroppedFilesParams): UseDroppedFilesResult {
   const [isDragOver, setIsDragOver] = useState(false);
+  const addDroppedFiles = useAddDroppedFiles();
 
-  const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    // 외부 파일 드래그일 때만 드롭 영역 표시
-    if (isExternalFileDrag(e.dataTransfer)) {
-      setIsDragOver(true);
+  const handleFileDrop = useEffectEvent((event: FileDropEvent) => {
+    switch (event.type) {
+      case FILE_DROP_EVENT_TYPE.ENTER:
+      case FILE_DROP_EVENT_TYPE.OVER:
+        setIsDragOver(true);
+        return;
+      case FILE_DROP_EVENT_TYPE.LEAVE:
+        setIsDragOver(false);
+        return;
+      case FILE_DROP_EVENT_TYPE.DROP:
+        setIsDragOver(false);
+        void addDroppedFiles({ paths: event.paths, targetPageId: null });
     }
-  }, []);
+  });
 
-  const handleDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragOver(false);
-  }, []);
+  useEffect(() => {
+    if (!isEnabled) return;
+    return getPlatform().onFileDrop((event) => handleFileDrop(event));
+  }, [isEnabled]);
 
-  const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragOver(false);
-  }, []);
-
-  return {
-    isDragOver,
-    handleDragOver,
-    handleDragLeave,
-    handleDrop
-  };
+  return { isDragOver: isEnabled && isDragOver };
 }

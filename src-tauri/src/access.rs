@@ -1,4 +1,4 @@
-//! 허용 경로 목록(D13). 파일 커맨드는 사용자가 다이얼로그로 고른 경로와
+//! 허용 경로 목록(D13). 파일 커맨드는 사용자가 다이얼로그로 고르거나 창에 드롭한 경로와
 //! 앱이 만든 폴더(이 실행의 병합 임시 세션 폴더, TIFF 변환 결과 폴더) 안의 경로만 받는다.
 //!
 //! 모든 경로는 `canonicalize`한 뒤 비교한다. 심볼릭 링크와 `..`이 풀리므로
@@ -114,7 +114,7 @@ impl AppDirectories {
 
 pub(crate) struct PathAccess {
     directories: AppDirectories,
-    /// 열기 다이얼로그에서 고른 파일(canonical). 읽기만 허용한다.
+    /// 열기 다이얼로그에서 고르거나 창에 드롭한 파일(canonical). 읽기만 허용한다.
     opened: Mutex<HashSet<PathBuf>>,
     /// 저장 다이얼로그에서 고른 파일(정규화). 쓰기만 허용한다.
     save_targets: Mutex<HashSet<PathBuf>>,
@@ -143,6 +143,20 @@ impl PathAccess {
             .map_err(|source| read_error(path, source))?;
         lock(&self.opened).insert(canonical.clone());
         Ok(canonical)
+    }
+
+    /// 창에 드롭한 파일 중 열 수 있는 것(있는 파일, 파일 추가 확장자)만 열기 목록에 기록한다.
+    /// 폴더·없는 경로·다른 확장자는 건너뛴다. 드롭 이벤트가 웹뷰에 가기 전에 부른다.
+    pub(crate) fn allow_dropped(&self, paths: &[PathBuf]) {
+        let openable: Vec<PathBuf> = paths
+            .iter()
+            .filter_map(|path| {
+                let canonical = path.canonicalize().ok()?;
+                (canonical.is_file() && has_extension(&canonical, &OPENABLE_EXTENSIONS))
+                    .then_some(canonical)
+            })
+            .collect();
+        lock(&self.opened).extend(openable);
     }
 
     /// 저장 다이얼로그에서 고른 경로를 기록하고 정규화한 경로를 돌려준다.
@@ -329,5 +343,25 @@ mod tests {
             access.readable(&path, &[PDF_EXTENSION]).expect("readable"),
             picked
         );
+    }
+
+    #[test]
+    fn dropped_files_are_readable_only_when_they_have_an_openable_extension() {
+        let test_dir = TestDir::new("readable-after-drop");
+        let access = test_dir.access();
+        let pdf = test_dir.copy_fixture("one-page.pdf", "dropped.pdf");
+        let text = test_dir.user("notes.txt");
+        fs::write(&text, b"not a pdf").expect("write text file");
+
+        access.allow_dropped(&[pdf.clone(), text.clone()]);
+
+        assert_eq!(
+            access
+                .readable(&pdf, &OPENABLE_EXTENSIONS)
+                .expect("readable"),
+            pdf.canonicalize().expect("canonical")
+        );
+        let canonical_text = text.canonicalize().expect("canonical");
+        assert!(!access.is_opened(&canonical_text));
     }
 }

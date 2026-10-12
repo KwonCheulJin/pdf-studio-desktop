@@ -242,8 +242,8 @@ fn starts_cluster(ch: char) -> bool {
             .any(|range| range.contains(&ch))
 }
 
-/// 두 상자를 덮는 상자. 쪽은 `first` 쪽이다(클러스터는 한 단어 안에서 이어진 글자다).
-fn union(first: TextBox, second: TextBox) -> TextBox {
+/// 두 상자를 덮는 상자. 쪽은 `first` 쪽이다(클러스터·같은 줄 상자처럼 같은 쪽 상자만 합친다).
+pub(super) fn union(first: TextBox, second: TextBox) -> TextBox {
     let (left, bottom) = (first.x.min(second.x), first.y.min(second.y));
     let right = (first.x + first.w).max(second.x + second.w);
     let top = (first.y + first.h).max(second.y + second.h);

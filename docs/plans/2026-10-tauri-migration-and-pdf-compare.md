@@ -50,6 +50,7 @@
 | PDF 처리(Rust) | `pdfium-render` | MIT / Apache-2.0 |
 | PDF 엔진 바이너리 | pdfium (bblanchon/pdfium-binaries 배포본) | BSD-3 / Apache-2.0 |
 | 시퀀스 diff | `similar` | Apache-2.0 |
+| 유니코드 정규화 | `unicode-normalization` | MIT / Apache-2.0 |
 | TIFF 디코드 | `tiff`, `image` | MIT / Apache-2.0 |
 | 에러, 직렬화, 타입 생성 | `thiserror`, `serde`, `tauri-specta` | MIT / Apache-2.0 |
 | 표시 | `pdfjs-dist` | Apache-2.0 |
@@ -435,6 +436,7 @@ pub struct CompareResult {
    - Unicode 정규화(NFC/NFKC 옵션, `unicode-normalization`), 공백과 줄바꿈 정리, 하이픈 줄바꿈 결합, 대소문자 무시 옵션
    - 토큰 단위는 **단어**(공백 기준, 한글 포함)이고, 각 토큰은 구성 글자의 박스 목록을 가진다. replace 구간 내부는 **글자 단위 2차 diff**로 정밀 하이라이트한다.
    - 대체 문자(U+FFFD)나 PUA 비율이 높으면 `LowTextConfidence`로 표시한다(ToUnicode가 깨진 PDF).
+   - 토큰 경계, 하이픈 줄바꿈 결합 규칙, 정규화 뒤 글자별 상자 대응, `LOW_TEXT_CONFIDENCE_RATIO` 값은 [ADR 0001](../adr/0001-compare-result-model.md) §9가 정본이다.
 3. **정렬과 diff (P2-4, L)**
    - 문서 전체 토큰열끼리 비교해 페이지 경계를 넘는 이동이나 밀림에 대응한다.
    - 대용량 대응: ① 단락/줄 해시로 **유일 매칭 앵커**를 잡고(Patience) ② 앵커 사이 구간만 Myers diff를 돌린다(`similar`의 `Algorithm::Patience`/`Myers`, 시간 제한(deadline) 설정).

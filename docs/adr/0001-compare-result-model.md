@@ -1,7 +1,7 @@
 # ADR 0001. 비교 결과 모델(`CompareResult`)과 좌표 규칙
 
-- 상태: 채택 (2026-10, Step 16 / 계획서 P2-1, §11 D16). Step 17이 맡긴 추출 규칙을 §8에 더했다.
-- 코드: `crates/pdf-core/src/compare/model.rs` (이 문서와 같은 타입만 둔다), 추출은 `crates/pdf-core/src/compare/extract.rs`
+- 상태: 채택 (2026-10, Step 16 / 계획서 P2-1, §11 D16). Step 17이 맡긴 추출 규칙을 §8에, Step 18이 맡긴 정규화·토큰화 규칙을 §9에 더했다.
+- 코드: `crates/pdf-core/src/compare/model.rs` (이 문서와 같은 타입만 둔다), 추출은 `crates/pdf-core/src/compare/extract.rs`, 정규화·토큰화는 `crates/pdf-core/src/compare/tokenize.rs`
 - 관련: 계획서 §6.1(결과 모델), §6.2(파이프라인), §6.4(OCR 신뢰도·확인 필요·좌표 되돌리기), §7.1(연결선)
 
 ## 맥락
@@ -138,7 +138,7 @@ pub struct CompareResult {
 
 | 종류 | 언제 생기나 | 데이터 |
 |---|---|---|
-| `LowTextConfidence` | 텍스트 레이어 쪽에서 대체 문자(U+FFFD)·PUA 글자 비율이 기준(`LOW_TEXT_CONFIDENCE_RATIO`, Step 18에서 정한다) 이상. ToUnicode가 깨진 PDF, 스캐너가 넣은 품질 낮은 숨은 글자층. OCR 쪽에는 생기지 않는다(OCR은 `needs_review`로 다룬다). | `side`, `pages` |
+| `LowTextConfidence` | 텍스트 레이어 쪽에서 대체 문자(U+FFFD)·PUA 글자 비율이 기준(`LOW_TEXT_CONFIDENCE_RATIO` = 0.1, §9) 이상. ToUnicode가 깨진 PDF, 스캐너가 넣은 품질 낮은 숨은 글자층. OCR 쪽에는 생기지 않는다(OCR은 `needs_review`로 다룬다). | `side`, `pages` |
 | `NoTextLayer` | OCR 대상 쪽(텍스트 레이어 글자 수 `OCR_MIN_TEXT_CHARS` 미만)인데 OCR로 글자를 얻지 못했다. 그 쪽은 텍스트 레이어 글자로 비교했다. | `side`, `reason`(`OcrUnavailable`: 런타임·모델이 없거나 OCR을 넣지 않은 빌드 / `OcrFailed`: 그 쪽의 렌더·추론 실패), `pages` |
 | `Truncated` | diff 시간 제한(deadline)을 넘은 앵커 구간을 정밀 diff 대신 구간 통째 `Replace`로 냈다. | `before_pages`, `after_pages`: 그 구간이 걸친 쪽 |
 
@@ -175,13 +175,34 @@ pub struct CompareResult {
 | `view_box` | pdfium `FPDF_GetPageBoundingBox`(쪽을 열 때 Pages 노드에서 물려받은 값까지 반영해 정규화한 CropBox ∩ MediaBox)다. 넓이가 0이면 pdf.js처럼 MediaBox로 돌아간다. `FPDFPage_GetMediaBox`·`GetCropBox`는 물려받은 상자를 읽지 못하므로 쓰지 않는다. MediaBox를 물려받은 쪽에서 교집합까지 비면 pdfium이 MediaBox를 알려 주지 않아 빈 상자가 남는다(잘못 만든 PDF에서만 생긴다). |
 | 보이지 않는 글자 | tight 상자가 `view_box`와 닫힌 구간으로도 겹치지 않으면 뺀다. 겹치면 상자를 자르지 않고 둔다. 화면에 없는 차이는 하이라이트할 곳이 없고, OCR(§6.4)도 `view_box`만 렌더하므로 텍스트 쪽과 스캔 쪽이 같은 글자 집합을 본다. pdf.js `getTextContent()`도 화면 밖 글리프를 빼지만 기준이 다르다(기준선 시작점·전진 폭 기준). 경계에 걸친 글자에서만 다를 수 있다. 렌더 모드 3(숨은 글자층)·흰 글자처럼 겹치지만 안 보이는 글자는 빼지 않는다. |
 | 순서 | pdfium 텍스트 페이지 순서. 단 pdfium은 화면 방향(`/Rotate` 적용 후)으로 줄 순서를 정해 `/Rotate 90` 쪽에서 내용상 줄 순서를 뒤집는다. 그래서 메모리 안 문서의 `/Rotate`만 0으로 두고 분석한다(저장하지 않으므로 원본은 그대로, 상자는 사용자 공간이라 그대로). 같은 내용이면 회전과 상관없이, 글자를 돌려 그리고 `/Rotate`로 바로 세운 쪽까지 같은 순서다(`rotation-order.pdf`). |
-| 공백·줄바꿈 | 내용 스트림의 공백 글리프는 다른 글자처럼 `glyph`와 함께 낸다(높이가 거의 0인 상자). pdfium이 간격·줄 끝을 보고 만든 글자(줄 끝 `\r` `\n`, 공백 글리프 없이 띄운 단어 사이 공백)는 `glyph: None`이다. 만든 글자도 뺀 글자 사이에 남을 수 있다. 정리(연속 공백·`\r\n` 합치기)는 Step 18이 하고, 토큰화는 `glyph`가 없는 글자를 경계로만 쓴다. |
-| 글자 값 | pdfium 유니코드(`FPDFText_GetUnicode`) 그대로. 유효한 스칼라 값이 아니면 U+FFFD다. ToUnicode가 없거나 깨진 글꼴의 엉뚱한 값은 Step 18의 `LowTextConfidence`가 다룬다. |
+| 공백·줄바꿈 | 내용 스트림의 공백 글리프는 다른 글자처럼 `glyph`와 함께 낸다(높이가 거의 0인 상자). pdfium이 간격·줄 끝을 보고 만든 글자(줄 끝 `\r` `\n`, 공백 글리프 없이 띄운 단어 사이 공백)는 `glyph: None`이다. 만든 글자도 뺀 글자 사이에 남을 수 있다. 정리(연속 공백·`\r\n` 합치기)는 토큰화(§9)가 하고, 토큰화는 `glyph`가 없는 글자를 경계로만 쓴다. |
+| 글자 값 | pdfium 유니코드(`FPDFText_GetUnicode`) 그대로. 유효한 스칼라 값이 아니면 U+FFFD다. pdfium이 다음 줄과 이은 줄 끝 하이픈은 U+0002로 나오고 그 뒤에 줄바꿈 글자가 없다(§9에서 되돌린다). ToUnicode가 깨져 PUA·U+FFFD가 나오는 글꼴은 `LowTextConfidence`(§9)가 다루고, ToUnicode가 아예 없는 글꼴의 엉뚱한 값은 잡지 못한다(§9 한계). |
 | `font_size` | 사용자 공간 글꼴 크기 = `Tf` × 글자 행렬(텍스트 행렬 × CTM)의 세로 단위 벡터 길이. pdfium `FPDFText_GetFontSize`는 `Tf` 값만 준다(`Tf 1` + `Tm` 배율 PDF에서 1이 된다). `font_name`은 쓰는 곳(Phase 5 스타일 비교)이 생길 때 더한다. |
 | OCR 대상 | 남은 글자 중 `glyph`가 있고 공백이 아닌 글자가 `OCR_MIN_TEXT_CHARS`(32)보다 적으면 `needs_ocr`다. 스캔본에 디지털로 찍힌 쪽 번호·날짜·도장 문구(보통 30자 아래)만으로 텍스트 쪽이 되지 않게 하고, 글자가 적은 텍스트 쪽(서명란)은 OCR로 읽어도 같은 글자가 나와 손해가 작으므로 높은 쪽으로 둔다. Step 19-a가 스캔 픽스처로 다시 본다. |
 
 - golden JSON 모양은 §7 계약 모양(camelCase, `rotation` 숫자, `viewBox`는 계약 `PageBox`)과 같다. E2E(`e2e/text-box-geometry.spec.ts`)가 같은 golden과 픽스처를 읽어, 상자를 `convertToViewportRectangle`로 바꾼 사각형이 pdf.js 텍스트 항목의 화면 사각형 안에 들고 항목 길이를 덮는지, `viewBox`·`rotation`이 `page.view`·`page.rotate`와 같은지 확인한다.
 - 한글 픽스처는 IBM Plex Sans KR(OFL-1.1) 서브셋을 임베드한 Identity-H CID 글꼴이다. 임베드하지 않은 CID 글꼴은 pdfium이 시스템 글꼴로 대신 그려 tight 상자가 플랫폼마다 달라지므로 golden에 쓰지 않는다.
+
+### 9. 정규화와 토큰화 (Step 18에서 정함)
+
+공개 API는 `tokenize(pages, options) -> Vec<Token>`과 `has_low_text_confidence(page) -> bool`이다. 옵션은 `NormalizeOptions { form: UnicodeForm(Nfc 기본 | Nfkc), ignore_case }`이고 Step 21의 비교 옵션이 이 구조체를 담는다. 토큰은 `Token { key, text, key_boxes }`다.
+
+| 항목 | 규칙 |
+|---|---|
+| 토큰 | 단어. `glyph: None`인 글자와 공백 글자(`char::is_whitespace`: 공백 글리프, NBSP, U+3000 포함)가 경계다. 경계가 몇 개 이어져도(연속 공백, 공백 + 만든 `\r\n`) 토큰을 한 번 가를 뿐이라 공백·줄바꿈 정리가 따로 없다. 문장부호는 단어에 붙은 채 둔다(`제3조(대금`). 쪽은 받은 순서로 잇고 쪽 사이는 줄바꿈이다. 공백 글리프(높이 ≈ 0인 상자)는 토큰에 들어가지 않으므로 하이라이트에 쓰이지 않는다. |
+| 줄바꿈 | `\r`·`\n`과 쪽 경계. 하이픈 결합에만 쓴다. |
+| 하이픈 줄바꿈 | 줄 끝 단어가 하이픈(`-` U+002D, U+2010)으로 끝나고, 하이픈 바로 앞 글자와 다음 줄 첫 단어의 첫 글자가 둘 다 글자·숫자(`char::is_alphanumeric`, 한글 포함)면 두 단어를 한 토큰으로 잇고 **하이픈은 남긴다**: `co-` + `operation` → `co-operation`, `123-45-` + `67890` → `123-45-67890`, 쪽 끝 `갑-` + 다음 쪽 `을` → `갑-을`. 홀로 선 `-`(`별첨 -`)나 다음 줄이 `(`처럼 글자·숫자가 아닌 것으로 시작하면 잇지 않는다. |
+| pdfium 줄 끝 하이픈 | pdfium은 문자 뒤 줄 끝 `-`·U+00AD를 U+0002(`FPDFText_IsHyphen`인 글자, 상자는 하이픈 글리프)로 바꾸고 그 뒤 `\r\n`을 내지 않는다. 다음 줄 첫 글자가 대문자·숫자여도 그렇다. 토큰화는 U+0002를 `-` + 줄바꿈으로 되돌린 뒤 위 규칙을 쓴다. 그래서 텍스트 레이어와 OCR(하이픈 + 줄바꿈으로 들어온다) 결과가 같다. U+00AD였는지는 알 수 없어 `-`로 둔다. |
+| 정규화 | 비교 키 `key` = 옵션 형식(NFC 기본, NFKC) → `ignore_case`면 `char::to_lowercase`. 원문 `text` = NFC만(대소문자 그대로, `ChangeSide.text` 재료). 방법: 원본 글자마다 분해(NFC는 정준, NFKC는 호환 분해)해 분해 글자에 원본 상자를 붙이고, 클러스터(결합 순서 0인 글자 + 뒤따르는 결합 글자·한글 중성/종성 자모 U+1160–11FF, U+D7B0–D7FF)마다 정준 합성한다. |
+| 키 글자 ↔ 상자 | `key_boxes[i]`는 `key`의 i번째 글자 상자이고 개수가 늘 같다. 한 클러스터가 낸 키 글자는 모두 그 클러스터 원본 글자 상자들을 합친 상자를 쓴다. 글자가 늘면(NFKC `㈜` → `(주)`, `™` → `TM`) 같은 상자가 여러 번 나오고, 줄면(자모 `ᄀ`+`ᅡ` → `가`, `e`+U+0301 → `é`) 합친 상자 하나가 된다. 겹친 상자는 같은 줄 상자 병합(Step 19)이 하나로 만든다. 글자 단위 2차 diff는 키 글자 색인으로 상자를 찾는다. |
+| 토큰 신뢰도 | 아직 두지 않는다. OCR 연결(Step 19-a)이 `ExtractedChar`에 글자 신뢰도를, `Token`에 구성 글자 신뢰도 최솟값(§5)을 더한다. 하이픈 결합·정규화는 원본 글자를 버리지 않으므로(모든 원본 글자가 한 토큰의 한 클러스터에 들어간다) 최솟값을 그대로 셀 수 있다. |
+| `LowTextConfidence` 판정 | 쪽에서 `glyph`가 있고 공백이 아닌 글자 중 U+FFFD·PUA(U+E000–F8FF, 15·16 평면) 비율이 `LOW_TEXT_CONFIDENCE_RATIO`(0.1) 이상이면 대상이다. 그런 글자가 없는 쪽은 아니다. 안내를 붙일 쪽(출처가 텍스트 레이어이고 비교 범위 안인 쪽)은 결과를 만드는 Step이 고른다. |
+
+- `LOW_TEXT_CONFIDENCE_RATIO` 근거: ToUnicode가 깨진 글꼴은 그 글꼴로 쓴 글자를 거의 모두 PUA·U+FFFD로 내므로 본문 글꼴이 깨지면 비율이 1에 가깝다. 정상 문서의 기호 글꼴(체크박스·글머리표) PUA는 줄마다 한두 글자라 보통 몇 % 안이다(실제 문서로 잰 값이 아니라 추정이다. 오탐이 보이면 다시 정한다). 10%면 한글 단어(3~4자) 서너 개 중 하나에 깨진 글자가 끼어 비교 결과를 믿기 어렵다.
+- 한계: ToUnicode가 아예 없는 CID 글꼴은 pdfium이 글자 코드를 그대로 유니코드로 내 엉뚱한 ASCII가 되므로 이 비율로 잡히지 않는다(Step 18 작업 중 임시 픽스처로 확인했다). pdfium `FPDFText_HasUnicodeMapError`가 신호가 될 수 있지만 pdfium-render 0.9.4는 이 함수를 글자 API로 내주지 않는다.
+- 한계: 줄 끝 하이픈을 남기므로 조판 프로그램이 자동으로 넣은 하이픈(`inter-` + `national`)은 한 줄 판 `international`과 다른 토큰이 된다. 계약서 원본(워드·한글)은 자동 하이픈이 기본으로 꺼져 있어 줄 끝 하이픈은 대개 진짜 하이픈(복합어, 사업자등록번호·전화번호·날짜)이다.
+- 한계: 한글을 글자 단위로 줄바꿈해 단어 중간에서 하이픈 없이 줄이 바뀐 경우는 잇지 않는다. 줄 끝이 단어 끝인지 알 수 없다.
+- golden: `crates/pdf-core/tests/golden/tokenize-korean.tokens.json`(기본 옵션)·`tokenize-korean.nfkc-ignore-case.tokens.json`, 픽스처 `tokenize-korean.pdf`.
 
 ## 결과
 
@@ -210,4 +231,9 @@ pub struct CompareResult {
 | (§8) `view_box` 밖 글자도 추출 | 화면에 없는 글자의 차이는 하이라이트·연결선을 둘 곳이 없고, OCR 쪽은 `view_box`만 읽어 텍스트 쪽과 글자 집합이 달라진다. |
 | (§8) pdfium 기본 순서(화면 방향) 그대로 | `/Rotate`만 바꾼 쪽(이 앱의 병합 회전 포함)과 원본을 비교하면 줄 순서가 뒤집혀 차이가 생긴다. |
 | (§8) 만든 공백·줄바꿈을 버리기 | 공백 글리프 없이 단어를 띄워 놓은 PDF(한글 문서에 흔하다)에서 단어가 붙고, 줄 끝 단어와 다음 줄 첫 단어가 붙는다. pdfium의 줄·간격 판단을 다시 만들 이유가 없다. |
+| (§9) 줄 끝 하이픈을 지우고 잇기(pdfium 방식) | 계약서의 줄 끝 하이픈은 대개 진짜 하이픈이라 `self-employed`·`123-45-67890`이 한 줄 판과 달라진다. 숫자 뒤 하이픈만 잇지 않으면 날짜·번호가 줄 위치에 따라 둘로 갈린다. |
+| (§9) pdfium이 이은 결과를 그대로 쓰기 | 하이픈을 지우고, 대문자·숫자 앞에서도 이으며, OCR 글자에는 없는 동작이라 텍스트 쪽과 스캔 쪽 토큰이 달라진다. |
+| (§9) 토큰 전체를 한 번에 정규화 | 키 글자와 원본 글자 상자를 짝지을 수 없다. |
+| (§9) 원본 글자마다 따로 정규화 | 자모·결합 문자가 합쳐지지 않아 NFC가 되지 않는다. |
+| (§9) 늘어난 키 글자에 원본 상자를 나눠 붙이기(`㈜` 상자를 3등분) | 글리프 모양과 상관없는 좌표가 생긴다. 하이라이트는 원본 글자 단위면 충분하다. |
 | (§8) loose bounds(글꼴 상자 높이) | 계획서 §6.2가 tight를 기본으로 정했다. 하이라이트가 글자 모양에 붙고 줄 사이가 겹치지 않는다. |

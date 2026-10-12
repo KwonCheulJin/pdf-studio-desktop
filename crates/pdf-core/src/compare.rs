@@ -3,9 +3,14 @@
 
 mod extract;
 mod model;
+mod tokenize;
 
 pub use extract::{ExtractedChar, ExtractedPage, Glyph, OCR_MIN_TEXT_CHARS, extract_text_layer};
 pub use model::{
     Change, ChangeKind, ChangeSide, CompareResult, NoTextReason, Notice, PagePair, PageSize,
     PageSizes, PageSources, Side, TextBox, TextSource,
+};
+pub use tokenize::{
+    LOW_TEXT_CONFIDENCE_RATIO, NormalizeOptions, Token, UnicodeForm, has_low_text_confidence,
+    tokenize,
 };

@@ -6,6 +6,7 @@ mod extract;
 mod model;
 mod options;
 mod pages;
+mod report;
 mod tokenize;
 
 pub use diff::{DIFF_TIME_LIMIT, TokenDiff, diff_tokens};
@@ -19,6 +20,11 @@ pub use options::{
     parse_page_range, select_pages,
 };
 pub use pages::pair_pages;
+pub use report::{
+    AnnotatedReport, CompareReport, CompareReportOptions, MAX_PREVIEW_WIDTH_PX, ReportError,
+    ReportLayout, ReportPreview, ReportSources, export_annotated_pdf, export_compare_pdf,
+    preview_compare_report,
+};
 pub use tokenize::{
     LOW_TEXT_CONFIDENCE_RATIO, NormalizeOptions, Token, UnicodeForm, has_low_text_confidence,
     tokenize,

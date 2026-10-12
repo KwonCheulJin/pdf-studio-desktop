@@ -231,7 +231,7 @@ fn group_lines(page: &ExtractedPage) -> (Vec<Option<usize>>, Vec<Line>) {
 }
 
 /// 화면 방향 쪽 크기 `(너비, 높이)`
-fn display_size(size: &PageSize) -> (f32, f32) {
+pub(super) fn display_size(size: &PageSize) -> (f32, f32) {
     let view = size.view_box;
     let (width, height) = (view.right - view.left, view.top - view.bottom);
     match size.rotation {
@@ -242,7 +242,7 @@ fn display_size(size: &PageSize) -> (f32, f32) {
 
 /// 사용자 공간 상자를 화면 방향 좌표로 옮긴다. `/Rotate`는 시계 방향이라 90이면 사용자 공간
 /// 왼쪽 가장자리가 화면 위, 180이면 아래쪽 가장자리가 화면 위, 270이면 오른쪽 가장자리가 화면 위다.
-fn to_display(bounds: &TextBox, size: &PageSize) -> TextBox {
+pub(super) fn to_display(bounds: &TextBox, size: &PageSize) -> TextBox {
     let view = size.view_box;
     let (x, y) = (bounds.x - view.left, bounds.y - view.bottom);
     let (width, height) = (view.right - view.left, view.top - view.bottom);

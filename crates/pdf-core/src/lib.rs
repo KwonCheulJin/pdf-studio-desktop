@@ -10,12 +10,14 @@ mod output;
 mod tiff;
 
 pub use compare::{
-    Change, ChangeKind, ChangeSide, CompareOptions, CompareOptionsError, CompareResult,
-    DIFF_TIME_LIMIT, ExtractedChar, ExtractedPage, Glyph, HEADER_FOOTER_BAND_PT,
-    LOW_TEXT_CONFIDENCE_RATIO, LineExclusions, NoTextReason, NormalizeOptions, Notice,
-    OCR_MIN_TEXT_CHARS, PagePair, PageSize, PageSizes, PageSources, Side, TextBox, TextSource,
-    Token, TokenDiff, UnicodeForm, diff_tokens, exclude_lines, extract_text_layer,
-    has_low_text_confidence, pair_pages, parse_page_range, select_pages, tokenize,
+    AnnotatedReport, Change, ChangeKind, ChangeSide, CompareOptions, CompareOptionsError,
+    CompareReport, CompareReportOptions, CompareResult, DIFF_TIME_LIMIT, ExtractedChar,
+    ExtractedPage, Glyph, HEADER_FOOTER_BAND_PT, LOW_TEXT_CONFIDENCE_RATIO, LineExclusions,
+    MAX_PREVIEW_WIDTH_PX, NoTextReason, NormalizeOptions, Notice, OCR_MIN_TEXT_CHARS, PagePair,
+    PageSize, PageSizes, PageSources, ReportError, ReportLayout, ReportPreview, ReportSources,
+    Side, TextBox, TextSource, Token, TokenDiff, UnicodeForm, diff_tokens, exclude_lines,
+    export_annotated_pdf, export_compare_pdf, extract_text_layer, has_low_text_confidence,
+    pair_pages, parse_page_range, preview_compare_report, select_pages, tokenize,
 };
 pub use document::{DocumentError, MAX_INPUT_FILE_BYTES};
 pub use engine::{EngineError, PdfEngine};

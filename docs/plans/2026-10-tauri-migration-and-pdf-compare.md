@@ -478,6 +478,7 @@ pub struct CompareResult {
    - **비교 PDF:** pdfium으로 새 문서를 만들고 A4 가로 한 장에 좌우 페이지를 배치한다. 옵션: 배치(`side_by_side | a_only | b_only`), 차이 있는 쪽만(`changed_pages_only`), 색 상자 넣기(`draw_boxes`). 화면의 필터(숨긴 종류)를 그대로 받는다.
    - **주석 PDF:** B 문서를 복사해 변경 영역마다 Highlight/Square 주석(색, 내용=변경 전후 텍스트)을 단다. 원본은 건드리지 않는다.
    - 둘 다 원자적 쓰기. 미리보기용으로 첫 N장을 렌더해 돌려주는 `preview_compare_report`를 둔다.
+   - 배치·빈 칸·상자 모양(확인 필요 구별)·삭제 주석 위치·저장·취소·미리보기 규칙은 [ADR 0001](../adr/0001-compare-result-model.md) §14가 정본이다.
 
 ### 6.3 테스트 전략
 - **픽스처:** 작은 PDF를 레포에 커밋하고(`crates/pdf-core/tests/fixtures/`), 생성 스크립트도 함께 둔다. 원본과 변형(단어 삽입/삭제/치환, 문단 이동, 페이지 삽입/삭제, 회전 페이지, CropBox 오프셋)을 만들고 기대 결과 JSON(golden)과 비교한다.

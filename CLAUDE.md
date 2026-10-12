@@ -71,14 +71,15 @@ cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
 - **I** 인터페이스와 props는 쓰는 쪽이 필요한 만큼만. 거대한 props 객체·만능 훅 금지
 - **D** 상위 정책은 추상에 의존한다. UI → `DesktopPlatform`(부팅 시 `app/providers`에서 주입), 커맨드 → `pdf-core` 공개 API
 
-### TDD
-- **Red → Green → Refactor.** 실패하는 테스트를 먼저 쓰고, 통과시키는 최소 코드를 쓰고, 그다음 정리한다.
-- 대상: `crates/pdf-core` 전체, `src-tauri`의 순수 로직(경로 검증·진행률 계산), `shared/lib`, `**/model` 순수 함수·스토어, (전환 전) `src/main/services`·`workers`
-- 제외: React 컴포넌트(`*.tsx`), 스타일, 얇은 커맨드·IPC 래퍼
-- 리팩터링 전에는 **특성 테스트**로 지금 동작을 고정한다. 버그는 재현 테스트부터 쓴다.
-- 비교 엔진·연결선은 golden JSON 픽스처로 검증하고, TS와 Rust가 같은 픽스처를 쓴다.
+### 테스트
+- **Rust는 핵심 동작만 테스트한다.** 결과가 바뀌면 깨지는 규칙이 대상이다: 병합(페이지 순서·회전 절대값·북마크), 정보 읽기, TIFF 변환, 비교 엔진(추출·토큰화·diff·연결선 묶기), 경로 검증, 진행률 계산. `crates/pdf-core`와 `src-tauri`의 순수 로직에 적용한다.
+- **Rust에서 쓰지 않는 테스트:** 상수 값 확인, 단순 getter, 자명한 enum↔문자열 매핑, 라이브러리(pdfium 등) 자체 동작, 다른 테스트와 같은 것을 다시 확인하는 중복. 「이 테스트를 실패시킬 production 변경」을 한 줄로 말할 수 없으면 쓰지 않는다.
+- Rust 핵심 코어는 **Red → Green → Refactor.** 실패하는 테스트를 먼저 쓰고, 통과시키는 최소 코드를 쓰고, 그다음 정리한다. 버그는 재현 테스트부터 쓴다.
+- 비교 엔진·연결선 묶기는 golden JSON 픽스처로 Rust에서 검증한다.
+- **프론트는 새 단위 테스트(Vitest)를 쓰지 않는다.** 검증은 Playwright E2E로 한다: Vite dev 서버 + `mock-platform` + WebKit 엔진 헤드리스(창이 뜨지 않는다). 어댑터(`tauri-platform.ts`)에도 단위 테스트를 따로 두지 않고 계약 타입과 typecheck로 형태를 맞추고 동작은 E2E로 확인한다.
+- 기존 프론트 Vitest(특성 테스트 포함)는 리팩터링 중 동작 고정용으로 유지한다. 대상 코드를 다시 쓰거나 지우는 Step에서 같은 동작을 E2E가 확인하게 되면 그 테스트도 함께 지운다.
 - 공개 인터페이스로 테스트한다. 구현 세부(private 함수, 내부 상태)를 테스트하지 않는다.
-- 위치: TS는 대상과 같은 폴더의 `__tests__/`(Vitest), Rust 단위 테스트는 같은 파일 `#[cfg(test)] mod tests`, 통합 테스트는 `crates/*/tests/`, 픽스처는 `crates/pdf-core/tests/fixtures/`
+- 위치: Rust 단위 테스트는 같은 파일 `#[cfg(test)] mod tests`, 통합 테스트는 `crates/*/tests/`, 픽스처는 `crates/pdf-core/tests/fixtures/`, E2E는 `e2e/`. 기존 Vitest는 대상과 같은 폴더의 `__tests__/`에 있다.
 
 ## Tauri 규칙
 

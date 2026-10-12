@@ -10,12 +10,14 @@ mod output;
 mod tiff;
 
 pub use compare::{
-    Change, ChangeKind, ChangeSide, CompareError, CompareResult, DIFF_TIME_LIMIT, DocumentText,
-    ExtractedChar, ExtractedPage, Glyph, LOW_TEXT_CONFIDENCE_RATIO, NoTextReason, NormalizeOptions,
-    Notice, OCR_MIN_CONFIDENCE, OCR_MIN_CONFIDENCE_NUMERIC, OCR_MIN_TEXT_CHARS, OcrFailure,
-    PagePair, PageSize, PageSizes, PageSources, Side, TextBox, TextComparison, TextSource, Token,
-    TokenDiff, UnicodeForm, compare_texts, diff_tokens, extract_text_layer,
-    has_low_text_confidence, read_document_text, tokenize,
+    Change, ChangeKind, ChangeSide, CompareError, CompareOptions, CompareOptionsError,
+    CompareResult, DIFF_TIME_LIMIT, DocumentText, ExtractedChar, ExtractedPage, Glyph,
+    HEADER_FOOTER_BAND_PT, LOW_TEXT_CONFIDENCE_RATIO, LineExclusions, NoTextReason,
+    NormalizeOptions, Notice, OCR_MIN_CONFIDENCE, OCR_MIN_CONFIDENCE_NUMERIC, OCR_MIN_TEXT_CHARS,
+    OcrFailure, PagePair, PageSize, PageSizes, PageSources, Side, TextBox, TextComparison,
+    TextSource, Token, TokenDiff, UnicodeForm, compare_texts, diff_tokens, exclude_lines,
+    extract_text_layer, has_low_text_confidence, pair_pages, parse_page_range, read_document_text,
+    select_pages, tokenize,
 };
 pub use document::{DocumentError, MAX_INPUT_FILE_BYTES};
 pub use engine::{EngineError, PdfEngine};

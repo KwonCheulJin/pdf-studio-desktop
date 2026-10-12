@@ -160,6 +160,7 @@ export function createTauriPlatform(): DesktopPlatform {
     setSetting: async ({ key, value }) => {
       await settle(settings.set(key, value));
       await settle(settings.save());
-    }
+    },
+    readThirdPartyNotices: () => unwrap(commands.readThirdPartyNotices())
   };
 }

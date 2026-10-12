@@ -5,6 +5,8 @@ mod diff;
 mod extract;
 mod model;
 mod ocr_text;
+mod options;
+mod pages;
 mod pipeline;
 mod review;
 mod tokenize;
@@ -15,6 +17,11 @@ pub use model::{
     Change, ChangeKind, ChangeSide, CompareResult, NoTextReason, Notice, PagePair, PageSize,
     PageSizes, PageSources, Side, TextBox, TextSource,
 };
+pub use options::{
+    CompareOptions, CompareOptionsError, HEADER_FOOTER_BAND_PT, LineExclusions, exclude_lines,
+    parse_page_range, select_pages,
+};
+pub use pages::pair_pages;
 pub use pipeline::{
     CompareError, DocumentText, OcrFailure, TextComparison, compare_texts, read_document_text,
 };

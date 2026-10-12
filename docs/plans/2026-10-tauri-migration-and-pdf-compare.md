@@ -58,6 +58,18 @@
 | OCR 런타임 바이너리 | ONNX Runtime | MIT |
 | OCR 모델 | PaddleOCR(PP-OCR) 한국어 검출·인식 모델의 ONNX 변환본 | Apache-2.0 |
 
+**예외(이름 고정, 2026-10-13 사용자 결정, P4-5).** 아래는 허용 목록 밖이지만 이름을 고정해 허용한다. 같은 라이선스라도 목록에 없는 새 패키지가 들어오면 `pnpm licenses:check`가 실패한다. 정본은 `scripts/third-party/policy.mjs`의 `LICENSE_EXCEPTIONS`이고, 바꿀 때는 이 표와 함께 고친다.
+
+| 라이선스 | 대상 | 근거 |
+|---|---|---|
+| Unicode-3.0 | Rust `icu_collections`, `icu_locale_core`, `icu_normalizer`, `icu_normalizer_data`, `icu_properties`, `icu_properties_data`, `icu_provider`, `litemap`, `potential_utf`, `tinystr`, `unicode-ident`, `writeable`, `yoke`, `yoke-derive`, `zerofrom`, `zerofrom-derive`, `zerotrie`, `zerovec`, `zerovec-derive` | 유니코드 데이터. Tauri 하위 의존성(`tauri > url > idna`, `tauri-utils > urlpattern`의 ICU4X, `serde_derive > proc-macro2 > unicode-ident`) |
+| MPL-2.0 | Rust `cssparser`, `cssparser-macros`, `dtoa-short`, `option-ext`, `selectors` | Tauri 하위 의존성(`tauri-utils > dom_query`, `tauri > dirs`). 수정 없이 링크만 한다 |
+| 0BSD | npm `tslib` | 저작권 표시 의무도 없는 BSD 계열. firebase 하위 의존성 |
+| CC0-1.0 | pdf.js ICC 프로필(`pdfjs-dist/iccs`) | 권리 포기(퍼블릭 도메인). `pdfjs-dist` 배포본에 들어 있다 |
+
+- pdfium 배포본의 하위 구성요소(FreeType, ICU, libjpeg-turbo, libpng, libtiff 등)와 `pdfjs-dist`의 자산(표준 글꼴, wasm 디코더, CMap)은 위 표의 pdfium·`pdfjs-dist` 행 범위로 보고, 라이선스 원문을 고지에 싣는다.
+- 이 앱 저작자의 패키지(npm `@kwoncheulJin/error-snapshot`)는 제3자 소프트웨어가 아니므로 고지·검사에서 뺀다.
+
 ### 1.3 레포 작업 규칙 (CLAUDE.md 유지)
 - 계획 → 확인 → 실행 → 보고
 - YAGNI/KISS, 매직 값 금지(Rust도 `const`/enum으로)
@@ -443,6 +455,7 @@ pub struct CompareResult {
    - 인접한 delete와 insert는 replace로 묶는다. 같은 줄에서 인접한 박스는 병합한다.
 4. **페이지 짝짓기 (P2-5, M)**
    - 페이지 쌍별 매칭 토큰 수 행렬을 만들고, 단조 증가 최대 가중 경로(LIS 계열)로 짝을 짓는다. 남는 페이지는 삽입 또는 삭제 페이지가 된다.
+   - 입력(diff의 공통 토큰 짝 `TokenDiff.matches`), 동률 처리, 짝 없는 쪽(빈 쪽 → 개수가 같으면 차례로 → 아니면 A만 있는 행 먼저) 규칙은 [ADR 0001](../adr/0001-compare-result-model.md) §12가 정본이다.
 5. **옵션 (P2-6, S)**
    - 페이지 범위는 **A·B 따로**(`range_a`, `range_b`, 각각 `"1,3-5"`, 비우면 전체). 쪽수를 넘으면 `InvalidRange` 에러.
    - 반복 줄 제외는 **머리말, 꼬리말, 쪽번호를 따로** 켠다(상단/하단 N pt 밴드, 쪽번호는 하단 밴드 안의 숫자만 있는 줄). 양쪽 문서에 같이 적용한다. 자동 머리글 감지는 Phase 5로 미룬다.
@@ -816,8 +829,10 @@ A의 변경 상자와 B의 대응 상자를 거터를 가로지르는 곡선으�
 
 ### P4-5 라이선스와 고지 (S, L1)
 - 루트에 `LICENSE`(MIT) 파일을 둔다.
-- `THIRD_PARTY_NOTICES.md`를 만들어 앱과 함께 번들한다: pdfium(BSD-3/Apache-2.0), pdf.js(Apache-2.0), IBM Plex(OFL), ONNX Runtime(MIT), PaddleOCR 모델(Apache-2.0), Rust·npm 의존성. `cargo-about`과 `license-checker`류로 생성하고 CI에서 §1.2 허용 목록 밖 라이선스가 들어오면 실패시킨다.
-- 앱 정보 화면(또는 메뉴 "PDF Studio 정보")에서 고지를 열 수 있게 한다.
+- `THIRD_PARTY_NOTICES.md`를 만들어 앱과 함께 번들한다: pdfium(BSD-3/Apache-2.0), pdf.js(Apache-2.0), IBM Plex(OFL), ONNX Runtime(MIT), PaddleOCR 모델(Apache-2.0), Rust·npm 의존성. CI에서 §1.2 허용 목록 밖 라이선스가 들어오면 실패시킨다.
+- 생성 도구는 새로 설치하지 않고 기본 명령으로 한다(2026-10-13 변경, 원래 `cargo-about`·`license-checker`류): `pnpm licenses:generate`(`scripts/generate-notices.mjs`)가 Rust는 `cargo metadata`(워크스페이스 멤버의 normal 의존성만, dev·build 의존성 제외, 모든 타깃), npm은 `pnpm licenses list --json --prod`로 모으고 패키지 폴더의 LICENSE·NOTICE 원문을 싣는다. 번들 바이너리·자산(pdfium, ONNX Runtime, OCR 모델, 글꼴, pdf.js 자산)은 `scripts/third-party/bundled.mjs`의 고정 목록이다. pdfium 원문은 `src-tauri/pdfium/aarch64-apple-darwin/`에서 읽으므로 그 타깃을 받아 둔다.
+- `pnpm licenses:check`(`scripts/check-licenses.mjs`)는 허용 목록·예외(§1.2) 밖 라이선스가 있거나 커밋한 고지가 지금 의존성으로 만든 것과 다르면 0이 아닌 코드로 끝난다. CI 연결은 Step 30(P4-1) PR이 병합된 뒤 한다: `node scripts/fetch-pdfium.mjs --target aarch64-apple-darwin && pnpm licenses:check`.
+- 앱 정보: 상태 바 버전 옆 "오픈소스 라이선스"가 번들한 고지(`bundle.resources`)를 Rust 커맨드 `read_third_party_notices`로 읽어 대화상자로 보여 준다. 저장소 `LICENSE`도 함께 번들한다.
 
 ---
 

@@ -52,6 +52,9 @@ pub struct TokenDiff {
     pub changes: Vec<Change>,
     /// 시간 제한 때문에 통째로 낸 변경이 있으면 [`Notice::Truncated`]
     pub truncated: Option<Notice>,
+    /// 공통(Equal) 토큰의 `(A 토큰 색인, B 토큰 색인)` 짝. 두 색인이 함께 늘어난다. 변경에 걸린
+    /// 토큰과 띄어쓰기만 다른 묶음의 토큰은 들지 않는다. 페이지 짝짓기(ADR 0001 §12)가 쓴다.
+    pub matches: Vec<(usize, usize)>,
 }
 
 /// 두 토큰열을 비교해 변경 목록을 만든다. `time_limit`(보통 [`DIFF_TIME_LIMIT`])이 지나면 남은
@@ -61,7 +64,8 @@ pub fn diff_tokens(before: &[Token], after: &[Token], time_limit: Duration) -> T
     let (before_ids, after_ids, vocabulary) = intern_keys(before, after);
     let anchors = anchors(&before_ids, &after_ids, vocabulary);
     let hunks = diff_between_anchors(&before_ids, &after_ids, &anchors, deadline);
-    let equal_positions = equal_positions(before.len(), &hunks);
+    let matches = equal_pairs(before.len(), after.len(), &hunks);
+    let equal_positions: Vec<usize> = matches.iter().map(|&(position, _)| position).collect();
 
     let mut changes = Vec::new();
     let mut id_counts: HashMap<String, usize> = HashMap::new();
@@ -119,7 +123,11 @@ pub fn diff_tokens(before: &[Token], after: &[Token], time_limit: Duration) -> T
             before_pages: before_pages.into_iter().collect(),
             after_pages: after_pages.into_iter().collect(),
         });
-    TokenDiff { changes, truncated }
+    TokenDiff {
+        changes,
+        truncated,
+        matches,
+    }
 }
 
 /// 키를 정수로 바꾼다(같은 키 = 같은 수). 앵커 셈과 Myers 비교가 문자열 대신 정수를 본다.
@@ -305,16 +313,17 @@ fn is_past(deadline: Option<Instant>) -> bool {
     deadline.is_some_and(|deadline| Instant::now() >= deadline)
 }
 
-/// 어느 변경에도 들지 않은 A 토큰 위치(공통 토큰). 오름차순이다.
-fn equal_positions(before_len: usize, hunks: &[Hunk]) -> Vec<usize> {
-    let mut positions = Vec::with_capacity(before_len);
-    let mut start = 0;
+/// 어느 구간에도 들지 않은 토큰(공통 토큰)의 `(A 위치, B 위치)` 짝. 구간 사이 공통 토큰은 양쪽
+/// 개수가 같고 차례로 짝이 된다. 두 위치 모두 오름차순이다.
+fn equal_pairs(before_len: usize, after_len: usize, hunks: &[Hunk]) -> Vec<(usize, usize)> {
+    let mut pairs = Vec::with_capacity(before_len.min(after_len));
+    let (mut before_start, mut after_start) = (0, 0);
     for hunk in hunks {
-        positions.extend(start..hunk.before.start);
-        start = hunk.before.end;
+        pairs.extend((before_start..hunk.before.start).zip(after_start..hunk.after.start));
+        (before_start, after_start) = (hunk.before.end, hunk.after.end);
     }
-    positions.extend(start..before_len);
-    positions
+    pairs.extend((before_start..before_len).zip(after_start..after_len));
+    pairs
 }
 
 /// A 위치 `start` 바로 앞 공통 토큰 [`CHANGE_ID_CONTEXT_TOKENS`]개(`equal_positions` 색인 범위)
@@ -495,7 +504,7 @@ fn highlight_boxes(boxes: &[TextBox], marked: &[bool]) -> Vec<TextBox> {
 /// `next`가 `current`(같은 줄에서 합쳐 온 상자)에 이어지는 같은 줄 글자인가. 같은 쪽이고, 세로로
 /// 충분히 겹치고, 오른쪽으로 너무 멀지 않아야 한다. 사용자 공간에서 세로로 흐르는 글자(돌려
 /// 그린 글자)는 세로로 겹치지 않으므로 글자마다 상자가 따로 남는다.
-fn continues_line(current: &TextBox, next: &TextBox) -> bool {
+pub(super) fn continues_line(current: &TextBox, next: &TextBox) -> bool {
     let overlap = (current.y + current.h).min(next.y + next.h) - current.y.max(next.y);
     let gap = next.x - (current.x + current.w);
     current.page == next.page

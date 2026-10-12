@@ -232,8 +232,8 @@ pnpm i && pnpm start                                           # 현재 Electron
 | 18 | P2-3 정규화·토큰화 | `feat/compare-tokenize` | 한글 픽스처 토큰화 golden 통과 | [x] |
 | 19 | P2-4 정렬과 diff | `feat/compare-diff` | 삽입·삭제·치환·문단 이동 golden 통과 | [x] |
 | 19-a | P2-4a OCR 연결 | `feat/compare-ocr` | Step 17-a 통과 후 시작. 텍스트본 ↔ 스캔본 차이 0, 금액·날짜·조항을 바꾼 짝에서 바꾼 곳만 변경 golden 통과, OCR 상자 → PDF pt 되돌리기가 원본 상자와 허용 오차 안(CropBox 오프셋, 회전 페이지 포함), 신뢰도 기준 미만 토큰이 걸린 변경과 OCR 쪽 띄어쓰기만·문장부호만 다른 치환이 `needs_review`로 분류, OCR 쪽이 있으면 NFKC 강제(ADR 0001 §5), 같은 파일 재비교에서 OCR 생략(캐시) → [ADR 0001 §11](../adr/0001-compare-result-model.md) | [x] |
-| 20 | P2-5 페이지 짝짓기 | `feat/compare-page-pairs` | 페이지 삽입·삭제 픽스처에서 짝이 맞음 | [ ] |
-| 21 | P2-6 옵션 | `feat/compare-options` | A·B 따로 페이지 범위(초과 시 `InvalidRange`), 머리말·꼬리말·쪽번호 따로 제외, 대소문자 무시 테스트 통과 | [ ] |
+| 20 | P2-5 페이지 짝짓기 | `feat/compare-page-pairs` | 페이지 삽입·삭제 픽스처에서 짝이 맞음 | [x] |
+| 21 | P2-6 옵션 | `feat/compare-options` | A·B 따로 페이지 범위(초과 시 `InvalidRange`), 머리말·꼬리말·쪽번호 따로 제외, 대소문자 무시 테스트 통과 | [x] |
 | 22 | P2-7 작업 실행기 | `feat/compare-runner` | 6단계 `Progress` 이벤트(단계별 %·전체 %, 1% 단위, 100%는 끝났을 때만), 취소(추출·OCR은 쪽마다 확인), 옵션만 바꾼 재실행에서 추출·OCR 생략(그 단계 즉시 100%), OCR 대상 쪽이 없으면 `ocr` 단계 즉시 100% | [ ] |
 | 23 | P2-8 리포트 내보내기 | `feat/compare-report` | 비교 PDF(배치 3종, 차이 쪽만, 색 상자)와 주석 PDF 생성, 미리보기 렌더 | [ ] |
 
@@ -270,7 +270,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 | 31 | P4-2 릴리스 흐름 | 태그 푸시로 Draft Release(기존 워크플로는 Step 1에서 제거됨) | [ ] |
 | 32 | P4-3 서명 | ad-hoc 서명 `.app`과 `libpdfium.dylib`·ONNX Runtime dylib가 같은 identity, `codesign --verify --deep --strict` 통과 | [ ] |
 | 33 | P4-4 자동 업데이트(선택) | `pnpm tauri add updater`, 키는 `pnpm tauri signer generate`로 생성(개인 키는 시크릿에만), `latest.json` 생성, 업데이트 동작 | [ ] |
-| 34 | P4-5 라이선스와 고지 | `LICENSE`, `THIRD_PARTY_NOTICES.md` 번들, 허용 목록 밖 라이선스면 CI 실패, 앱 정보에서 고지 열림 | [ ] |
+| 34 | P4-5 라이선스와 고지 | `LICENSE`, `THIRD_PARTY_NOTICES.md` 번들, 허용 목록 밖 라이선스면 CI 실패, 앱 정보에서 고지 열림. 검사는 `pnpm licenses:check`이고, CI 연결은 Step 30 PR이 병합된 뒤 한다(`node scripts/fetch-pdfium.mjs --target aarch64-apple-darwin && pnpm licenses:check`) | [x] |
 
 ---
 

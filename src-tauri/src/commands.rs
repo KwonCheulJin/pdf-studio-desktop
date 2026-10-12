@@ -15,7 +15,8 @@ use crate::access::{OPENABLE_EXTENSIONS, PDF_EXTENSION, PathAccess};
 use crate::contract::{MergeProgress, MergeRequest, MergeResult, OpenedFile, SaveDialogOptions};
 use crate::error::{AppError, CommandError};
 use crate::jobs::JobRegistry;
-use crate::{files, merge};
+use crate::notices::THIRD_PARTY_NOTICES_FILE;
+use crate::{files, merge, notices};
 
 /// 열기 다이얼로그의 형식 필터 이름. 언어와 무관한 형식 이름만 쓴다.
 const OPENABLE_FILTER_NAME: &str = "PDF, TIFF";
@@ -49,6 +50,7 @@ pub(crate) fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             copy_file,
             discard_temp,
             cleanup_temp,
+            read_third_party_notices,
         ])
         .constant(OPENABLE_EXTENSIONS_CONSTANT, OPENABLE_EXTENSIONS)
         .constant(MAX_INPUT_FILE_BYTES_CONSTANT, MAX_INPUT_FILE_BYTES_FOR_TS)
@@ -195,6 +197,23 @@ pub(crate) async fn discard_temp(app: AppHandle, path: PathBuf) -> Result<(), Ap
 #[specta::specta]
 pub(crate) async fn cleanup_temp(app: AppHandle) -> Result<(), AppError> {
     run_blocking(app, |app| path_access(app)?.cleanup_session()).await
+}
+
+/// 앱과 함께 번들한 제3자 고지(마크다운 원문). 경로를 받지 않고 리소스 폴더의 고정 파일만 읽는다.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn read_third_party_notices(app: AppHandle) -> Result<String, AppError> {
+    run_blocking(app, |app| {
+        let resource_dir =
+            app.path()
+                .resource_dir()
+                .map_err(|error| CommandError::ResourceUnavailable {
+                    name: THIRD_PARTY_NOTICES_FILE,
+                    detail: error.to_string(),
+                })?;
+        notices::read_third_party_notices(&resource_dir)
+    })
+    .await
 }
 
 /// pdf.js에 넘길 PDF 바이트. JSON 숫자 배열이 아니라 그대로 보내 JS에서 `ArrayBuffer`로 받는다.

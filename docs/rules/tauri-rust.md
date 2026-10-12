@@ -16,7 +16,7 @@
 - **IPC 전송:** 진행률 스트림은 `tauri::ipc::Channel`, 바이너리는 `tauri::ipc::Response`. `Vec<u8>`을 그대로 돌려주지 않는다(JSON 숫자 배열이 된다). 진행 이벤트는 1% 단위 이상으로만 보낸다.
 - **취소:** 오래 걸리는 작업은 작업 ID와 `Arc<AtomicBool>` 취소 토큰을 갖고, 취소되면 임시 파일을 지운다.
 - **상태:** 공유 상태는 `app.manage()` + `State<'_, T>`로만. 전역 `static mut` 금지
-- **CSP:** `tauri.conf.json > app.security.csp`로 관리하고 외부 스크립트를 로드하지 않는다. `withGlobalTauri`를 켜지 않는다.
+- **CSP:** `tauri.conf.json > app.security.csp` 한 곳에서 관리한다(`index.html`에 meta CSP를 두지 않는다). 외부 스크립트를 로드하지 않는다. `withGlobalTauri`를 켜지 않는다. Tauri는 이 CSP를 빌드 자산의 HTML 응답에만 붙이므로 `tauri dev`(Vite 개발 서버)와 브라우저 E2E에는 적용되지 않는다 — CSP를 바꾸면 창 숨김 release 빌드로 확인한다. 바깥 연결은 오류 보고용 Firestore(`connect-src`) 하나뿐이다.
 - **경로·플랫폼:** TS는 `@tauri-apps/api/path`, Rust는 `PathBuf`만. 문자열로 `/`·`\`를 다루지 않는다. 단축키는 `isMac ? metaKey : ctrlKey`
 - **버전:** `tauri.conf.json`의 `version`은 `../package.json`을 가리킨다(단일 소스). <!-- docs-path-check: ignore -->
 - **pdfium:** 라이브러리 경로 결정은 `pdf-core` 한 곳에서. 개발·테스트는 `PDFIUM_LIB_PATH` 환경변수를 우선한다.

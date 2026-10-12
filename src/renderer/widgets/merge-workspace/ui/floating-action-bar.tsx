@@ -15,6 +15,7 @@ import {
   SELECTION_TYPE,
   type SelectionType
 } from "@/renderer/features/pdf-merge";
+import { ErrorReportingToggleButton } from "@/renderer/features/error-reporting";
 import { ThemeToggleButton } from "@/renderer/features/theme-toggle";
 import { Button, Slider, Tooltip } from "@/renderer/shared/ui";
 import { ZOOM_CONFIG } from "@/renderer/shared/constants/zoom";
@@ -197,9 +198,10 @@ export function FloatingActionBar({
         </>
       )}
 
-      {/* 구분자 + 테마 토글 버튼 */}
+      {/* 구분자 + 테마·오류 보고 설정 */}
       <div className="bg-border h-6 w-px" />
       <ThemeToggleButton />
+      <ErrorReportingToggleButton />
     </div>
   );
 }

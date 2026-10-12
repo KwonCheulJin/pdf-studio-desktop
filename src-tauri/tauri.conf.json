@@ -13,14 +13,16 @@
     "windows": [
       {
         "title": "PDF Studio",
-        "width": 800,
-        "height": 600,
+        "width": 1280,
+        "height": 800,
+        "minWidth": 1120,
+        "minHeight": 720,
         "resizable": true,
         "fullscreen": false
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self' ipc: http://ipc.localhost https://firestore.googleapis.com; object-src 'none'; base-uri 'self'"
     }
   },
   "bundle": {

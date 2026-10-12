@@ -10,7 +10,8 @@ import {
   FILE_DROP_EVENT_TYPE,
   MERGE_OUTPUT_KIND,
   type DesktopPlatform,
-  type FileDropHandler
+  type FileDropHandler,
+  type SettingValue
 } from "./desktop-platform";
 import { toFileDropEvent, type NativeFileDropEvent } from "./native-file-drop";
 import { PlatformError } from "./platform-error";
@@ -119,6 +120,7 @@ export function createMockPlatform({
   /** 저장 다이얼로그에서 고른 경로 → 그 파일 이름 */
   const saveTargets = new Map<string, string>();
   const tempOutputs = new Set<string>();
+  const settings = new Map<string, SettingValue>();
 
   const ensureReadable = (path: string): void => {
     if (
@@ -264,6 +266,10 @@ export function createMockPlatform({
       return () => {
         dropHandlers.delete(handler);
       };
+    },
+    getSetting: async (key) => settings.get(key),
+    setSetting: async ({ key, value }) => {
+      settings.set(key, value);
     },
     simulateFileDrop: (event) => {
       if (event.type === FILE_DROP_EVENT_TYPE.DROP) {

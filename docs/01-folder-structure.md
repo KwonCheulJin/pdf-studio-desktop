@@ -57,7 +57,7 @@ project-root/
    ├─ app/                     # 부팅, 프로바이더(플랫폼 주입), 레이아웃, 전역 스타일
    │  ├─ index.tsx
    │  ├─ layout/               # app-shell, 툴바, 상태바
-   │  ├─ providers/            # platform-provider
+   │  ├─ providers/            # 플랫폼·오류 보고 주입, 테마 적용(theme-provider), 오류 경계
    │  └─ styles/               # index.css, tokens.css, theme.css, base.css
    ├─ pages/
    │  └─ merged-preview/       # 병합 결과 미리보기 화면
@@ -66,13 +66,14 @@ project-root/
    ├─ features/                # 사용자 행동
    │  ├─ pdf-merge/            # 파일 추가·선택·회전·병합·다운로드
    │  ├─ pdf-preview/          # 미리보기 모달
-   │  └─ theme-toggle/
+   │  ├─ theme-toggle/         # 테마 system|light|dark 선택·저장
+   │  └─ error-reporting/      # 오류 보고 켜기·끄기, 첫 실행 안내
    ├─ entities/                # 읽기·표시
    │  └─ merge-plan/           # 병합 대상 문서·페이지 상태(merge-store), 진행 오버레이
    └─ shared/                  # 도메인을 모른다
       ├─ api/bindings.ts       # tauri-specta 생성물 (손으로 고치지 않는다)
       ├─ platform/             # DesktopPlatform 인터페이스, tauri·mock 구현
-      ├─ lib/                  # 순수 함수, pdf.js 썸네일
+      ├─ lib/                  # 순수 함수, pdf.js 썸네일, 오류 보고(error-report: 경로 마스킹·전송)
       ├─ ui/                   # 공용 UI (토큰 클래스만)
       ├─ constants/
       └─ types/

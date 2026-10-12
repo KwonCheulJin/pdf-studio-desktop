@@ -6,6 +6,7 @@ import {
   info as writeInfoLog,
   warn as writeWarnLog
 } from "@tauri-apps/plugin-log";
+import { LazyStore } from "@tauri-apps/plugin-store";
 import {
   commands,
   type AppError,
@@ -35,6 +36,9 @@ type LogWriter = (message: string) => Promise<void>;
 
 /** 확장자 앞 구분자. `extname`은 구분자 없이 돌려준다. */
 const EXTENSION_SEPARATOR = ".";
+
+/** 앱 설정 파일(앱 데이터 폴더 안). `plugin-store`가 JSON으로 저장한다. */
+const SETTINGS_FILE = "settings.json";
 
 /** WebView2 사용자 에이전트에 들어 있는 OS 이름 */
 const WINDOWS_USER_AGENT_TOKEN = "Windows";
@@ -100,6 +104,7 @@ export function isTauriRuntime(): boolean {
 }
 
 export function createTauriPlatform(): DesktopPlatform {
+  const settings = new LazyStore(SETTINGS_FILE);
   return {
     pickFiles: () => unwrap(commands.pickFiles()),
     pickSavePath: async ({ fileName }) => {
@@ -150,6 +155,11 @@ export function createTauriPlatform(): DesktopPlatform {
             // 구독이 실패했으면 끊을 것이 없다(위에서 기록함).
           });
       };
+    },
+    getSetting: (key) => settle(settings.get<unknown>(key)),
+    setSetting: async ({ key, value }) => {
+      await settle(settings.set(key, value));
+      await settle(settings.save());
     }
   };
 }

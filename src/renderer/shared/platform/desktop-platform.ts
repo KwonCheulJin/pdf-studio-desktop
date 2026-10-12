@@ -86,6 +86,14 @@ export type FileDropEvent =
 
 export type FileDropHandler = (event: FileDropEvent) => void;
 
+/** 설정 저장소에 넣는 값 */
+export type SettingValue = string | boolean;
+
+export interface SetSettingParams {
+  key: string;
+  value: SettingValue;
+}
+
 /** 구독을 끊는다. 여러 번 불러도 된다. */
 export type Unsubscribe = () => void;
 
@@ -118,4 +126,11 @@ export interface DesktopPlatform {
   log(params: LogParams): void;
   /** 창 밖에서 끌어온 파일의 드래그·드롭. 좌표는 CSS 픽셀로 바꿔 넘긴다. */
   onFileDrop(handler: FileDropHandler): Unsubscribe;
+  /**
+   * 앱 설정 하나를 읽는다. 없으면 `undefined`. 저장된 값은 손상됐을 수 있으므로
+   * 쓰는 쪽이 모양을 확인한다.
+   */
+  getSetting(key: string): Promise<unknown>;
+  /** 앱 설정 하나를 쓰고 재시작해도 남도록 저장한다. */
+  setSetting(params: SetSettingParams): Promise<void>;
 }

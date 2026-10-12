@@ -384,39 +384,52 @@ Phase 5  고도화
 - D는 회사 코드라 이번 범위에서 제외한다. 결과 계약(§6.1)을 안정적으로 유지해 두면, 승인이 나는 경우 비공개 빌드에서 엔진만 교체하는 것도 가능하다.
 
 ### 6.1 결과 모델 (P2-1, S): ADR로 고정
+
+> **정본은 [ADR 0001](../adr/0001-compare-result-model.md)이다.** 필드의 의미, 쪽 번호(0부터), `page_pair`, `Change.id` 계산(SHA-256), 정렬, `needs_review` 판정, `Notice` 데이터, 계약 JSON 모양은 그 문서를 따른다. 아래는 요약이고, 다르면 ADR이 맞다.
+
 ```rust
-// serde + specta 로 TS 타입 자동 생성
+// crates/pdf-core/src/compare/model.rs. 계약 타입(serde + specta)은 src-tauri/contract.rs에 같은 모양으로 둔다
 pub enum Side { Before, After }
-pub struct TextBox { pub page: u32, pub x: f32, pub y: f32, pub w: f32, pub h: f32 } // PDF pt, 좌하단 원점, /Rotate 적용 전
+pub struct TextBox { pub page: u32, pub x: f32, pub y: f32, pub w: f32, pub h: f32 } // PDF 사용자 공간 pt, 좌하단 원점, /Rotate 적용 전, CropBox 원점 포함
 pub enum ChangeKind { Insert, Delete, Replace }
 pub enum TextSource { TextLayer, Ocr }  // 페이지 글자를 어디서 얻었나
 pub struct ChangeSide {
     pub text: String,
-    pub boxes: Vec<TextBox>,
+    pub boxes: Vec<TextBox>,         // 비어 있지 않다
     pub min_confidence: Option<f32>, // OCR 토큰이 섞이면 그중 가장 낮은 신뢰도(0~1). 텍스트 레이어만이면 None
 }
+pub type PagePair = (Option<u32>, Option<u32>); // (A 쪽, B 쪽), 0부터. 짝이 없으면 None
 pub struct Change {
-    pub id: String,                  // 안정 키: hash(정규화 텍스트 + 문맥) — 재실행해도 동일
+    pub id: String,                  // 안정 키: SHA-256(정규화 토큰 + 앞뒤 공통 토큰 3개) — 재실행해도 동일
     pub kind: ChangeKind,
     pub before: Option<ChangeSide>,
     pub after: Option<ChangeSide>,
-    pub page_pair: (Option<u32>, Option<u32>),
-    pub needs_review: bool,          // OCR 신뢰도 기준 미만 토큰이 걸린 변경 = "확인 필요"(§6.4). 차이 개수와 따로 센다
+    pub page_pair: PagePair,         // 각 쪽 첫 상자의 쪽
+    pub needs_review: bool,          // OCR 신뢰도 기준 미만 토큰·OCR 띄어쓰기만 다른 치환 = "확인 필요"(§6.4). 차이 개수와 따로 센다
+}
+pub struct PageSize { pub view_box: PageBox, pub rotation: PageRotation } // view_box = CropBox ∩ MediaBox(pdf.js page.view)
+pub struct PageSizes { pub before: Vec<PageSize>, pub after: Vec<PageSize> }                         // 색인 = 쪽 번호
+pub struct PageSources { pub before: Vec<Option<TextSource>>, pub after: Vec<Option<TextSource>> } // 범위 밖 쪽은 None
+pub enum NoTextReason { OcrUnavailable, OcrFailed }
+pub enum Notice {
+    LowTextConfidence { side: Side, pages: Vec<u32> },
+    NoTextLayer { side: Side, reason: NoTextReason, pages: Vec<u32> }, // OCR도 못 한 쪽
+    Truncated { before_pages: Vec<u32>, after_pages: Vec<u32> },       // diff 시간 제한으로 통째 치환한 구간
 }
 pub struct CompareResult {
-    pub changes: Vec<Change>,
-    pub page_pairs: Vec<(Option<u32>, Option<u32>)>, // 삽입/삭제 페이지는 None
-    pub page_sizes: PageSizes,                       // 좌우 각 페이지의 크기·회전·CropBox 원점
-    pub page_sources: PageSources,                   // 좌우 각 페이지의 TextSource
-    pub notices: Vec<Notice>,                        // LowTextConfidence, NoTextLayer(OCR도 못 한 쪽), Truncated
+    pub changes: Vec<Change>,                 // diff 순서
+    pub page_pairs: Vec<PagePair>,            // 화면 행 순서. 삽입/삭제 페이지는 None
+    pub page_sizes: PageSizes,
+    pub page_sources: PageSources,
+    pub notices: Vec<Notice>,
 }
 ```
-좌표는 PDF 원본 좌표로 저장한다. 화면 변환은 pdf.js `viewport.convertToViewportRectangle`이 담당한다. 회전이나 확대가 바뀌어도 결과를 다시 계산할 필요가 없다. OCR로 얻은 글자 상자도 같은 좌표 규칙으로 바꿔 넣는다(§6.4).
+좌표는 PDF 원본 좌표(CropBox 원점이 이미 들어간 사용자 공간 좌표)로 저장한다. 화면 변환은 pdf.js `viewport.convertToViewportRectangle`이 담당하고, 프론트는 원점을 보정하지 않는다. 회전이나 확대가 바뀌어도 결과를 다시 계산할 필요가 없다. OCR로 얻은 글자 상자도 같은 좌표 규칙으로 바꿔 넣는다(§6.4).
 
 ### 6.2 파이프라인
 1. **추출 (P2-2, M)**
    - pdfium 페이지 텍스트에서 글자별 `{ char, bounds, font_size, font_name }`을 얻는다. 박스는 tight bounds를 기본으로 한다.
-   - **좌표계 일치 검증(중요):** pdfium 좌표와 pdf.js 화면 좌표가 CropBox/MediaBox 원점 오프셋, `/Rotate` 페이지, `UserUnit`에서 일치하는지 pdfium 박스는 Rust golden 테스트로 고정하고, 화면 박스와의 일치는 E2E로 확인한다. 필요하면 `page_sizes`에 원점 오프셋을 포함해 프론트에서 보정한다.
+   - **좌표계 일치 검증(중요):** pdfium 좌표와 pdf.js 화면 좌표가 CropBox/MediaBox 원점 오프셋, `/Rotate` 페이지, `UserUnit`에서 일치하는지 pdfium 박스는 Rust golden 테스트로 고정하고, 화면 박스와의 일치는 E2E로 확인한다. 원점 보정은 Rust가 박스에 이미 넣고 프론트는 보정하지 않는다([ADR 0001](../adr/0001-compare-result-model.md) §2). `page_sizes.view_box`가 pdf.js `page.view`와 같은지도 확인한다.
    - 텍스트 레이어가 없거나 글자 수가 `OCR_MIN_TEXT_CHARS` 미만인 페이지(스캔본)는 OCR 경로(P2-4a, §6.4)로 글자를 얻는다. OCR로도 글자를 얻지 못하면(모델 파일 없음, OCR 실패) `NoTextLayer`로 알린다.
 2. **정규화와 토큰화 (P2-3, M)**
    - Unicode 정규화(NFC/NFKC 옵션, `unicode-normalization`), 공백과 줄바꿈 정리, 하이픈 줄바꿈 결합, 대소문자 무시 옵션
@@ -628,7 +641,7 @@ A의 변경 상자와 B의 대응 상자를 거터를 가로지르는 곡선으�
 - 20pt는 시작값이다. 픽스처로 조정하고 상수로 둔다.
 
 **좌표와 모양**
-- 끝점 y = 묶음 상자의 세로 중앙. `y_px = (pageHeightPt − (y0 + y1) / 2) × (96 / 72) × zoom` (페이지 좌하단 원점 기준. §6.1 좌표가 회전 적용 전이면 같은 viewport 변환을 먼저 거친다).
+- 끝점 y = 묶음 상자의 세로 중앙. 묶음 상자를 그 쪽 pdf.js viewport로 바꾼 화면 상자(`convertToViewportRectangle`)의 세로 중앙이다. `(pageHeightPt − y) × (96 / 72) × zoom` 같은 손 공식은 CropBox 원점이 0이고 회전 0, `UserUnit` 1일 때만 맞으므로 쓰지 않는다([ADR 0001](../adr/0001-compare-result-model.md) §2).
 - x 변환은 없다. SVG를 거터에 정확히 맞춰 두고(왼쪽 = A 페이지 오른쪽 끝, 너비 = 거터) x는 0과 W.
 - 거터 너비는 확대와 무관하게 고정: 세로 페이지 `CONNECTOR_GUTTER_PX`(120px), 한쪽이라도 가로 페이지면 72px. SVG 높이 = 두 페이지 중 큰 쪽.
 - 곡선: 3차 베지어 `(0, aY) → (W, bY)`, 제어점 `(0.5W, aY)`, `(0.5W, bY)`(양끝에서 수평으로 나가는 대칭 S). `|aY − bY| ≤ 3px`이면 직선.
@@ -766,6 +779,7 @@ pnpm tauri dev                           # P1-1 이후
 | D13 | 허용 경로 목록: 파일 열기·저장 다이얼로그를 Rust 커맨드로 열고, 다이얼로그·드롭으로 받은 경로를 `State`에 기록해 파일 커맨드는 목록에 있는 경로(와 앱 임시 폴더)만 허용 | 프론트가 `plugin-dialog`를 직접 열고 경로를 넘김 | Rust가 "사용자가 고른 경로"를 알 수단이 없으면 경로 검증이 형식만 남는다 |
 | D14 | 파일 추가 처리 = Rust `open_files` | TS `ingestPaths` 통합 | 같은 분기가 3벌 중복(B2의 원인)이고, 확장자 화이트리스트는 어차피 Rust가 검사한다 |
 | D15 | 스캔 계약서 OCR = PaddleOCR(PP-OCR) 한국어 모델 ONNX 변환본 + ONNX Runtime(`ort`) (§6.4) | macOS Vision + Windows.Media.Ocr, Tesseract, 클라우드 OCR | Mac·Windows가 같은 결과, 한국어 정확도, 라이선스 화이트리스트 안, 계약서가 기기 밖으로 나가지 않음 |
+| D16 | 비교 결과 모델과 좌표 규칙 = [ADR 0001](../adr/0001-compare-result-model.md): 박스는 CropBox 원점이 들어간 사용자 공간 좌표(회전 전, `UserUnit` 미적용), 쪽 번호 0부터, `Change.id` = SHA-256 안정 키, `needs_review`로 변경을 둘로 나눠 셈, 계약 타입은 `src-tauri` 미러 | 박스를 CropBox 상대 좌표로 두고 프론트가 보정, 순번 id, 쪽마다 안내 | 화면 변환을 pdf.js viewport 하나에 맡겨 보정 지점을 Rust 한 곳으로, 재실행해도 선택 유지, `pdf-core`는 specta를 모른다 |
 
 ## 12. 리스크
 

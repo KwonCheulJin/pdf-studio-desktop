@@ -1,5 +1,6 @@
 //! PDF 처리 도메인. Tauri·웹뷰에 의존하지 않는다.
 
+mod compare;
 mod document;
 mod engine;
 mod info;
@@ -7,6 +8,10 @@ mod merge;
 mod output;
 mod tiff;
 
+pub use compare::{
+    Change, ChangeKind, ChangeSide, CompareResult, NoTextReason, Notice, PagePair, PageSize,
+    PageSizes, PageSources, Side, TextBox, TextSource,
+};
 pub use document::{DocumentError, MAX_INPUT_FILE_BYTES};
 pub use engine::{EngineError, PdfEngine};
 pub use info::{PageBox, PageInfo, PageRotation, PdfInfo, read_pdf_info};

@@ -212,9 +212,9 @@ pnpm i && pnpm start                                           # 현재 Electron
 - 브랜치: `chore/tauri-icons-build`
 - 읽을 곳: 계획서 §5 P1-7
 - 할 일(키트): 1024px PNG 원본으로 `pnpm tauri icon` → `pnpm tauri build`
-  - PNG 원본은 루트 `icon.icns`(Step 14에서 이 용도로 남겨 둠)에서 추출하고, `pnpm tauri icon` 뒤 루트 `icon.icns`를 지운다.
+  - PNG 원본은 루트 `icon.icns`에서 추출해 루트 `app-icon.png`(1024px)로 두고, `pnpm tauri icon app-icon.png` 뒤 루트 `icon.icns`를 지웠다.
 - 완료 기준: Mac에서 `.dmg` 생성 후 설치·실행
-- [ ] Step 15
+- [x] Step 15
 
 ---
 

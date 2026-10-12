@@ -16,9 +16,9 @@ const buttonVariants = cva(
           "bg-destructive text-destructive-foreground hover:bg-destructive/90",
         // 카드 액션용 (반투명 배경, hover 시 강조)
         "card-action":
-          "rounded bg-transparent p-1 text-white/80 hover:bg-white/20 hover:text-white",
+          "text-media-foreground/80 hover:bg-media-foreground/20 hover:text-media-foreground rounded bg-transparent p-1",
         "card-action-destructive":
-          "rounded bg-transparent p-1 text-white/80 hover:bg-white/20 hover:text-red-400"
+          "text-media-foreground/80 hover:bg-destructive hover:text-destructive-foreground rounded bg-transparent p-1"
       },
       size: {
         default: "h-10 px-4",

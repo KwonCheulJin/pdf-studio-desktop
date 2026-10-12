@@ -1,13 +1,13 @@
-# 디자인 시스템 토큰 (v2 개선안)
+# 디자인 시스템 토큰 (v2)
 
 - 작성일: 2026-10-12
-- 상태: **제안**. 아직 코드에 적용하지 않았다.
+- 상태: **적용됨** (2026-10-13, 진행 가이드 Step 7). 실제 값과 이 문서가 다른 점은 [§6](#6-적용-결과와-문서와-다른-점)에 적었다.
 - 정본: Claude Design 디자인 시스템 "PDF Studio" (https://claude.ai/artifact/1ASMwsuQt2SmvSACFmTTL4, 비공개). 값이 이 문서와 다르면 그 페이지의 `tokens.json`이 맞다.
 - 관련 계획: [Tauri 마이그레이션 + PDF 비교 계획](plans/2026-10-tauri-migration-and-pdf-compare.md)의 P0-2(FSD 정리), P1-5(테마), Phase 3(비교 UI)
 
 ## 1. 왜 바꾸나
 
-지금 `src/renderer/styles/index.css`는 tweakcn에서 가져온 shadcn 테마를 거의 그대로 쓴다. 문제는 다음과 같다.
+적용 전 `src/renderer/styles/index.css`는 tweakcn에서 가져온 shadcn 테마를 거의 그대로 쓴다. 문제는 다음과 같다.
 
 | 문제 | 지금 | 영향 |
 |---|---|---|
@@ -99,7 +99,7 @@
 | `radius-lg` | 12px | 22.4px | 카드 |
 | `radius-xl` | 16px | 26.4px | 다이얼로그 |
 
-- **그림자**: 기존 `shadow-xs`~`shadow-xl` 값은 유지하고 `shadow-paper`(페이지 썸네일)를 더한다.
+- **그림자**: 기존 `shadow-xs`~`shadow-xl` 값은 유지하고 `shadow-paper`(페이지 썸네일)를 더한다. (`shadow-paper`는 값이 정해지지 않아 아직 넣지 않았다. §6)
 
 ## 3. FSD 파일 배치
 
@@ -204,14 +204,14 @@ src/renderer/
 
 `theme.css`는 위 변수마다 `--color-<이름>: var(--<이름>)`을 두고, 모서리·그림자·글꼴을 고정값으로 선언한다(`--radius-paper: 2px` … `--radius-xl: 16px`, `--font-sans`, `--font-mono`, `--spacing: 0.25rem`).
 
-## 4. 적용 순서 (제안)
+## 4. 적용 순서
 
 [단계별 진행 가이드](plans/2026-10-step-guide.md)에서 1단계는 Step 2, 2~4단계는 Step 7, 5단계는 Phase 3에 들어 있다. 각 단계는 따로 커밋할 수 있다.
 
-1. **파일 이동**: `src/renderer/styles/` → `src/renderer/app/styles/`로 옮기고 `tokens.css`, `theme.css`, `base.css`로 나눈다. 값은 그대로 둔다(동작 변화 없음). `components.json` 경로를 고친다.
-2. **글꼴 번들**: `@fontsource` 두 패키지를 추가하고 `fonts.css`를 연결한다. `body`의 system-ui 덮어쓰기를 지운다.
-3. **값 교체**: 2.1~2.3의 값으로 바꾸고, 쓰지 않는 변수를 지운다. 라이트·다크 주요 화면(빈 화면, 썸네일 그리드, 병합 미리보기, 다이얼로그)을 확인한다.
-4. **하드코딩 제거**: 팔레트 클래스 약 42곳을 토큰 클래스로 바꾼다. `group-colors.ts`를 `shared/config/theme.ts`로 옮겨 `border-group-1`~`5`를 쓴다.
+1. **파일 이동**(완료): `src/renderer/styles/` → `src/renderer/app/styles/`로 옮기고 `tokens.css`, `theme.css`, `base.css`로 나눈다. 값은 그대로 둔다(동작 변화 없음). `components.json` 경로를 고친다.
+2. **글꼴 번들**(완료): `@fontsource` 두 패키지를 추가하고 `fonts.css`를 연결한다. `body`의 system-ui 덮어쓰기를 지운다.
+3. **값 교체**(완료): 2.1~2.3의 값으로 바꾸고, 쓰지 않는 변수를 지운다. 라이트·다크 주요 화면(빈 화면, 썸네일 그리드, 병합 미리보기, 다이얼로그)을 확인한다.
+4. **하드코딩 제거**(완료): 팔레트 클래스 약 42곳을 토큰 클래스로 바꾼다. `group-colors.ts`를 `shared/config/theme.ts`로 옮겨 `border-group-1`~`5`를 쓴다.
 5. **(Phase 3)** 비교 뷰어에서 `diff-*` 토큰을 쓴다.
 
 ## 5. 아직 하지 않은 것
@@ -219,3 +219,21 @@ src/renderer/
 - `shared/ui` 컴포넌트는 디자인 시스템 페이지에 아직 없다. 토큰을 코드에 적용한 뒤 빌드 번들로 추가한다.
 - 로고 파일이 없다.
 - 크기 토큰(툴바 높이, 컨트롤 높이)은 실제 화면을 측정한 뒤 정한다.
+- `shadow-paper` 값, 글자 스타일(§2.2 `display`~`page-number`) 토큰, 모서리 역할 맞추기(아래 §6)
+
+## 6. 적용 결과와 문서와 다른 점
+
+정본 `tokens.json`을 가져올 수 없어 이 문서의 §2·§3.1 값을 그대로 넣었다. 문서에 없는 값은 지어내지 않고 기존 값을 두었다.
+
+- **배치**: 색은 `tokens.css`(`:root`/`.dark`)와 `theme.css`의 `@theme inline`(`--color-*: var(--*)`), 테마와 상관없는 글꼴·`--spacing`·모서리·그림자·자간은 `theme.css`의 `@theme`(고정값)에 둔다. 다크 블록은 색만 다시 정의한다.
+- **글꼴 스택**: §2.2 순서 끝에 일반 글꼴(`sans-serif`, `monospace`)을 하나 더 두었다. `@fontsource` CSS가 `woff2`와 `woff`를 함께 가리켜 빌드에 둘 다 자산 파일로 나간다(작은 파일은 `data:`로 인라인, CSP `font-src 'self' data:` 안).
+- **그대로 둔 값**: 그림자 `shadow-2xs`~`shadow-2xl`(기존 값), 자간 `--tracking-normal: -0.025em`과 파생 값(문서에 없음).
+- **넣지 않은 것**: `shadow-paper`(값 없음), 글자 스타일 토큰(§3.1·`theme.css` 설명에 없고 아직 쓰는 곳이 없음).
+- **새 토큰 중 아직 쓰지 않는 것**: `canvas`, `paper`, `success`, `warning`, `diff-*`. 화면에 붙이는 일은 해당 화면을 고칠 때(비교 뷰어는 Phase 3) 한다.
+- **모서리**: 임의값 `rounded-[4px]`는 같은 4px인 `rounded-xs`로만 바꿨다. §2.3 "쓰는 곳"과 다른 곳이 남아 있다 — 버튼 `rounded-lg`(12px, 문서는 `md` 8px), 다이얼로그 `rounded-xs`(4px, 문서는 `xl` 16px), 페이지 썸네일 `rounded-paper` 미사용.
+- **팔레트 클래스 → 토큰** (실제 팔레트 클래스 34개, 임의값 14개): `bg-black/60` → `bg-media-scrim`, `bg-black/50` → `bg-scrim`, `text-white`·`bg-white/20`(썸네일 위 버튼) → `media-foreground`, 오류 화면의 `red-*`·`gray-*` → `destructive`·`muted-foreground`, `group-colors.ts` → `shared/config/theme.ts`의 `GROUP_COLOR_CLASSES`(`border-group-1`~`5`).
+- **모양이 바뀐 곳**: 썸네일 위 삭제 버튼 hover는 빨간 글자(`text-red-400`) 대신 `bg-destructive` + `text-destructive-foreground` 채움이다(어두운 막 위에서 라이트 `destructive` 글자는 대비가 모자람). 공용 체크박스 테두리는 `border-white/50` 대신 `border-input`이고(툴바 체크박스가 라이트에서 보이게), 썸네일 위 체크박스만 `border-media-foreground/50`을 넘긴다.
+- **남은 임의값**: 크기·위치 계산용 `max-h-[70vh]`, `h-[80vh]`, `h-[calc(100%-48px)]`, `max-w-[calc(100%-2rem)]`, `transition-[left,top]`. 색 임의값은 없다. 크기 토큰은 §5대로 화면을 잰 뒤 정한다.
+- **간격**: 그리드 카드 크기·간격은 JS 상수(`shared/constants/grid-layout.ts`, px)라 `--spacing` 변경과 상관없다. Tailwind 간격(패딩·높이)만 약 7.4% 줄었다.
+- **검증**: `e2e/design-tokens.spec.ts` — 본문 글꼴과 실제 로드, 라이트·다크 본문 대비 4.5:1 이상, 키보드 포커스 링(링 색과 배경 3:1 이상).
+

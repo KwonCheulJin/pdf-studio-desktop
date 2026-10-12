@@ -141,7 +141,7 @@ pnpm i && pnpm start                                           # 현재 Electron
   - `src/renderer`에서 `bg-black/`, `text-white`, `-500` 같은 팔레트 클래스 검색 결과 0
   - 개발자 도구에서 본문 글꼴이 IBM Plex Sans KR로 잡힘
   - 라이트·다크 모두 본문 대비 4.5:1, 포커스 링이 보임
-- [ ] Step 7
+- [x] Step 7
 
 ---
 

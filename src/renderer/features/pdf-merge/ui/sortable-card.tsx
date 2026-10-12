@@ -51,7 +51,7 @@ export function SortableCard({
       onClick={onClick}
       className={cn(
         // group: 카드에 포커스가 있을 때(focus-within)도 카드 버튼을 보인다
-        "group focus-visible:ring-primary absolute rounded-[4px] outline-none select-none focus-visible:ring-2",
+        "group focus-visible:ring-primary absolute rounded-xs outline-none select-none focus-visible:ring-2",
         isDragging
           ? "z-40 opacity-80"
           : "transition-[left,top] duration-200 ease-out"

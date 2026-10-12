@@ -15,7 +15,7 @@ import {
 } from "@/renderer/entities/merge-plan";
 import { cn } from "@/renderer/shared/lib/utils";
 import { Button, Checkbox, Tooltip } from "@/renderer/shared/ui";
-import type { GroupColor } from "@/renderer/shared/constants/group-colors";
+import type { GroupColorClass } from "@/renderer/shared/config/theme";
 import {
   useSelectionStore,
   useSelectedIds,
@@ -33,7 +33,7 @@ interface ExpandedPageCardProps {
   fileName: string;
   /** 이미지 고정 크기 (정사각형) */
   imageSize?: number;
-  groupColor?: GroupColor; // 파일 그룹 구분 테두리 색상
+  groupColor?: GroupColorClass; // 파일 그룹 구분 테두리 색상
   /** 그룹 고유 ID (연속된 같은 파일 페이지 그룹) */
   groupId: string;
   showCollapseButton?: boolean; // 첫 카드에만 접기 버튼 표시
@@ -148,13 +148,13 @@ export function ExpandedPageCard({
       <div className="relative flex-1">
         {/* 스택 효과 (펼침 상태의 첫 페이지만) - Adobe thumbnailBorder 스타일 */}
         {isStacked && (
-          <div className="border-border bg-card absolute -top-1.5 right-1.5 bottom-1.5 -left-1.5 rounded-[4px] border" />
+          <div className="border-border bg-card absolute -top-1.5 right-1.5 bottom-1.5 -left-1.5 rounded-xs border" />
         )}
 
         {/* 썸네일 영역 - 절대 좌표 기반으로 h-full 사용 */}
         <div
           className={cn(
-            "bg-card relative h-full w-full cursor-grab rounded-[4px] border p-3 transition-all hover:shadow-lg",
+            "bg-card relative h-full w-full cursor-grab rounded-xs border p-3 transition-all hover:shadow-lg",
             isSelected
               ? "border-primary ring-primary/30 ring-2"
               : "border-border",
@@ -165,7 +165,7 @@ export function ExpandedPageCard({
           {/* 선택 체크박스 */}
           <div
             className={cn(
-              "absolute top-2 left-2 z-10 flex cursor-default items-center justify-center rounded-[4px] bg-black/60 p-2 transition-opacity",
+              "bg-media-scrim absolute top-2 left-2 z-10 flex cursor-default items-center justify-center rounded-xs p-2 transition-opacity",
               isSelected
                 ? "opacity-100"
                 : "opacity-0 group-focus-within:opacity-100 group-hover:opacity-100"
@@ -177,13 +177,13 @@ export function ExpandedPageCard({
               onCheckedChange={handleCheckboxChange}
               onClick={(e) => e.stopPropagation()}
               aria-label={`${fileName} ${pageNumber}쪽 선택`}
-              className="size-5"
+              className="border-media-foreground/50 size-5"
             />
           </div>
 
           {/* 퀵 액션 버튼 (우상단) - Collapse, 미리보기, 회전, 삭제. 삭제된 페이지는 접기만 */}
           {(showCollapseButton || !page.isDeleted) && (
-            <div className="pointer-events-none absolute top-2 right-2 z-10 flex cursor-default flex-col gap-1 rounded-md bg-black/60 p-1 opacity-0 transition-opacity group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100">
+            <div className="bg-media-scrim pointer-events-none absolute top-2 right-2 z-10 flex cursor-default flex-col gap-1 rounded-md p-1 opacity-0 transition-opacity group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100">
               {showCollapseButton && (
                 <Tooltip content="접기">
                   <Button

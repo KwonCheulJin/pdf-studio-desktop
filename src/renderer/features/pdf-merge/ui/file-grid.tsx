@@ -385,7 +385,6 @@ export function FileGrid({
               ) : (
                 <ExpandedPageCard
                   fileId={card.file.id}
-                  filePath={card.file.path}
                   page={card.page}
                   pageNumber={card.page.sourcePageIndex + 1}
                   flatIndex={card.flatIndex}

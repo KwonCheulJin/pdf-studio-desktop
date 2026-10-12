@@ -11,7 +11,7 @@ import {
   DialogFooter,
   Button
 } from "@/renderer/shared/ui";
-import { ipcClient } from "@/renderer/shared/lib/ipc-client";
+import { getPlatform } from "@/renderer/shared/platform";
 
 interface MergePreviewModalProps {
   isOpen: boolean;
@@ -37,14 +37,14 @@ export function MergePreviewModal({
     if (!mergedDocument) return;
     const result = await download(mergedDocument);
     if (result.success) {
-      await ipcClient.file.delete({ path: mergedDocument.path });
+      await getPlatform().discardTemp(mergedDocument.path);
       onClose();
     }
   }, [mergedDocument, download, onClose]);
 
   const handleClose = useCallback(async () => {
     if (mergedDocument) {
-      await ipcClient.file.delete({ path: mergedDocument.path });
+      await getPlatform().discardTemp(mergedDocument.path);
     }
     onClose();
   }, [mergedDocument, onClose]);

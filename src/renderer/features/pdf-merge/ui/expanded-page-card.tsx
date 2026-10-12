@@ -27,7 +27,6 @@ import { FLAT_CARD_TYPE } from "../config/flat-card";
 
 interface ExpandedPageCardProps {
   fileId: string;
-  filePath: string;
   page: PdfPage;
   pageNumber: number; // 원본 페이지 번호 (1-based)
   flatIndex: number; // flatCards 배열에서의 인덱스
@@ -56,7 +55,6 @@ interface ExpandedPageCardProps {
  */
 export function ExpandedPageCard({
   fileId,
-  filePath,
   page,
   pageNumber,
   flatIndex,
@@ -81,8 +79,7 @@ export function ExpandedPageCard({
 
   const { handleRotateCw, handleRotateCcw } = usePageRotateHandlers({
     fileId,
-    page,
-    filePath
+    page
   });
 
   // 파일 선택 모드에서도 해당 파일의 페이지가 선택 표시되도록

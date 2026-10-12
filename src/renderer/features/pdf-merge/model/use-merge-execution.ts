@@ -1,15 +1,14 @@
-import { useCallback, useEffect } from "react";
+import { useCallback } from "react";
 import { useErrorSnapshot } from "@kwoncheulJin/error-snapshot";
-import type { MergeResult, MergeProgress } from "@/main/types/ipc-schema";
 import {
   MERGE_STATUS,
   MERGE_VIEW,
   useMergeStore,
   createPdfDocument
 } from "@/renderer/entities/merge-plan";
-import { ipcClient } from "@/renderer/shared/lib/ipc-client";
+import { getPlatform, MERGE_OUTPUT_KIND } from "@/renderer/shared/platform";
 import { getErrorSnapshot } from "@/renderer/shared/lib/error-snapshot";
-import { buildMergeRequest } from "../lib/build-merge-request";
+import { buildMergeSources } from "../lib/build-merge-request";
 
 export function useMergeExecution() {
   const { captureError } = useErrorSnapshot(getErrorSnapshot());
@@ -21,41 +20,11 @@ export function useMergeExecution() {
   const setView = useMergeStore((state) => state.setView);
   const setMergedDocument = useMergeStore((state) => state.setMergedDocument);
 
-  // IPC 이벤트 리스너 등록
-  useEffect(() => {
-    const handleProgress = (progress: MergeProgress) => {
-      // 전체 병합 중일 때만 처리 (선택 병합 이벤트는 무시)
-      if (useMergeStore.getState().status !== MERGE_STATUS.MERGING) return;
-      setProgress(progress.percentage);
-      setStatus(MERGE_STATUS.MERGING);
-    };
-
-    const handleComplete = (result: MergeResult) => {
-      // 전체 병합 중일 때만 처리 (선택 병합 이벤트는 무시)
-      if (useMergeStore.getState().status !== MERGE_STATUS.MERGING) return;
-      const mergedDocument = createPdfDocument(
-        result.outputPath,
-        result.totalPages
-      );
-      setMergedDocument(mergedDocument);
-      setProgress(100);
-      setStatus(MERGE_STATUS.COMPLETE);
-      setView(MERGE_VIEW.PREVIEW);
-    };
-
-    ipcClient.merge.onProgress(handleProgress);
-    ipcClient.merge.onComplete(handleComplete);
-
-    return () => {
-      ipcClient.merge.removeListeners();
-    };
-  }, [setMergedDocument, setProgress, setStatus, setView]);
-
   const startMerge = useCallback(async () => {
     if (files.length === 0) return;
 
-    const request = buildMergeRequest({ files, mergeOrder });
-    if (request.files.length === 0) {
+    const sources = buildMergeSources({ files, mergeOrder });
+    if (sources.length === 0) {
       setError("병합할 페이지가 없습니다.");
       setStatus(MERGE_STATUS.ERROR);
       setProgress(0);
@@ -69,7 +38,22 @@ export function useMergeExecution() {
     setMergedDocument(null);
 
     try {
-      await ipcClient.merge.start(request);
+      const result = await getPlatform().mergePdfs({
+        request: {
+          jobId: crypto.randomUUID(),
+          sources,
+          output: { kind: MERGE_OUTPUT_KIND.TEMP }
+        },
+        onProgress: (progress) => setProgress(progress.overallPercent)
+      });
+      const mergedDocument = createPdfDocument(
+        result.outputPath,
+        result.pageCount
+      );
+      setMergedDocument(mergedDocument);
+      setProgress(100);
+      setStatus(MERGE_STATUS.COMPLETE);
+      setView(MERGE_VIEW.PREVIEW);
     } catch (error) {
       setError("병합 요청에 실패했습니다.");
       setStatus(MERGE_STATUS.ERROR);

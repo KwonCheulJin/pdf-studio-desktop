@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
 import type { PdfDocument } from "@/renderer/entities/merge-plan";
-import { ipcClient } from "@/renderer/shared/lib/ipc-client";
+import { getPlatform } from "@/renderer/shared/platform";
 import { PREVIEW_CONFIG } from "../config/preview";
 
 interface PageDimensions {
@@ -85,7 +85,7 @@ export function usePreviewPages({
           pdfDocRef.current = null;
         }
 
-        const { data } = await ipcClient.file.readPdf(pdfDocument.path);
+        const data = await getPlatform().readPdf(pdfDocument.path);
         const loadingTask = pdfjsLib.getDocument({ data });
         const pdf = await loadingTask.promise;
 

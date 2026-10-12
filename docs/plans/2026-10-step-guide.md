@@ -45,9 +45,9 @@ pnpm i && pnpm start                                           # 현재 Electron
 ### Step 1. 개발 환경 정합 (S)
 - 브랜치: `chore/dev-env`
 - 읽을 곳: 계획서 §4 P0-1
-- 할 일: Node 버전 하나로 통일, `engines`·`packageManager`, `.gitattributes`(eol=lf), `forceConsistentCasingInFileNames`, `.claude` 훅 절대경로 제거
+- 할 일: Node 버전 하나로 통일, `engines`·`packageManager`, `.gitattributes`(eol=lf), `forceConsistentCasingInFileNames`, `.claude` 훅 절대경로 제거, GitHub Actions 워크플로 제거(Phase 4에서 Tauri 기준으로 새로 만든다)
 - 완료 기준: Mac과 Windows에서 클론 직후 `pnpm i && pnpm validate` 통과, 줄바꿈 차이로 수정 표시되는 파일 0개
-- [ ] Step 1
+- [x] Step 1
 
 ### Step 2. 플랫폼 어댑터, 계약 분리, FSD 정리, 스타일 폴더 이동 (M)
 - 브랜치: `refactor/platform-adapter-fsd`
@@ -214,7 +214,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 | Step | 계획서 | 완료 기준 | |
 |---|---|---|---|
 | 30 | P4-1 CI 매트릭스 | PR에서 `pnpm validate` + `cargo fmt --check` + `cargo clippy -D warnings` + `cargo test`, Windows는 NSIS 설치 파일 | [ ] |
-| 31 | P4-2 릴리스 흐름 | `auto-version.yml` 제거, 태그 푸시로 Draft Release | [ ] |
+| 31 | P4-2 릴리스 흐름 | 태그 푸시로 Draft Release(기존 워크플로는 Step 1에서 제거됨) | [ ] |
 | 32 | P4-3 서명 | ad-hoc 서명 `.app`과 `libpdfium.dylib`가 같은 identity, `codesign --verify --deep --strict` 통과 | [ ] |
 | 33 | P4-4 자동 업데이트(선택) | `latest.json` 생성, 업데이트 동작 | [ ] |
 | 34 | P4-5 라이선스와 고지 | `LICENSE`, `THIRD_PARTY_NOTICES.md` 번들, 허용 목록 밖 라이선스면 CI 실패, 앱 정보에서 고지 열림 | [ ] |

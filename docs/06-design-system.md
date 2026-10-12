@@ -71,7 +71,7 @@
 | `--font-sans` | IBM Plex Sans KR → Apple SD Gothic Neo → Malgun Gothic → system-ui | `@fontsource/ibm-plex-sans-kr` (400, 500, 600) |
 | `--font-mono` | IBM Plex Mono → ui-monospace → SF Mono → Consolas | `@fontsource/ibm-plex-mono` (400, 500) |
 
-둘 다 OFL이다. 계획서 §1.2의 라이선스 허용 목록에 OFL이 있는지 확인한다. 앱은 오프라인으로 돌아야 하므로 CDN이 아니라 npm 패키지로 번들한다.
+둘 다 OFL이며, 계획서 §1.2의 허용 목록에 들어 있다. 앱은 오프라인으로 돌아야 하므로 CDN이 아니라 npm 패키지로 번들한다.
 
 | 스타일 | 크기/행간 | 굵기 | 쓰는 곳 |
 |---|---|---|---|
@@ -205,7 +205,7 @@ src/renderer/
 
 ## 4. 적용 순서 (제안)
 
-계획서 Phase 0에 넣는다. 각 단계는 따로 커밋할 수 있다.
+[단계별 진행 가이드](plans/2026-10-step-guide.md)에서 1단계는 Step 2, 2~4단계는 Step 7, 5단계는 Phase 3에 들어 있다. 각 단계는 따로 커밋할 수 있다.
 
 1. **파일 이동**: `src/renderer/styles/` → `src/renderer/app/styles/`로 옮기고 `tokens.css`, `theme.css`, `base.css`로 나눈다. 값은 그대로 둔다(동작 변화 없음). `components.json` 경로를 고친다.
 2. **글꼴 번들**: `@fontsource` 두 패키지를 추가하고 `fonts.css`를 연결한다. `body`의 system-ui 덮어쓰기를 지운다.

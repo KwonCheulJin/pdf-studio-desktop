@@ -443,7 +443,7 @@ pnpm tauri dev                           # P1-1 이후
 - **E2E:** `tauri-driver`(WebDriver)는 **macOS를 지원하지 않는다.** Mac 로컬 E2E는 Vite dev + `mock-platform`(또는 `mockIPC`) + Playwright로 하고, 처리 로직은 `cargo test`로 검증한다.
 
 ### 10.3 Claude Code 세션 시작 프롬프트 예시
-> `docs/plans/2026-10-tauri-migration-and-pdf-compare.md`를 읽고, 체크리스트에서 다음 미완료 작업(Pxx-x)을 진행해줘. 시작 전에 해당 작업의 계획을 먼저 보여주고 확인을 받아.
+> `docs/plans/2026-10-step-guide.md`의 **Step N**을 진행해줘. 거기 적힌 문서 섹션을 읽고, 시작 전에 작업 계획을 먼저 보여 주고 확인을 받아. 완료 기준을 직접 검증한 뒤 보고해.
 
 ---
 
@@ -476,6 +476,8 @@ pnpm tauri dev                           # P1-1 이후
 ---
 
 ## 13. 진행 체크리스트
+
+> 실제 진행 순서와 체크는 [단계별 진행 가이드](2026-10-step-guide.md)에서 한다. 아래는 작업 목록 요약이다.
 
 - [ ] P0-1 개발 환경 정합
 - [ ] P0-2 플랫폼 어댑터와 계약 분리

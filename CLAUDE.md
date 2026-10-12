@@ -53,7 +53,7 @@ pnpm tauri build                    # Tauri 빌드
 - 커밋 메시지는 `feat:`·`fix:`·`refactor:`·`docs:`·`chore:`·`test:` 접두어 + 한국어 요약이다. 병합은 `gh pr merge --merge --delete-branch`(merge commit).
 - `Co-Authored-By: Claude` 등 **AI 기여자 표시 절대 금지**
 - 공개(MIT) 레포다. 회사 코드·상수·문구·내부 정보를 코드·문서·커밋에 남기지 않는다(계획서 §1.1 클린룸). 의존성은 MIT/BSD/Apache-2.0/ISC/Zlib만, GPL/AGPL 금지.
-- 커밋 전 `pnpm validate`(+ `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`)를 통과시킨다.
+- 커밋 전 `pnpm validate`(+ 프론트 변경 시 `pnpm test:e2e`, `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`)를 통과시킨다.
 - 작업 완료 후 제거: `console.log`, `dbg!`, 미사용 변수/import, 주석 처리된 코드. `eslint-disable`·`#[allow(...)]` 남용 금지.
 
 ## 문서 지도

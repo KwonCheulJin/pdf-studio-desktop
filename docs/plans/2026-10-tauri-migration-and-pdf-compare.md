@@ -15,7 +15,7 @@
 | 처리 계층 | **Rust**(`crates/pdf-core`, pdfium-render 기반)가 병합, 회전 적용, 페이지 정보, TIFF 변환, **비교 엔진**(추출·diff·페이지 정렬·내보내기)을 맡는다. |
 | 표시 계층 | **pdf.js(웹뷰)** 가 썸네일, 미리보기, 비교 뷰어 렌더링을 맡는다. Rust가 돌려준 결과(PDF 좌표 박스)를 pdf.js 화면 위에 겹쳐 그린다. |
 | 데이터 흐름 | 프론트는 **파일 경로를 넘기고 결과(JSON)만 받는다.** PDF 바이트는 표시용 읽기(`read_pdf`)를 제외하면 IPC를 오가지 않는다. |
-| 진행 방식 | **마이그레이션을 먼저 순서대로 끝낸다:** Phase 0(Electron 위에서 정리) → P1-0 pdfium 스파이크(게이트) → Phase 1(Tauri 셸 + 기본 처리). **그 뒤 병렬:** Track B(Rust 비교 엔진)와 Phase 4 일부 → Phase 3(비교 UI)에서 합류 |
+| 진행 방식 | **마이그레이션을 먼저 순서대로 끝낸다:** Tauri 셸 먼저(Step 1 → 9 → 8 → 10 → 11 → 2 → 14 → 3 → 4 → 5 → 6 → 13 → 7 → 15, 가이드 0-3 참고). Tauri 스캐폴드(P1-1) → P1-0 pdfium 스파이크(게이트) → pdf-core·커맨드(P1-2~3) → Phase 0 정리(P0-2 등, Tauri 위에서) → Electron 제거. **그 뒤 병렬:** Track B(Rust 비교 엔진)와 Phase 4 일부 → Phase 3(비교 UI)에서 합류 |
 | 핵심 원칙 | 플랫폼 의존 코드는 `shared/platform` 어댑터 한 곳에만 둔다. `pdf-core`는 Tauri에 의존하지 않는 순수 라이브러리로 만들어 `cargo test`로 검증한다. 사용자 원본 파일은 **절대 수정하지 않는다.** |
 
 ### 처리 계층을 Rust로 두는 이유
@@ -117,11 +117,13 @@
 ## 3. 전체 로드맵
 
 ```
-Phase 0  Electron 위에서 가벼운 정리 (어댑터·계약·비파괴 회전·pdf.js 캐시·DnD)
+P1-1     Tauri 스캐폴드 + Cargo workspace (Step 9)
    │
-P1-0     pdfium 스파이크 — Mac에서 로드 → 렌더 → .app 번들/서명 검증  ★ 게이트
+P1-0     pdfium 스파이크 — 실제 앱 안에서 로드 → 렌더 → .app 번들/서명 검증  ★ 게이트 (Step 8)
    │
-Phase 1  Tauri 셸 + pdf-core 기본 처리(병합/정보/TIFF) → 기능 동등성 (마이그레이션 완료)
+P1-2~3   pdf-core 기본 처리(병합/정보/TIFF) + Tauri 커맨드 (Step 10, 11)
+   │
+Phase 0  Tauri 위에서 정리 (어댑터·FSD, Step 2) → Electron 제거 (Step 14) → 비파괴 회전·pdf.js 캐시·DnD·버그 (Step 3~6) → 보안·테마 (Step 13) → 디자인 토큰 (Step 7) → 아이콘·빌드 (Step 15) = 기능 동등성 (마이그레이션 완료)
    │
    ├── Track B: Phase 2  pdf-core/compare (cargo만으로 개발·테스트)
    │
@@ -132,15 +134,16 @@ Phase 4  P4-4 자동 업데이트(선택)
 Phase 5  고도화
 ```
 
-- Phase 0에서는 **처리 로직을 TS로 다시 다듬지 않는다**(곧 Rust로 대체되므로 YAGNI). 계약과 경계만 정리한다.
-- **마이그레이션(Phase 0 → P1-0 → Phase 1)은 순서대로 진행하고, 그동안 병렬 작업을 두지 않는다.** 비교 기능이 올라갈 FSD 배치, 계약 타입(tauri-specta), `pdf-core` 문서 API가 이 구간에서 정해지므로, 그 전에 나란히 진행하면 다시 고치게 된다.
+- Phase 0에서는 **처리 로직을 TS로 다시 다듬지 않는다**(Rust가 대체하므로 YAGNI). 계약과 경계만 정리한다.
+- **실행 순서는 Step 1 → 9 → 8 → 10 → 11 → 2 → 14 → 3 → 4 → 5 → 6 → 13 → 7 → 15이다(Step 12는 Step 2에 흡수).** Step 번호는 그대로 두고 순서만 바꿨다. Step 9~2 사이에는 파일 처리 기능이 동작하지 않는다(D12).
+- **마이그레이션 구간은 순서대로 진행하고, 그동안 병렬 작업을 두지 않는다.** 비교 기능이 올라갈 FSD 배치, 계약 타입(tauri-specta), `pdf-core` 문서 API가 이 구간에서 정해지므로, 그 전에 나란히 진행하면 다시 고치게 된다.
 - Track B는 Tauri 없이 `cargo test`만으로 진행할 수 있으므로, Phase 1이 끝나면 Phase 4 일부(P4-1~P4-3, P4-5)와 나란히 진행한다.
 
 규모 표기: S = 반나절~1일, M = 2~3일, L = 4일 이상
 
 ---
 
-## 4. Phase 0: Electron 상태에서 가벼운 정리
+## 4. Phase 0: 앱 구조 정리 (Tauri 위에서)
 
 ### P0-1 개발 환경 정합 (S)
 - Node를 **Active LTS 하나로** 맞춘다. `.tool-versions`, CI, README를 동일하게 하고, `package.json`에 `engines`와 `packageManager: "pnpm@x.y.z"`(corepack)를 둔다.
@@ -152,8 +155,8 @@ Phase 5  고도화
 
 ### P0-2 플랫폼 어댑터 도입과 계약 분리 (M)
 - **먼저 특성 테스트(T2):** 스토어를 옮기기 전에 지금 동작을 고정하는 테스트를 쓴다. 대상: `merge-store`의 파일 추가·삽입 위치, `movePageInMergeOrder`(파일 간 이동 포함), `insertFileAtPosition`, 그룹 접기/펼치기, 페이지 삭제, `selection-store`의 FILE/PAGE 전환. 리팩터링 중 이 테스트는 그대로 통과해야 한다(B10·B11에서 의도적으로 바꾸는 동작은 그 단계에서 테스트를 갱신).
-- `src/shared/contracts/`(프로세스 중립)로 DTO와 상수를 옮긴다. renderer는 `@/main/*`을 import하지 않는다. Phase 1 이후에는 이 타입을 `tauri-specta` 생성물로 대체한다.
-- `src/renderer/shared/platform/`: **경로 기반의 굵은 단위(coarse-grained) API**로 정의한다. 처리 주체가 Electron main이든 Rust든 같은 시그니처를 유지하기 위해서다.
+- 손으로 쓴 `src/shared/contracts`는 만들지 않는다. 계약 타입은 P1-3에서 만든 `tauri-specta` 생성물을 쓴다. renderer는 `@/main/*`을 import하지 않는다.
+- `src/renderer/shared/platform/`: **경로 기반의 굵은 단위(coarse-grained) API**로 정의한다. 처리 주체(Rust)가 바뀌어도 같은 시그니처를 유지하기 위해서다.
   ```ts
   export interface DesktopPlatform {
     pickFiles(options: PickFilesOptions): Promise<string[]>
@@ -170,14 +173,15 @@ Phase 5  고도화
     // Phase 3: comparePdfs, cancelJob, exportCompareReport
   }
   ```
-  - 구현체는 `electron-platform.ts`(Phase 0), `tauri-platform.ts`(Phase 1), `mock-platform.ts`(테스트, Playwright) 세 개다.
+  - 구현체는 `tauri-platform.ts`와 `mock-platform.ts`(테스트, Playwright) 둘이다. Electron용 임시 어댑터는 만들지 않는다.
+  - 어댑터 단위 테스트는 `@tauri-apps/api/mocks`의 `mockIPC`로 쓴다.
   - 앱 부팅 시 하나를 주입한다(`app/providers`).
 - FSD를 정리한다. `shared/hooks`의 업무 훅을 `features/*/model`로, `shared/model/merge-store`는 `entities/merge-plan` + `features/pdf-merge/model`로 나눈다.
-- **완료 기준:** `window.api` 참조가 `electron-platform.ts` 한 곳에만 남는다.
+- **완료 기준:** `window.api` 참조 0, `@tauri-apps/api` import는 `shared/platform/tauri-platform.ts`에만, `shared`가 상위 레이어나 `@/main`을 import하지 않음, `mockIPC` 테스트 통과.
 
 ### P0-3 비파괴 회전 (S, B1)
 - 회전은 `PdfPage.rotation`(스토어)으로만 관리하고, `MergeRequest.sources[].pages[].rotation`에 담아 병합 시 적용한다.
-- `pdf.edit:apply`와 `pdf.page:rotate`를 삭제한다. Electron main의 병합 서비스는 rotation 필드만 반영하도록 최소 수정한다(곧 Rust로 대체).
+- 병합은 Rust(`merge_pdfs`, P1-2~3)가 요청의 페이지별 rotation을 적용한다. 프론트에서 원본을 덮어쓰는 편집·회전 호출(`pdf.edit:apply`, `pdf.page:rotate`에 해당)을 없애고, 회전은 스토어 상태로만 들고 있다가 `MergeRequest`에 담는다.
 - **완료 기준:** 어떤 조작을 해도 원본 파일의 mtime과 해시가 변하지 않는다(테스트로 보장).
 
 ### P0-4 pdf.js 로더 단일화와 렌더 캐시 (M, P1)
@@ -226,7 +230,7 @@ Phase 5  고도화
    - macOS: `bundle.macOS.frameworks`에 dylib를 넣는다(`Contents/Frameworks/`).
    - Windows/Linux: `bundle.resources`
 3. 런타임 로드: `Pdfium::bind_to_library(<경로>)`. 경로는 플랫폼별로 결정한다(macOS `…/Contents/Frameworks/libpdfium.dylib`, 그 외 `resource_dir()`). 테스트와 개발에서는 환경변수 `PDFIUM_LIB_PATH`를 우선한다.
-4. 검증: 빈 Tauri 앱(`pnpm create tauri-app`으로 생성, pdfium은 `cargo add pdfium-render --features thread_safe`)에서 PDF 1장 렌더 → `pnpm tauri build` → **ad-hoc 서명된 `.app`에서 실행** → `codesign --verify --deep --strict`가 통과한다.
+4. 검증: Step 9에서 만든 실제 앱(`src-tauri`, `crates/pdf-core`) 안에서(pdfium은 `cargo add -p pdf-core pdfium-render --features thread_safe`) PDF 1장 렌더 → `pnpm tauri build` → **ad-hoc 서명된 `.app`에서 실행** → `codesign --verify --deep --strict`가 통과한다.
 - `thread_safe` 기능을 켠다. pdfium은 스레드 안전하지 않으므로 모든 호출을 **전용 작업 스레드 하나(큐)** 로 직렬화한다.
 - 정적 링크(`static` 기능)는 pdfium을 직접 빌드해야 하므로 이번 범위에서 제외한다.
 - **완료 기준:** Mac `.app`과 CI의 Windows 빌드에서 pdfium이 로드되고 렌더된다.
@@ -613,6 +617,7 @@ pnpm tauri dev                           # P1-1 이후
 | D9 | 첫 화면 = 홈(작업 고르기), 이후 툴바 탭으로 전환 | 탭만 두기 | 기능이 둘이 되면서 처음 쓰는 사람이 무엇을 할 수 있는지 바로 보이게 |
 | D10 | 병합 화면은 지금 구조 유지, 모드 탭만 추가 | 병합 화면 재설계 | 익숙한 화면 유지, 변경 범위 최소화 |
 | D11 | 설치·생성은 Tauri CLI 키트와 `pnpm add`/`cargo add`로 (§1.3) | 설정 파일·등록 코드를 직접 작성 | 공식 생성물이 버전에 맞는 형식을 보장하고, 손으로 쓸 때 생기는 누락(권한, 플러그인 등록, 버전 불일치)을 막는다. |
+| D12 | Tauri 셸을 먼저(실행 순서 1 → 9 → 8 → 10 → 11 → 2 → 14 → 3 → 4 → 5 → 6 → 13 → 7 → 15) | Electron 위에서 Phase 0 정리 + 임시 `electron-platform.ts` | 버려질 임시 어댑터·계약 코드를 만들지 않는다. 대가로 Step 9~2 사이에는 파일 처리 기능이 동작하지 않는다. |
 
 ## 12. 리스크
 
@@ -631,7 +636,7 @@ pnpm tauri dev                           # P1-1 이후
 
 ## 13. 진행 체크리스트
 
-> 실제 진행 순서와 체크는 [단계별 진행 가이드](2026-10-step-guide.md)에서 한다. 아래는 작업 목록 요약이다.
+> 실제 진행 순서와 체크는 [단계별 진행 가이드](2026-10-step-guide.md)에서 한다. 새 실행 순서(1 → 9 → 8 → 10 → 11 → 2 → 14 → 3 → 4 → 5 → 6 → 13 → 7 → 15)는 가이드를 따른다. 아래는 작업 목록 요약이다.
 
 - [ ] P0-1 개발 환경 정합
 - [ ] P0-2 플랫폼 어댑터와 계약 분리

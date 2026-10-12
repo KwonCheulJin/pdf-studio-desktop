@@ -182,7 +182,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 - 할 일(키트): `pnpm tauri add dialog`, `pnpm tauri add log`, `pnpm tauri add opener`. `tauri-specta`는 `cargo add`로 넣는다.
 - 할 일(직접 작성): `pick_files`·`pick_save_path`(Rust가 다이얼로그를 열고 결과 경로를 허용 경로 목록에 기록, D13), `open_files`(D14), `discard_temp`, `merge_pdfs`의 출력 `temp | userPath`와 `job_id`
 - 완료 기준: 큰 PDF 병합 중에도 UI가 멈추지 않음, 전체 %와 작업별 %(파일 읽기·페이지 합치기·저장) 표시, **병합 취소 후 임시 파일 없음**, 상한(512MB·200개)을 넘는 입력은 이유와 함께 거부, 앱 임시 폴더 밖 경로는 커맨드가 거부, 허용 경로 목록에 없는 경로는 거부, 출력 경로가 입력 원본과 같으면 거부, `open_files`가 파일별 성공/오류를 돌려줌, `discard_temp`는 앱 임시 폴더 밖 경로를 거부
-- [ ] Step 11
+- [x] Step 11
 
 ### Step 12. Tauri 어댑터와 드롭 (M)
 - 실행 순서: 없음 (Step 2에 흡수)

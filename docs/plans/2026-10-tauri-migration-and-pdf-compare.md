@@ -74,8 +74,8 @@
 |---|---|---|
 | `pdf.merge:start` (+progress, complete) | main 스레드에서 pdf-lib 병합 | **`merge_pdfs(request, channel)`** 커맨드. `request`는 `{ job_id, sources: {path, pages: {index, rotation}[]}[], output }`이고 `output`은 `{ kind: temp } | { kind: userPath, path }`이다(`job_id`는 프론트가 만든다). 진행률은 `tauri::ipc::Channel`(페이지 단위). `complete` 이벤트는 제거한다. |
 | `pdf.edit:apply`, `pdf.page:rotate` | **원본 파일을 덮어씀** | **제거.** 회전은 스토어 상태로만 들고 있다가 병합 요청에 담는다(P0-3). |
-| `file.convert.tiff` | sharp → PNG → pdf-lib | **`convert_tiff(path) -> { pdf_path, page_count, display_name }`**(`tiff`/`image` + pdfium). 결과 PDF는 앱 캐시 디렉터리에 고유 이름으로 저장하고, 화면에 보일 이름은 `display_name`(원본 TIFF 이름)으로 따로 돌려준다(결함 B15). |
-| `file.meta.get-pdf-info` | pdf-lib 전체 파싱 | **`get_pdf_info(path)`**(pdfium: 페이지 수, 페이지별 크기·회전) |
+| `file.convert.tiff` | sharp → PNG → pdf-lib | **`open_files`가 처리한다**(별도 커맨드 없음, D14). pdf-core `convert_tiff`(`tiff`/`image` + pdfium)로 바꾼 결과 PDF는 앱 캐시 디렉터리에 고유 이름으로 저장하고, 화면에 보일 이름은 `display_name`(원본 TIFF 이름)으로 따로 돌려준다(결함 B15). |
+| `file.meta.get-pdf-info` | pdf-lib 전체 파싱 | **`open_files`가 처리한다**(별도 커맨드 없음, D14). pdfium으로 페이지 수, 페이지별 크기·회전을 읽는다. |
 | `file.read:pdf` | 파일 전체를 구조화 복제로 전달 | **`read_pdf(path) -> tauri::ipc::Response`**(raw bytes). **표시용(pdf.js)으로만 사용한다.** |
 | `dialog.show-open/save` | Electron dialog | **Rust가 다이얼로그를 여는 커맨드 `pick_files`·`pick_save_path`**(`plugin-dialog`는 Rust 쪽에서 호출). 결과 경로를 허용 경로 목록(`State`)에 기록한다(D13). |
 | `file.save.copy` | `fse.copy` | 필요 없음. 병합 출력은 요청의 `output`으로 지정한다: `{ kind: temp }`(미리보기용 앱 임시 파일) 또는 `{ kind: userPath, path }`(사용자가 고른 경로로 바로 쓰기). 임시 결과를 나중에 사용자 경로로 복사할 때만 `copy_file`(검증 포함)을 쓴다. |
@@ -286,24 +286,22 @@ Phase 5  고도화
 ### P1-3 Tauri 커맨드와 작업 큐 (M, B4/S1)
 | 커맨드 | 시그니처 | 비고 |
 |---|---|---|
-| `pick_files` | `(options) -> string[]` | Rust가 열기 다이얼로그를 연다. 고른 경로를 허용 경로 목록에 기록한다(D13). |
+| `pick_files` | `() -> string[]` | Rust가 열기 다이얼로그를 연다. 형식 필터는 Rust의 허용 확장자다. 고른 경로를 허용 경로 목록에 기록한다(D13). |
 | `pick_save_path` | `(options) -> string \| null` | Rust가 저장 다이얼로그를 연다. 고른 경로를 허용 경로 목록에 기록한다(D13). |
 | `open_files` | `(paths) -> 파일별 결과[]` | 확장자 판별, TIFF 변환, 정보 조회를 한 번에 한다. 파일별 성공/오류를 돌려준다(B16, D14). 허용 경로 목록에 있는 경로만. |
 | `read_pdf` | `(path) -> tauri::ipc::Response` | **pdf.js 표시용.** 허용 경로 목록(D13)에 있는 경로만. 확장자 화이트리스트, `canonicalize`, 크기 상한. `Vec<u8>`을 그대로 반환하면 JSON 숫자 배열이 되어 매우 느리다. |
-| `get_pdf_info` | `(path) -> PdfInfo` | 허용 경로 목록(D13)에 있는 경로만 |
-| `convert_tiff` | `(path) -> { pdf_path, page_count, display_name }` | 허용 경로 목록(D13)에 있는 경로만. `pdf_path`는 캐시의 임시 PDF |
 | `merge_pdfs` | `(request, Channel<Progress>) -> MergeResult` | 출력 = `temp` \| `userPath`(사용자 경로는 `pick_save_path`로 받은 것만). 출력 경로가 입력 원본과 같으면(`canonicalize` 비교) 거부. 요청에 프론트가 만든 `job_id` 포함 |
-| `copy_file` | `(source, destination)` | 소스는 앱 임시 디렉터리 하위만 허용 |
-| `cleanup_temp` | `()` | 시작과 종료 시에도 자동 실행 |
-| `discard_temp` | `(path)` | 미리보기 결과 하나만 지운다. 앱 임시 폴더 하위만 허용 |
+| `copy_file` | `(source, destination)` | 소스는 이 실행의 세션 폴더(앱 임시 디렉터리) 하위만, 대상은 `pick_save_path`로 받은 경로만 허용. 대상이 사용자가 연 원본이면 거부. 임시 파일에 쓴 뒤 rename(pdf-core `copy_atomically`) |
+| `cleanup_temp` | `()` | 이 실행의 세션 폴더만 비운다. 앱 임시 디렉터리는 `<시스템 임시>/<식별자>/session-<pid>-<시작 시각>/`처럼 실행마다 세션 폴더로 나누고, 병합 미리보기 결과는 자기 세션 폴더에만 쓴다. 종료 시 자기 세션 폴더를 지우고, 시작 시 다른 세션 폴더 중 24시간 넘게 손대지 않은 것만 지운다(여러 실행이 서로의 결과를 지우지 않는다) |
+| `discard_temp` | `(path)` | 미리보기 결과 하나만 지운다. 이 실행의 세션 폴더 하위만 허용 |
 | `cancel_job` | `(job_id)` | Phase 2부터 사용 |
 - 모든 처리 커맨드는 `async` + **pdfium 전용 작업 스레드**로 위임한다. UI 스레드는 막히지 않는다.
 - 진행률은 `tauri::ipc::Channel`로 보내고, 취소는 작업별 `Arc<AtomicBool>` 토큰으로 처리한다.
-- **병합 진행률(시안 7):** 비교와 같은 `Progress` 모양을 쓴다. 단계 `read_files`(파일, 가중치 20) → `merge_pages`(쪽, 70) → `save`(10). 오버레이에 전체 %와 단계별 %·막대, "취소". 실패하면 같은 자리에 원인·멈춘 단계·오류 코드와 "다시 시도 / 이 파일 빼기 / 닫기"(시안 8).
+- **병합 진행률(시안 7):** 비교와 같은 `Progress` 모양을 쓴다. 단계 `readFiles`(파일, 가중치 20) → `mergePages`(쪽, 70) → `save`(10). 오버레이에 전체 %와 단계별 %·막대, "취소". 실패하면 같은 자리에 원인·멈춘 단계·오류 코드와 "다시 시도 / 이 파일 빼기 / 닫기"(시안 8).
 - 에러는 `{ code, message }` 형태로 직렬화한다. 프론트는 `code`로 P0-6의 `error-messages.ts` 문구를 찾아 토스트나 오버레이로 보여 준다(B12). `message`는 로그용이며 화면에 그대로 내보내지 않는다.
 - **병합 취소(C1):** `merge_pdfs`도 작업 ID와 취소 토큰을 갖는다. 진행 오버레이에 "취소" 버튼, 취소되면 임시 파일을 지운다. (`cancel_job`은 Phase 1부터 쓴다.)
 - **입력 상한(I1):** `pdf-core`의 상수로 둔다. 시작값: 파일 하나 `MAX_INPUT_FILE_BYTES` = 512MB, 병합 입력 `MAX_MERGE_FILES` = 200개, 비교 문서 `MAX_COMPARE_PAGES` = 2,000쪽(넘으면 `Truncated` 안내). 넘으면 `InputTooLarge` 에러로 거부하고 화면에 이유를 보인다. 측정 후 조정한다.
-- 타입은 `tauri-specta`로 TS 바인딩을 생성해 `src/shared/contracts`를 대체한다.
+- 타입은 `tauri-specta`로 TS 바인딩을 생성해 `src/shared/contracts`를 대체한다. 생성 파일은 `src/renderer/shared/api/bindings.ts`이고 커밋한다. `cargo test`의 `exports_typescript_bindings`가 다시 만들며, 경계 타입에 JS 숫자로 보낼 수 없는 타입(`usize`·`u64`)이 들어오면 실패한다. 경계의 개수·번호는 `u32`다.
 - **Rust가 정본이다:** 회전값·오류 코드는 specta 생성 타입을 쓰고, 허용 확장자·입력 상한은 Rust에서 받아 온다(TS에 숫자·목록을 다시 적지 않는다).
 - 사용할 플러그인: `dialog`, `log`, `store`, `opener`, `window-state`. **`fs` 플러그인은 쓰지 않는다**(커스텀 커맨드에서 경로를 검증해 권한 표면을 최소화).
   - 플러그인은 하나씩 `pnpm tauri add <이름>`으로 넣는다. 이 명령이 Cargo 의존성, npm 패키지, `lib.rs`의 `.plugin(...)` 등록, 기본 권한을 함께 처리한다. 이 단계에서는 `dialog`, `log`, `opener`를 넣고, `store`와 `window-state`는 P1-5에서 넣는다.

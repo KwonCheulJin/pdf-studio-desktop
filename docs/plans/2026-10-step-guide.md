@@ -53,12 +53,13 @@ pnpm i && pnpm start                                           # 현재 Electron
 - 브랜치: `refactor/platform-adapter-fsd`
 - 읽을 곳: 계획서 §4 P0-2, 토큰 문서 §3과 §4의 1단계
 - 할 일
+  0. **먼저 특성 테스트**(계획서 T2): `merge-store`·`selection-store`의 지금 동작을 테스트로 고정한다. 이 커밋을 가장 먼저 한다.
   1. `src/shared/contracts/`로 DTO·상수 이동, renderer의 `@/main/*` import 제거
   2. `shared/platform/`에 `DesktopPlatform` 인터페이스와 `electron-platform.ts`, `mock-platform.ts`
   3. `shared/hooks`의 업무 훅 → `features/*/model`, `merge-store` → `entities/merge-plan` + `features/pdf-merge/model`
   4. `src/renderer/styles/` → `src/renderer/app/styles/`로 옮기고 `tokens.css`, `theme.css`, `base.css`로 나눈다. **값은 그대로 둔다.**
   5. `components.json` 경로 수정(`app/styles/index.css`, `components` 별칭)
-- 커밋을 넷으로 나눈다: 계약 / 어댑터 / FSD 이동 / 스타일 이동
+- 커밋을 다섯으로 나눈다: 특성 테스트 / 계약 / 어댑터 / FSD 이동 / 스타일 이동
 - 완료 기준: `window.api` 참조가 `electron-platform.ts` 한 곳, `shared`가 상위 레이어나 `@/main`을 import하지 않음, 스타일 이동 전후 화면이 같음(라이트·다크 스크린샷 비교)
 - [ ] Step 2
 
@@ -78,13 +79,19 @@ pnpm i && pnpm start                                           # 현재 Electron
 ### Step 5. 내부 드래그 정렬을 @dnd-kit으로 (M)
 - 브랜치: `refactor/dnd-kit`
 - 읽을 곳: 계획서 §4 P0-5
-- 완료 기준: HTML5 DnD 이벤트(`onDragStart` 등) 의존 0, 파일·페이지 재정렬과 외부 파일 드롭이 그대로 동작
+- 완료 기준: HTML5 DnD 이벤트(`onDragStart` 등) 의존 0, 파일·페이지 재정렬과 외부 파일 드롭이 그대로 동작, **키보드만으로 재정렬 가능**(Space 집기 → 방향키 → Space 놓기)
 - [ ] Step 5
 
-### Step 6. 버그 수정과 정리 (S)
+### Step 6. 버그 수정과 정리 (M)
 - 브랜치: `fix/p0-cleanup`
-- 읽을 곳: 계획서 §4 P0-6 (B2, B5, B8, D1, D2)
-- 완료 기준: 빈 화면 TIFF 드롭 후 병합 성공, Windows 경로로 기본 저장 경로 계산 테스트 통과, 미사용 의존성 제거 후 `pnpm validate` 통과
+- 읽을 곳: 계획서 §2.2 버그 표, §4 P0-6 (B2, B5, B8~B12, A1, D1, D2)
+- 커밋 단위: 버그마다 하나. B10(페이지 복원)은 스토어 변경 + 화면 연결이라 따로 리뷰한다.
+- 완료 기준
+  - 빈 화면 TIFF 드롭 후 병합 성공, Windows 경로로 기본 저장 경로 계산 테스트 통과
+  - 페이지 삭제 → 흐린 카드의 "복원" → 병합 결과가 삭제 전과 같음(스토어 테스트), 상태바·카드 쪽수는 삭제 안 된 페이지만 셈
+  - 클릭·⌘·Shift 선택, 삭제 후 선택 목록 정리, 단축키(Delete, ⌘A, Esc)
+  - 일부러 실패시킨 파일 읽기·병합·다운로드가 모두 화면에 보임
+  - 미사용 코드 제거 후 `pnpm validate` 통과(`selectRange`, `restorePage`는 남김)
 - [ ] Step 6
 
 ### Step 7. 디자인 토큰 v2 적용 (M)
@@ -130,7 +137,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 ### Step 11. Tauri 커맨드와 작업 큐 (M)
 - 브랜치: `feat/tauri-commands`
 - 읽을 곳: 계획서 §5 P1-3
-- 완료 기준: 큰 PDF 병합 중에도 UI가 멈추지 않음, 진행률 표시, 앱 임시 폴더 밖 경로는 커맨드가 거부
+- 완료 기준: 큰 PDF 병합 중에도 UI가 멈추지 않음, 진행률 표시, **병합 취소 후 임시 파일 없음**, 상한(512MB·200개)을 넘는 입력은 이유와 함께 거부, 앱 임시 폴더 밖 경로는 커맨드가 거부
 - [ ] Step 11
 
 ### Step 12. Tauri 어댑터와 드롭 (M)
@@ -142,7 +149,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 ### Step 13. 보안, 테마, 창 (S)
 - 브랜치: `feat/tauri-security-theme`
 - 읽을 곳: 계획서 §5 P1-5, 토큰 문서 §3(`app/providers/theme-provider.tsx`)
-- 완료 기준: animatedicons 제거, 테마 `system|light|dark` 선택이 재시작 후에도 유지, 창 크기·위치 기억
+- 완료 기준: animatedicons 제거, 테마 `system|light|dark` 선택이 재시작 후에도 유지, 창 크기·위치 기억, 최소 창 크기 1120×720, 에러 스냅샷이 앱 전용 설정으로 가고 경로·파일 이름이 지워져 전송되며 설정에서 끌 수 있음
 - [ ] Step 13
 
 ### Step 14. Electron 제거와 문서 갱신 (S)
@@ -203,10 +210,11 @@ pnpm i && pnpm start                                           # 현재 Electron
 
 | Step | 계획서 | 완료 기준 | |
 |---|---|---|---|
-| 30 | P4-1 CI 매트릭스 | PR에서 `pnpm validate` + `cargo fmt --check` + `cargo clippy -D warnings` + `cargo test` | [ ] |
+| 30 | P4-1 CI 매트릭스 | PR에서 `pnpm validate` + `cargo fmt --check` + `cargo clippy -D warnings` + `cargo test`, Windows는 NSIS 설치 파일 | [ ] |
 | 31 | P4-2 릴리스 흐름 | `auto-version.yml` 제거, 태그 푸시로 Draft Release | [ ] |
 | 32 | P4-3 서명 | ad-hoc 서명 `.app`과 `libpdfium.dylib`가 같은 identity, `codesign --verify --deep --strict` 통과 | [ ] |
 | 33 | P4-4 자동 업데이트(선택) | `latest.json` 생성, 업데이트 동작 | [ ] |
+| 34 | P4-5 라이선스와 고지 | `LICENSE`, `THIRD_PARTY_NOTICES.md` 번들, 허용 목록 밖 라이선스면 CI 실패, 앱 정보에서 고지 열림 | [ ] |
 
 ---
 

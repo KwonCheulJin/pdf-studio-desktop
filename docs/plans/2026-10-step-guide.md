@@ -139,8 +139,8 @@ pnpm i && pnpm start                                           # 현재 Electron
 - 읽을 곳: 계획서 §5 P1-0, §12 리스크 첫 줄
 - 할 일(키트): 버리는 빈 앱(`pnpm create tauri-app`)은 만들지 않는다. Step 9에서 만든 실제 `src-tauri`와 `crates/pdf-core` 안에서 스파이크하고, pdfium은 `cargo add -p pdf-core pdfium-render --features thread_safe`로 넣는다. 직접 작성하는 것은 `scripts/fetch-pdfium.mjs`와 렌더 확인 코드뿐이다.
 - **이 단계가 실패하면 Step 10 이후를 진행하지 않는다.** 실패하면 원인을 기록하고 계획서 §6.0의 엔진 선택을 다시 검토한다.
-- 완료 기준: ad-hoc 서명된 `.app`에서 PDF 1장 렌더, `codesign --verify --deep --strict` 통과, CI Windows 빌드에서 pdfium 로드
-- [ ] Step 8
+- 완료 기준: ad-hoc 서명된 `.app`에서 PDF 1장 렌더, `codesign --verify --deep --strict` 통과, CI Windows 빌드에서 pdfium 로드 (Windows는 Step 30 CI에서 확인)
+- [x] Step 8
 
 ### Step 9. Tauri 스캐폴드 + Cargo workspace (S)
 - 실행 순서: 2번째 (앞: Step 1, 뒤: Step 8)

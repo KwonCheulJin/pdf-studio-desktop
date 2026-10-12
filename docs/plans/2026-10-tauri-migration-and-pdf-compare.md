@@ -227,7 +227,7 @@ Phase 5  고도화
    - macOS: `libpdfium.dylib`(arm64. universal이 필요하면 x64와 `lipo`로 합친다)
    - Windows: `pdfium.dll` / Linux: `libpdfium.so`
 2. 번들 설정
-   - macOS: `bundle.macOS.frameworks`에 dylib를 넣는다(`Contents/Frameworks/`).
+   - macOS: `bundle.macOS.frameworks`에 dylib를 넣는다(`Contents/Frameworks/`). hardened runtime은 켜 두고 `Entitlements.plist`의 `com.apple.security.cs.disable-library-validation`으로 라이브러리 검증만 푼다. 라이브러리 검증이 Team ID 없는 ad-hoc 서명(`signingIdentity: "-"`) dylib의 `dlopen`을 막기 때문이다(Step 8에서 확인). Developer ID로 바꿀 때(P4-3) 앱과 dylib를 같은 Team ID로 서명하면 이 entitlement를 뺀다.
    - Windows/Linux: `bundle.resources`
 3. 런타임 로드: `Pdfium::bind_to_library(<경로>)`. 경로는 플랫폼별로 결정한다(macOS `…/Contents/Frameworks/libpdfium.dylib`, 그 외 `resource_dir()`). 테스트와 개발에서는 환경변수 `PDFIUM_LIB_PATH`를 우선한다.
 4. 검증: Step 9에서 만든 실제 앱(`src-tauri`, `crates/pdf-core`) 안에서(pdfium은 `cargo add -p pdf-core pdfium-render --features thread_safe`) PDF 1장 렌더 → `pnpm tauri build` → **ad-hoc 서명된 `.app`에서 실행** → `codesign --verify --deep --strict`가 통과한다.
@@ -260,7 +260,8 @@ Phase 5  고도화
 
 ### P1-2 `pdf-core` 기본 처리 (L)
 - 모듈
-  - `document.rs`: pdfium 바인딩 초기화, 문서 열기, 에러 타입(`thiserror`)
+  - `engine.rs`(Step 8): pdfium 라이브러리 경로 결정(`PDFIUM_LIB_PATH` 우선, 없으면 번들 폴더)과 프로세스 바인딩
+  - `document.rs`: 문서 열기, 에러 타입(`thiserror`)
   - `info.rs`: 페이지 수, 페이지별 크기(MediaBox/CropBox), 회전
   - `merge.rs`: 새 문서에 소스 페이지를 import하고 페이지별 회전을 적용해 저장한다. **원자적 쓰기**(임시 파일에 쓴 뒤 rename)를 하고, Windows 공유 위반 시 재시도한다(기존 retry-write 로직 이식, `cfg(windows)`).
   - `tiff.rs`: `tiff` 크레이트로 멀티페이지를 디코드하고, 페이지마다 이미지 객체로 PDF 페이지를 만든다. 결과는 앱 캐시 디렉터리에 고유 이름으로 저장한다(B3).

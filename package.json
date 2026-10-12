@@ -23,7 +23,8 @@
     "release:major": "pnpm version major --no-git-tag-version && node scripts/release.mjs major",
     "dev:web": "vite",
     "build:web": "vite build",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "fetch:pdfium": "node scripts/fetch-pdfium.mjs"
   },
   "keywords": [],
   "author": {

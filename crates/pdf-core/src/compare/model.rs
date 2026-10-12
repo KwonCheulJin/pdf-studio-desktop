@@ -3,6 +3,9 @@
 //! - 쪽 번호는 문서 전체에서 0부터 센다. 화면에 보일 때만 1을 더한다.
 //! - 좌표는 PDF 사용자 공간(pt, 원점은 왼쪽 아래, `/Rotate` 적용 전)이고 CropBox 원점이
 //!   이미 들어 있다. 화면은 pdf.js `viewport.convertToViewportRectangle`로만 바꾼다.
+//! - `Serialize`는 golden JSON을 쓰는 타입에만 붙인다. 모양은 ADR 0001 §7의 계약 JSON과 같다.
+
+use serde::Serialize;
 
 use crate::info::{PageBox, PageRotation};
 
@@ -14,7 +17,8 @@ pub enum Side {
 }
 
 /// 변경 글자를 덮는 상자. 같은 줄에서 이어진 글자는 상자 하나로 합친다.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TextBox {
     /// 상자가 있는 쪽(0부터). 어느 문서인지는 상자를 담은 [`ChangeSide`]가 정한다.
     pub page: u32,
@@ -70,7 +74,8 @@ pub struct Change {
 }
 
 /// 한 쪽의 보이는 영역과 회전
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PageSize {
     /// CropBox ∩ MediaBox(교집합이 비면 MediaBox). pdf.js `page.view`와 같은 정의이고
     /// 회전 전 사용자 공간 좌표다. CropBox 원점은 `left`·`bottom`이다.

@@ -4,7 +4,9 @@
 //! - 양쪽에 한 번씩만 나오는 키를 앵커로 잡고(Patience: 두 위치가 함께 늘어나는 가장 긴 사슬),
 //!   앵커 사이 구간만 Myers(`similar`)로 비교한다.
 //! - 공통 토큰 사이에서 바뀐 토큰 묶음 하나가 변경 하나다(양쪽에 토큰이 있으면 `Replace`).
-//!   띄어쓰기만 다른 묶음(양쪽 키를 공백 없이 이은 문자열이 같다)은 변경으로 내지 않는다.
+//!   띄어쓰기만 다른 묶음(양쪽 키를 공백 없이 이은 문자열이 같다)은 변경으로 내지 않는다. 단
+//!   한쪽에만 있는 토큰 경계가 숫자와 숫자 사이에 있으면(`1 000` ↔ `10 00`) 숫자를 다르게 읽히게
+//!   하므로 `Replace`로 낸다.
 //! - `Replace`의 상자는 키 글자 단위 2차 diff에서 실제로 다른 글자만 덮는다.
 //! - 시간 제한이 지나면 남은 정밀 diff(앵커 구간의 토큰 diff, `Replace`의 글자 diff)를 하지
 //!   않고 통째로 낸 뒤 `Truncated`로 알린다.
@@ -325,15 +327,58 @@ fn context_after(equal_positions: &[usize], end: usize) -> Range<usize> {
     start..(start + CHANGE_ID_CONTEXT_TOKENS).min(equal_positions.len())
 }
 
-/// 변경 종류. 띄어쓰기만 다른 묶음은 변경이 아니다(`None`).
+/// 변경 종류. 띄어쓰기만 다른 묶음([`is_spacing_only`])은 변경이 아니다(`None`).
 fn change_kind(before: &[Token], after: &[Token]) -> Option<ChangeKind> {
     match (before.is_empty(), after.is_empty()) {
         (true, true) => None,
         (true, false) => Some(ChangeKind::Insert),
         (false, true) => Some(ChangeKind::Delete),
-        (false, false) if joined_key_chars(before).eq(joined_key_chars(after)) => None,
+        (false, false) if is_spacing_only(before, after) => None,
         (false, false) => Some(ChangeKind::Replace),
     }
+}
+
+/// 양쪽 키를 공백 없이 이은 글자열이 같고, 한쪽에만 있는 토큰 경계가 하나도 숫자와 숫자
+/// 사이에 있지 않다. 줄 배치로 갈린 단어(`계약기` + `간은`, `제3조` + `의`)는 띄어쓰기 차이로
+/// 보지만, 숫자 사이 경계가 옮겨지면(`1 000` ↔ `10 00`, `제 1 2 조` ↔ `제 12 조`) 읽히는 숫자가
+/// 달라지므로 변경이다.
+fn is_spacing_only(before: &[Token], after: &[Token]) -> bool {
+    let chars: Vec<char> = joined_key_chars(before).collect();
+    if !chars.iter().copied().eq(joined_key_chars(after)) {
+        return false;
+    }
+    let (before_bounds, after_bounds) = (boundary_offsets(before), boundary_offsets(after));
+    let one_sided = |own: &[usize], other: &[usize]| -> Vec<usize> {
+        own.iter()
+            .copied()
+            .filter(|offset| other.binary_search(offset).is_err())
+            .collect()
+    };
+    !one_sided(&before_bounds, &after_bounds)
+        .into_iter()
+        .chain(one_sided(&after_bounds, &before_bounds))
+        .any(|offset| splits_number(&chars, offset))
+}
+
+/// 토큰 사이 경계의 위치(이은 글자열에서 경계 앞 글자 수). 오름차순이고 처음·끝은 없다.
+fn boundary_offsets(tokens: &[Token]) -> Vec<usize> {
+    tokens
+        .iter()
+        .scan(0, |offset, token| {
+            *offset += token.key.chars().count();
+            Some(*offset)
+        })
+        .take(tokens.len().saturating_sub(1))
+        .collect()
+}
+
+/// `offset` 경계 앞뒤 글자가 둘 다 숫자다(`char::is_numeric`: 전각 숫자 포함, 한글 수사 제외).
+fn splits_number(chars: &[char], offset: usize) -> bool {
+    let previous = offset.checked_sub(1).and_then(|index| chars.get(index));
+    matches!(
+        (previous, chars.get(offset)),
+        (Some(previous), Some(next)) if previous.is_numeric() && next.is_numeric()
+    )
 }
 
 /// 토큰 키를 공백 없이 이은 글자열
@@ -691,5 +736,100 @@ mod tests {
             boxes(&change.after),
             Some(vec![glyph(0, 0.0), glyph(0, 2.0 * GLYPH_WIDTH)])
         );
+    }
+
+    /// (A 단어, B 단어, 기대 변경마다 (종류, A 원문, B 원문))
+    type Case<'a> = (
+        &'a [&'a str],
+        &'a [&'a str],
+        &'a [(ChangeKind, &'a str, &'a str)],
+    );
+
+    fn assert_cases(cases: &[Case]) {
+        for &(before, after, expected) in cases {
+            let expected: Vec<_> = expected
+                .iter()
+                .map(|&(kind, before, after)| (kind, before.to_owned(), after.to_owned()))
+                .collect();
+            assert_eq!(
+                change_texts(before, after),
+                expected,
+                "{before:?} -> {after:?}"
+            );
+        }
+    }
+
+    /// 변경마다 (종류, A 원문, B 원문)
+    fn change_texts(before: &[&str], after: &[&str]) -> Vec<(ChangeKind, String, String)> {
+        let text = |side: &Option<ChangeSide>| {
+            side.as_ref()
+                .map(|side| side.text.clone())
+                .unwrap_or_default()
+        };
+        diff_tokens(&line(0, before), &line(0, after), DIFF_TIME_LIMIT)
+            .changes
+            .iter()
+            .map(|change| (change.kind, text(&change.before), text(&change.after)))
+            .collect()
+    }
+
+    /// 이은 글자열이 같아도 한쪽에만 있는 경계가 숫자 사이에 있으면 읽히는 숫자가 달라지므로
+    /// `Replace`다. 숫자가 든 토큰이라도 경계가 숫자 사이가 아니면(`제3조` + `의`) 줄 배치 차이다.
+    #[test]
+    fn spacing_only_difference_is_ignored_unless_it_splits_digits() {
+        let cases: [Case; 4] = [
+            (
+                &["금", "1", "000원"],
+                &["금", "10", "00원"],
+                &[(ChangeKind::Replace, "1 000원", "10 00원")],
+            ),
+            (
+                &["제", "1", "2", "조"],
+                &["제", "12", "조"],
+                &[(ChangeKind::Replace, "1 2", "12")],
+            ),
+            (&["계약기", "간은", "1년"], &["계약기간은", "1년"], &[]),
+            (&["제3조의", "규정"], &["제3조", "의", "규정"], &[]),
+        ];
+        assert_cases(&cases);
+    }
+
+    /// 앵커는 양쪽에 한 번씩만 나오는 키 중 두 위치가 함께 늘어나는 가장 긴 사슬이다. 유일 키가
+    /// 없으면 문서 전체가 한 구간이고, 한쪽에만 있는 키는 앵커가 아니며, 엇갈린 유일 키는 가장 긴
+    /// 사슬(`갑 을 병 무`)만 남기고 나머지(`정`)를 옮긴 것으로 낸다.
+    #[test]
+    fn anchors_are_the_longest_chain_of_keys_unique_on_both_sides() {
+        let cases: [Case; 4] = [
+            (
+                &["가", "나", "가", "나"],
+                &["가", "나", "가"],
+                &[(ChangeKind::Delete, "나", "")],
+            ),
+            // A에만 있는 `갑`을 앵커로 잡으면 B 첫 토큰 `을`과 같다고 보아 치환이 사라진다.
+            (
+                &["갑", "나", "다"],
+                &["을", "나", "다"],
+                &[(ChangeKind::Replace, "갑", "을")],
+            ),
+            // 앞에서부터 고르면 `갑 정 무`가 되어 `을 병`을 옮긴 것으로 낸다.
+            (
+                &["갑", "정", "을", "병", "무"],
+                &["갑", "을", "병", "정", "무"],
+                &[
+                    (ChangeKind::Delete, "정", ""),
+                    (ChangeKind::Insert, "", "정"),
+                ],
+            ),
+            // 사슬을 끝값 목록에서 바로 읽으면 (병, 갑)·(을, 병) 순서가 되어 위치가 거꾸로 간다.
+            (
+                &["갑", "을", "병"],
+                &["병", "갑", "을"],
+                &[
+                    (ChangeKind::Insert, "", "병"),
+                    (ChangeKind::Delete, "병", ""),
+                ],
+            ),
+        ];
+        assert_cases(&cases);
     }
 }

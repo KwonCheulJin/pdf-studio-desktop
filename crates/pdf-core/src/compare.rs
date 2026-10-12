@@ -8,6 +8,7 @@ mod ocr_text;
 mod options;
 mod pages;
 mod pipeline;
+mod report;
 mod review;
 mod tokenize;
 
@@ -24,6 +25,11 @@ pub use options::{
 pub use pages::pair_pages;
 pub use pipeline::{
     CompareError, DocumentText, OcrFailure, TextComparison, compare_texts, read_document_text,
+};
+pub use report::{
+    AnnotatedReport, CompareReport, CompareReportOptions, MAX_PREVIEW_WIDTH_PX, ReportError,
+    ReportLayout, ReportPreview, ReportSources, export_annotated_pdf, export_compare_pdf,
+    preview_compare_report,
 };
 pub use review::{OCR_MIN_CONFIDENCE, OCR_MIN_CONFIDENCE_NUMERIC};
 pub use tokenize::{

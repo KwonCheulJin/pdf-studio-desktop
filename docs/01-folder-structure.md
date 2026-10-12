@@ -34,11 +34,11 @@ project-root/
 │  │  ├─ engine.rs             # pdfium 라이브러리 경로 결정(PDFIUM_LIB_PATH 우선)과 바인딩
 │  │  ├─ document.rs           # 문서 열기, 에러 타입
 │  │  ├─ info.rs               # 페이지 수·크기·회전 정규화
-│  │  ├─ compare.rs, compare/  # PDF 비교(결과 모델은 ADR 0001)
+│  │  ├─ compare.rs, compare/  # PDF 비교(결과 모델·추출 규칙은 ADR 0001)
 │  │  ├─ merge.rs, merge/      # 병합(회전 절대값), 진행률
 │  │  ├─ tiff.rs, tiff/        # TIFF → PDF (CCITT 포함)
 │  │  └─ output.rs             # 원자적 쓰기(임시 파일 + rename)
-│  └─ tests/                   # 통합 테스트, fixtures/
+│  └─ tests/                   # 통합 테스트, fixtures/(생성 스크립트 포함), golden/(비교 엔진 기대 JSON)
 │
 ├─ src-tauri/                  # 어댑터: Tauri 셸
 │  ├─ src/

@@ -9,8 +9,9 @@ mod output;
 mod tiff;
 
 pub use compare::{
-    Change, ChangeKind, ChangeSide, CompareResult, NoTextReason, Notice, PagePair, PageSize,
-    PageSizes, PageSources, Side, TextBox, TextSource,
+    Change, ChangeKind, ChangeSide, CompareResult, ExtractedChar, ExtractedPage, Glyph,
+    NoTextReason, Notice, OCR_MIN_TEXT_CHARS, PagePair, PageSize, PageSizes, PageSources, Side,
+    TextBox, TextSource, extract_text_layer,
 };
 pub use document::{DocumentError, MAX_INPUT_FILE_BYTES};
 pub use engine::{EngineError, PdfEngine};

@@ -428,7 +428,7 @@ pub struct CompareResult {
 
 ### 6.2 파이프라인
 1. **추출 (P2-2, M)**
-   - pdfium 페이지 텍스트에서 글자별 `{ char, bounds, font_size, font_name }`을 얻는다. 박스는 tight bounds를 기본으로 한다.
+   - pdfium 페이지 텍스트에서 글자별 `{ char, bounds, font_size }`을 얻는다. 박스는 tight bounds를 기본으로 한다. `font_name`은 쓰는 곳(Phase 5 스타일 비교)이 생길 때 더한다. 화면 밖(`view_box`와 겹치지 않는) 글자 제외, `/Rotate`와 상관없는 글자 순서, pdfium이 만든 공백·줄바꿈 표시, `OCR_MIN_TEXT_CHARS` 값은 [ADR 0001](../adr/0001-compare-result-model.md) §8이 정본이다.
    - **좌표계 일치 검증(중요):** pdfium 좌표와 pdf.js 화면 좌표가 CropBox/MediaBox 원점 오프셋, `/Rotate` 페이지, `UserUnit`에서 일치하는지 pdfium 박스는 Rust golden 테스트로 고정하고, 화면 박스와의 일치는 E2E로 확인한다. 원점 보정은 Rust가 박스에 이미 넣고 프론트는 보정하지 않는다([ADR 0001](../adr/0001-compare-result-model.md) §2). `page_sizes.view_box`가 pdf.js `page.view`와 같은지도 확인한다.
    - 텍스트 레이어가 없거나 글자 수가 `OCR_MIN_TEXT_CHARS` 미만인 페이지(스캔본)는 OCR 경로(P2-4a, §6.4)로 글자를 얻는다. OCR로도 글자를 얻지 못하면(모델 파일 없음, OCR 실패) `NoTextLayer`로 알린다.
 2. **정규화와 토큰화 (P2-3, M)**

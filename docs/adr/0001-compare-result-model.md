@@ -1,7 +1,7 @@
 # ADR 0001. 비교 결과 모델(`CompareResult`)과 좌표 규칙
 
-- 상태: 채택 (2026-10, Step 16 / 계획서 P2-1, §11 D16)
-- 코드: `crates/pdf-core/src/compare/model.rs` (이 문서와 같은 타입만 둔다)
+- 상태: 채택 (2026-10, Step 16 / 계획서 P2-1, §11 D16). Step 17이 맡긴 추출 규칙을 §8에 더했다.
+- 코드: `crates/pdf-core/src/compare/model.rs` (이 문서와 같은 타입만 둔다), 추출은 `crates/pdf-core/src/compare/extract.rs`
 - 관련: 계획서 §6.1(결과 모델), §6.2(파이프라인), §6.4(OCR 신뢰도·확인 필요·좌표 되돌리기), §7.1(연결선)
 
 ## 맥락
@@ -88,10 +88,10 @@ pub struct CompareResult {
 - **OCR:** §6.4의 순서(기울기 보정 역변환 → `× 72 / OCR_RENDER_DPI`와 y 뒤집기 → 렌더에 적용된 `/Rotate` 되돌리기 → `view_box.left`·`view_box.bottom` 더하기)로 같은 좌표로 바꾼다. 렌더는 `view_box` 영역이므로 마지막에 더하는 원점이 `view_box`의 왼쪽 아래다.
 - **화면 변환:** `page.getViewport({ scale })`(회전 기본값 = 문서의 `/Rotate`)로 만든 viewport의 `convertToViewportRectangle([x, y, x + w, y + h])`를 쓰고, 돌려받은 `[x1, y1, x2, y2]`를 min/max로 정규화한다.
   - pdf.js의 viewBox는 MediaBox가 아니라 `page.view` = CropBox ∩ MediaBox(교집합이 비면 MediaBox)이고, 변환이 이 viewBox의 원점을 뺀다. 그래서 절대 사용자 공간 좌표를 그대로 넣으면 맞는다(pdfjs-dist 5.5 `get view()` 확인).
-  - pdfjs-dist 5.x의 viewport는 `scale *= userUnit`을 한다. 박스를 사용자 공간 단위로 두면 `UserUnit ≠ 1`도 viewport 변환이 맞춘다.
+  - pdfjs-dist 5.x의 viewport는 `scale *= userUnit`을 한다. 박스를 사용자 공간 단위로 두면 `UserUnit ≠ 1`도 viewport 변환이 맞춘다. pdfium도 `UserUnit`을 곱하지 않은 사용자 공간 단위로 상자를 준다(Step 17 E2E가 5.5.207에서 `UserUnit 2` 쪽으로 확인).
   - 화면 좌표를 손으로 쓴 공식(`pageHeight − y` 등)으로 구하지 않는다. CropBox 원점·회전·`UserUnit`을 놓친다. 연결선 끝점(§7.1)도 pt 점을 같은 viewport로 바꾼다.
 - **`page_sizes`의 쓰임:** pdf.js가 쪽을 열기 전의 행 크기·가로 판정(회전 90·270이면 너비와 높이를 바꾼다), 비교 PDF 내보내기(P2-8), 좌표 일치 검증(Step 17 E2E에서 pdf.js `page.view`·`page.rotate`와 같은지 확인). 화면 하이라이트 변환에는 필요하지 않다.
-- 박스는 `view_box` 밖에 있을 수 있다(모델은 잘라 내지 않는다). 보이지 않는 글자를 추출에서 뺄지는 Step 17이 정한다.
+- 박스는 `view_box` 밖에 있을 수 있다(모델은 잘라 내지 않는다). 추출은 `view_box`와 겹치지 않는 글자를 뺀다(§8).
 
 ### 3. 쪽 번호와 페이지 쌍
 
@@ -162,7 +162,26 @@ pub struct CompareResult {
 - **golden JSON:** pdf-core에 serde를 넣는다. 시점은 첫 golden 테스트를 쓰는 Step(17)이다.
   - `cargo add -p pdf-core serde --features derive`, `cargo add -p pdf-core --dev serde_json`(둘 다 MIT OR Apache-2.0).
   - 모델 타입(필요하면 `PageBox`·`PageRotation`까지)에 `Serialize`만 붙인다. `Deserialize`는 두지 않는다. golden 비교는 실제 결과를 `serde_json::Value`로 직렬화해 기대 파일과 비교하고, 실수는 허용 오차로 비교한다.
+  - Step 17은 추출 golden이 쓰는 `TextBox`·`PageSize`·`PageBox`·`PageRotation`(`#[serde(into = "u16")]`)과 추출 타입에만 붙였다. 나머지 모델 타입은 처음 직렬화하는 Step(19)이 붙인다.
   - 직렬화 모양은 위 계약 JSON 모양과 **같게** 한다(`rotation`은 숫자). 그래야 Rust golden 파일을 E2E mock 시드로 그대로 쓸 수 있다. 두 모양이 어긋나지 않게 하는 확인은 계약 미러를 만드는 Step이 둔다.
+
+### 8. 텍스트 레이어 추출 (Step 17에서 정함)
+
+공개 API는 `extract_text_layer(engine, path) -> Vec<ExtractedPage>`다(색인 = 쪽 번호). 쪽마다 `size: PageSize`, `chars: Vec<ExtractedChar>`, `needs_ocr`를 낸다. 글자는 `{ ch, glyph: Option<Glyph> }`, `Glyph = { bounds: TextBox, font_size }`다.
+
+| 항목 | 규칙 |
+|---|---|
+| 상자 | pdfium tight bounds(`FPDFText_GetCharBox`, 글리프 모양에 맞춘 상자)를 그대로 쓴다. CropBox 원점이 들어간 절대 사용자 공간 좌표이고 `/Rotate`·`UserUnit`을 적용하지 않은 값이다. CropBox 오프셋·MediaBox 원점·회전 90/180/270·`UserUnit 2` 쪽 golden(`crates/pdf-core/tests/golden/`)으로 고정했다. |
+| `view_box` | pdfium `FPDF_GetPageBoundingBox`(쪽을 열 때 Pages 노드에서 물려받은 값까지 반영해 정규화한 CropBox ∩ MediaBox)다. 넓이가 0이면 pdf.js처럼 MediaBox로 돌아간다. `FPDFPage_GetMediaBox`·`GetCropBox`는 물려받은 상자를 읽지 못하므로 쓰지 않는다. MediaBox를 물려받은 쪽에서 교집합까지 비면 pdfium이 MediaBox를 알려 주지 않아 빈 상자가 남는다(잘못 만든 PDF에서만 생긴다). |
+| 보이지 않는 글자 | tight 상자가 `view_box`와 닫힌 구간으로도 겹치지 않으면 뺀다. 겹치면 상자를 자르지 않고 둔다. 화면에 없는 차이는 하이라이트할 곳이 없고, OCR(§6.4)도 `view_box`만 렌더하므로 텍스트 쪽과 스캔 쪽이 같은 글자 집합을 본다. pdf.js `getTextContent()`도 화면 밖 글리프를 빼지만 기준이 다르다(기준선 시작점·전진 폭 기준). 경계에 걸친 글자에서만 다를 수 있다. 렌더 모드 3(숨은 글자층)·흰 글자처럼 겹치지만 안 보이는 글자는 빼지 않는다. |
+| 순서 | pdfium 텍스트 페이지 순서. 단 pdfium은 화면 방향(`/Rotate` 적용 후)으로 줄 순서를 정해 `/Rotate 90` 쪽에서 내용상 줄 순서를 뒤집는다. 그래서 메모리 안 문서의 `/Rotate`만 0으로 두고 분석한다(저장하지 않으므로 원본은 그대로, 상자는 사용자 공간이라 그대로). 같은 내용이면 회전과 상관없이, 글자를 돌려 그리고 `/Rotate`로 바로 세운 쪽까지 같은 순서다(`rotation-order.pdf`). |
+| 공백·줄바꿈 | 내용 스트림의 공백 글리프는 다른 글자처럼 `glyph`와 함께 낸다(높이가 거의 0인 상자). pdfium이 간격·줄 끝을 보고 만든 글자(줄 끝 `\r` `\n`, 공백 글리프 없이 띄운 단어 사이 공백)는 `glyph: None`이다. 만든 글자도 뺀 글자 사이에 남을 수 있다. 정리(연속 공백·`\r\n` 합치기)는 Step 18이 하고, 토큰화는 `glyph`가 없는 글자를 경계로만 쓴다. |
+| 글자 값 | pdfium 유니코드(`FPDFText_GetUnicode`) 그대로. 유효한 스칼라 값이 아니면 U+FFFD다. ToUnicode가 없거나 깨진 글꼴의 엉뚱한 값은 Step 18의 `LowTextConfidence`가 다룬다. |
+| `font_size` | 사용자 공간 글꼴 크기 = `Tf` × 글자 행렬(텍스트 행렬 × CTM)의 세로 단위 벡터 길이. pdfium `FPDFText_GetFontSize`는 `Tf` 값만 준다(`Tf 1` + `Tm` 배율 PDF에서 1이 된다). `font_name`은 쓰는 곳(Phase 5 스타일 비교)이 생길 때 더한다. |
+| OCR 대상 | 남은 글자 중 `glyph`가 있고 공백이 아닌 글자가 `OCR_MIN_TEXT_CHARS`(32)보다 적으면 `needs_ocr`다. 스캔본에 디지털로 찍힌 쪽 번호·날짜·도장 문구(보통 30자 아래)만으로 텍스트 쪽이 되지 않게 하고, 글자가 적은 텍스트 쪽(서명란)은 OCR로 읽어도 같은 글자가 나와 손해가 작으므로 높은 쪽으로 둔다. Step 19-a가 스캔 픽스처로 다시 본다. |
+
+- golden JSON 모양은 §7 계약 모양(camelCase, `rotation` 숫자, `viewBox`는 계약 `PageBox`)과 같다. E2E(`e2e/text-box-geometry.spec.ts`)가 같은 golden과 픽스처를 읽어, 상자를 `convertToViewportRectangle`로 바꾼 사각형이 pdf.js 텍스트 항목의 화면 사각형 안에 들고 항목 길이를 덮는지, `viewBox`·`rotation`이 `page.view`·`page.rotate`와 같은지 확인한다.
+- 한글 픽스처는 IBM Plex Sans KR(OFL-1.1) 서브셋을 임베드한 Identity-H CID 글꼴이다. 임베드하지 않은 CID 글꼴은 pdfium이 시스템 글꼴로 대신 그려 tight 상자가 플랫폼마다 달라지므로 golden에 쓰지 않는다.
 
 ## 결과
 
@@ -188,3 +207,7 @@ pub struct CompareResult {
 | 결과에 차이·확인 필요 개수 필드 | `changes`에서 바로 셀 수 있는 값이라 두 곳이 어긋날 위험만 생긴다. |
 | `pdf-core`에 specta derive(기능 플래그) | specta는 경계 어댑터의 관심사다. 기존 계약도 `src-tauri` 미러로 만든다. |
 | 스타일·글꼴 차이 필드를 미리 두기 | Phase 5 범위다(YAGNI). 필요해지면 `ChangeKind`·필드를 더하는 새 ADR로 정한다. |
+| (§8) `view_box` 밖 글자도 추출 | 화면에 없는 글자의 차이는 하이라이트·연결선을 둘 곳이 없고, OCR 쪽은 `view_box`만 읽어 텍스트 쪽과 글자 집합이 달라진다. |
+| (§8) pdfium 기본 순서(화면 방향) 그대로 | `/Rotate`만 바꾼 쪽(이 앱의 병합 회전 포함)과 원본을 비교하면 줄 순서가 뒤집혀 차이가 생긴다. |
+| (§8) 만든 공백·줄바꿈을 버리기 | 공백 글리프 없이 단어를 띄워 놓은 PDF(한글 문서에 흔하다)에서 단어가 붙고, 줄 끝 단어와 다음 줄 첫 단어가 붙는다. pdfium의 줄·간격 판단을 다시 만들 이유가 없다. |
+| (§8) loose bounds(글꼴 상자 높이) | 계획서 §6.2가 tight를 기본으로 정했다. 하이라이트가 글자 모양에 붙고 줄 사이가 겹치지 않는다. |

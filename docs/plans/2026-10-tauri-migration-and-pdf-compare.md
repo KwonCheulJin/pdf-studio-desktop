@@ -15,7 +15,7 @@
 | 처리 계층 | **Rust**(`crates/pdf-core`, pdfium-render 기반)가 병합, 회전 적용, 페이지 정보, TIFF 변환, **비교 엔진**(추출·diff·페이지 정렬·내보내기)을 맡는다. |
 | 표시 계층 | **pdf.js(웹뷰)** 가 썸네일, 미리보기, 비교 뷰어 렌더링을 맡는다. Rust가 돌려준 결과(PDF 좌표 박스)를 pdf.js 화면 위에 겹쳐 그린다. |
 | 데이터 흐름 | 프론트는 **파일 경로를 넘기고 결과(JSON)만 받는다.** PDF 바이트는 표시용 읽기(`read_pdf`)를 제외하면 IPC를 오가지 않는다. |
-| 진행 방식 | **Phase 0(Electron 위에서 가볍게 정리)** → **P1-0 pdfium 스파이크(Mac 우선)** → **Track A(Tauri 셸)** 와 **Track B(Rust 비교 엔진)** 병행 → Phase 3(비교 UI)에서 합류 |
+| 진행 방식 | **마이그레이션을 먼저 순서대로 끝낸다:** Phase 0(Electron 위에서 정리) → P1-0 pdfium 스파이크(게이트) → Phase 1(Tauri 셸 + 기본 처리). **그 뒤 병렬:** Track B(Rust 비교 엔진)와 Phase 4 일부 → Phase 3(비교 UI)에서 합류 |
 | 핵심 원칙 | 플랫폼 의존 코드는 `shared/platform` 어댑터 한 곳에만 둔다. `pdf-core`는 Tauri에 의존하지 않는 순수 라이브러리로 만들어 `cargo test`로 검증한다. 사용자 원본 파일은 **절대 수정하지 않는다.** |
 
 ### 처리 계층을 Rust로 두는 이유
@@ -57,6 +57,7 @@
 - YAGNI/KISS, 매직 값 금지(Rust도 `const`/enum으로)
 - TDD 대상: `shared/lib`, `**/model`, **`crates/pdf-core` 전체**
 - **커밋에 AI co-author 라인을 넣지 않는다.**
+- **설치·생성은 키트로 한다.** Tauri 스캐폴드, 플러그인, 권한(capability), 아이콘, 서명 키는 Tauri CLI(`tauri init`, `tauri add`, `tauri permission add`, `tauri capability new`, `tauri icon`, `tauri signer generate`)로 만들고, 생성된 결과를 최소한으로만 고친다. 의존성은 `pnpm add`와 `cargo add`로 넣는다(`package.json`, `Cargo.toml`, `lib.rs` 플러그인 등록, capability JSON을 손으로 쓰지 않는다). 직접 작성은 키트가 없는 경우(`fetch-pdfium.mjs`, 앱 고유 커맨드와 `pdf-core` 로직, Electron 제거)로 한정한다.
 
 ---
 
@@ -120,17 +121,20 @@ Phase 0  Electron 위에서 가벼운 정리 (어댑터·계약·비파괴 회�
    │
 P1-0     pdfium 스파이크 — Mac에서 로드 → 렌더 → .app 번들/서명 검증  ★ 게이트
    │
-   ├── Track A: Phase 1  Tauri 셸 + pdf-core 기본 처리(병합/정보/TIFF) → 기능 동등성
+Phase 1  Tauri 셸 + pdf-core 기본 처리(병합/정보/TIFF) → 기능 동등성 (마이그레이션 완료)
    │
-   └── Track B: Phase 2  pdf-core/compare (cargo만으로 개발·테스트)
+   ├── Track B: Phase 2  pdf-core/compare (cargo만으로 개발·테스트)
+   │
+   └── Phase 4 일부  CI, 릴리스, 서명, 라이선스 (P4-1~P4-3, P4-5)
                        │
-Phase 3  비교 UI (A + B 합류)
-Phase 4  빌드, 배포, 서명 (CI 매트릭스)
+Phase 3  비교 UI (Phase 2 합류)
+Phase 4  P4-4 자동 업데이트(선택)
 Phase 5  고도화
 ```
 
 - Phase 0에서는 **처리 로직을 TS로 다시 다듬지 않는다**(곧 Rust로 대체되므로 YAGNI). 계약과 경계만 정리한다.
-- Track B는 Tauri 없이 `cargo test`만으로 진행할 수 있다. P1-0만 끝나면 Track A와 독립적이다.
+- **마이그레이션(Phase 0 → P1-0 → Phase 1)은 순서대로 진행하고, 그동안 병렬 작업을 두지 않는다.** 비교 기능이 올라갈 FSD 배치, 계약 타입(tauri-specta), `pdf-core` 문서 API가 이 구간에서 정해지므로, 그 전에 나란히 진행하면 다시 고치게 된다.
+- Track B는 Tauri 없이 `cargo test`만으로 진행할 수 있으므로, Phase 1이 끝나면 Phase 4 일부(P4-1~P4-3, P4-5)와 나란히 진행한다.
 
 규모 표기: S = 반나절~1일, M = 2~3일, L = 4일 이상
 
@@ -222,13 +226,21 @@ Phase 5  고도화
    - macOS: `bundle.macOS.frameworks`에 dylib를 넣는다(`Contents/Frameworks/`).
    - Windows/Linux: `bundle.resources`
 3. 런타임 로드: `Pdfium::bind_to_library(<경로>)`. 경로는 플랫폼별로 결정한다(macOS `…/Contents/Frameworks/libpdfium.dylib`, 그 외 `resource_dir()`). 테스트와 개발에서는 환경변수 `PDFIUM_LIB_PATH`를 우선한다.
-4. 검증: 빈 Tauri 앱에서 PDF 1장 렌더 → `pnpm tauri build` → **ad-hoc 서명된 `.app`에서 실행** → `codesign --verify --deep --strict`가 통과한다.
+4. 검증: 빈 Tauri 앱(`pnpm create tauri-app`으로 생성, pdfium은 `cargo add pdfium-render --features thread_safe`)에서 PDF 1장 렌더 → `pnpm tauri build` → **ad-hoc 서명된 `.app`에서 실행** → `codesign --verify --deep --strict`가 통과한다.
 - `thread_safe` 기능을 켠다. pdfium은 스레드 안전하지 않으므로 모든 호출을 **전용 작업 스레드 하나(큐)** 로 직렬화한다.
 - 정적 링크(`static` 기능)는 pdfium을 직접 빌드해야 하므로 이번 범위에서 제외한다.
 - **완료 기준:** Mac `.app`과 CI의 Windows 빌드에서 pdfium이 로드되고 렌더된다.
 
 ### P1-1 스캐폴드 (S)
-- `pnpm tauri init`으로 `src-tauri/`를 만들고, **Cargo workspace**로 구성한다.
+- 키트로 만든다.
+  ```bash
+  pnpm add -D @tauri-apps/cli          # CLI가 있어야 아래 명령이 동작한다
+  pnpm add @tauri-apps/api
+  pnpm tauri init                      # src-tauri/ 생성 (앱 이름, 번들 ID, dev URL, 빌드 명령을 묻는다)
+  cargo new --lib crates/pdf-core      # Tauri 의존 없는 처리 crate
+  ```
+  그 뒤 루트 `Cargo.toml`에 `[workspace]` 몇 줄만 직접 쓴다. `pdf-core` 의존성은 `cargo add -p pdf-core pdfium-render --features thread_safe`처럼 `cargo add`로 넣는다.
+- 결과는 **Cargo workspace**로 구성한다.
   ```
   Cargo.toml              # [workspace] members = ["src-tauri", "crates/pdf-core"]
   crates/pdf-core/        # Tauri 의존 없음. pdfium 래퍼 + 처리 로직 + 비교 엔진
@@ -270,6 +282,8 @@ Phase 5  고도화
 - **입력 상한(I1):** `pdf-core`의 상수로 둔다. 시작값: 파일 하나 `MAX_INPUT_FILE_BYTES` = 512MB, 병합 입력 `MAX_MERGE_FILES` = 200개, 비교 문서 `MAX_COMPARE_PAGES` = 2,000쪽(넘으면 `Truncated` 안내). 넘으면 `InputTooLarge` 에러로 거부하고 화면에 이유를 보인다. 측정 후 조정한다.
 - 타입은 `tauri-specta`로 TS 바인딩을 생성해 `src/shared/contracts`를 대체한다.
 - 사용할 플러그인: `dialog`, `log`, `store`, `opener`, `window-state`. **`fs` 플러그인은 쓰지 않는다**(커스텀 커맨드에서 경로를 검증해 권한 표면을 최소화).
+  - 플러그인은 하나씩 `pnpm tauri add <이름>`으로 넣는다. 이 명령이 Cargo 의존성, npm 패키지, `lib.rs`의 `.plugin(...)` 등록, 기본 권한을 함께 처리한다. 이 단계에서는 `dialog`, `log`, `opener`를 넣고, `store`와 `window-state`는 P1-5에서 넣는다.
+  - `tauri-specta`는 `cargo add -p <src-tauri 패키지> tauri-specta specta`로 넣는다(버전과 기능 플래그는 tauri-specta README를 따른다).
 
 ### P1-4 Tauri 어댑터와 드롭 (M)
 - `tauri-platform.ts`에서 `DesktopPlatform`을 구현한다.
@@ -285,7 +299,8 @@ Phase 5  고도화
   - `worker-src 'self' blob:`, `img-src 'self' data: blob:`
   - error-snapshot용 Firebase `connect-src`는 유지한다.
 - 앱 origin이 바뀌므로(`tauri://localhost`, `http://tauri.localhost`) Firebase API 키에 HTTP 리퍼러 제한이 있으면 허용 목록을 갱신한다.
-- capabilities는 `main` 창 하나에만 연결하고, 필요한 권한만 둔다.
+- capabilities는 `main` 창 하나에만 연결하고, 필요한 권한만 둔다. 권한은 `pnpm tauri permission add <권한 ID>`로 넣고 `pnpm tauri permission ls`로 확인한다. capability 파일을 새로 만들어야 하면 `pnpm tauri capability new`를 쓴다. `tauri add`가 넣은 기본 권한 중 쓰지 않는 것은 `permission rm`으로 뺀다.
+- 플러그인 추가: `pnpm tauri add store`, `pnpm tauri add window-state`
 - 테마: `matchMedia` 구독 + 수동 설정(`system|light|dark`)을 `plugin-store`로 영속화한다.
 - 메뉴: macOS 기본 메뉴(편집 단축키 포함)를 확인한다. 이후 `파일 > 열기 (⌘O)` 등을 추가한다.
 - 창 크기와 위치는 `plugin-window-state`로 기억한다.
@@ -316,7 +331,7 @@ Phase 5  고도화
 
 ## 6. Phase 2 (Track B): Rust 비교 엔진 (`crates/pdf-core/src/compare/`)
 
-> Tauri와 무관하게 `cargo test`로 개발한다. P1-0(pdfium 로드)만 끝나면 시작할 수 있다.
+> Tauri와 무관하게 `cargo test`로 개발한다. Phase 1(마이그레이션)이 끝난 뒤 시작하고, `pdf-core`의 문서 열기 API(P1-2 `document.rs`)를 그대로 가져다 쓴다.
 
 ### 6.0 엔진 선택 기록
 
@@ -531,7 +546,7 @@ A의 변경 상자와 B의 대응 상자를 거터를 가로지르는 곡선으�
 - 어느 옵션이든 **`Frameworks/libpdfium.dylib`도 앱과 같은 identity로 서명**돼야 한다. `codesign --verify --deep --strict`로 확인한다.
 
 ### P4-4 (선택) 자동 업데이트
-- `plugin-updater` + minisign 키(`TAURI_SIGNING_PRIVATE_KEY`)를 쓴다. tauri-action이 GitHub Releases에 `latest.json`을 생성한다.
+- `pnpm tauri add updater`로 플러그인을 넣고, 서명 키는 `pnpm tauri signer generate -w ~/.tauri/pdfstudio.key`로 만든다(개인 키는 레포에 넣지 않고 GitHub 시크릿 `TAURI_SIGNING_PRIVATE_KEY`로만 둔다). tauri-action이 GitHub Releases에 `latest.json`을 생성한다.
 
 ### P4-5 라이선스와 고지 (S, L1)
 - 루트에 `LICENSE`(MIT) 파일을 둔다.
@@ -597,6 +612,7 @@ pnpm tauri dev                           # P1-1 이후
 | D8 | 라우터 미도입 (모드 스토어 `home/merge/compare`) | TanStack Router | 화면 수가 적다(YAGNI). |
 | D9 | 첫 화면 = 홈(작업 고르기), 이후 툴바 탭으로 전환 | 탭만 두기 | 기능이 둘이 되면서 처음 쓰는 사람이 무엇을 할 수 있는지 바로 보이게 |
 | D10 | 병합 화면은 지금 구조 유지, 모드 탭만 추가 | 병합 화면 재설계 | 익숙한 화면 유지, 변경 범위 최소화 |
+| D11 | 설치·생성은 Tauri CLI 키트와 `pnpm add`/`cargo add`로 (§1.3) | 설정 파일·등록 코드를 직접 작성 | 공식 생성물이 버전에 맞는 형식을 보장하고, 손으로 쓸 때 생기는 누락(권한, 플러그인 등록, 버전 불일치)을 막는다. |
 
 ## 12. 리스크
 

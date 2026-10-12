@@ -28,6 +28,9 @@ pnpm i && pnpm start                                           # 현재 Electron
 - [ ] 앱이 Mac에서 뜬다
 
 ### 0-3. 단계마다 반복하는 흐름
+
+> **키트 우선(계획서 §1.3, D11):** Tauri 설정·플러그인·권한·아이콘·서명 키는 Tauri CLI로, 의존성은 `pnpm add`/`cargo add`로 만든다. 각 Step의 "할 일(키트)"에 적힌 명령을 먼저 실행하고, 생성물은 최소한으로만 고친다.
+
 1. `git switch main && git pull` → `git switch -c <브랜치 이름>`
 2. Claude Code 세션을 열고 아래 **세션 프롬프트**를 붙여 넣는다.
 3. 계획을 확인한 뒤 실행 → 완료 기준을 직접 확인 → 커밋 → PR → 병합
@@ -117,6 +120,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 ### Step 8. ★ pdfium 스파이크 (M) — 게이트
 - 브랜치: `spike/pdfium`
 - 읽을 곳: 계획서 §5 P1-0, §12 리스크 첫 줄
+- 할 일(키트): 빈 앱은 `pnpm create tauri-app`으로 만들고, pdfium은 `cargo add pdfium-render --features thread_safe`로 넣는다. 직접 작성하는 것은 `scripts/fetch-pdfium.mjs`와 렌더 확인 코드뿐이다.
 - **이 단계가 실패하면 Step 9 이후를 진행하지 않는다.** 실패하면 원인을 기록하고 계획서 §6.0의 엔진 선택을 다시 검토한다.
 - 완료 기준: ad-hoc 서명된 `.app`에서 PDF 1장 렌더, `codesign --verify --deep --strict` 통과, CI Windows 빌드에서 pdfium 로드
 - [ ] Step 8
@@ -125,6 +129,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 - 브랜치: `feat/tauri-scaffold`
 - 읽을 곳: 계획서 §5 P1-1, §11 D5
 - 시작 전 결정: **번들 ID `io.github.kwoncheuljin.pdfstudio` 확정**(나중에 바꾸면 데이터 경로가 바뀐다)
+- 할 일(키트): `pnpm add -D @tauri-apps/cli` → `pnpm add @tauri-apps/api` → `pnpm tauri init` → `cargo new --lib crates/pdf-core`. 루트 `Cargo.toml`의 `[workspace]`만 직접 쓴다.
 - 완료 기준: `pnpm tauri dev`로 빈 셸에 기존 renderer가 뜸, 버전이 `package.json` 하나에서 나옴
 - [ ] Step 9
 
@@ -139,6 +144,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 - 브랜치: `feat/tauri-commands`
 - 읽을 곳: 계획서 §5 P1-3
 - 화면 시안: 7 "병합: 진행·취소", 8 "병합: 실패"
+- 할 일(키트): `pnpm tauri add dialog`, `pnpm tauri add log`, `pnpm tauri add opener`. `tauri-specta`는 `cargo add`로 넣는다.
 - 완료 기준: 큰 PDF 병합 중에도 UI가 멈추지 않음, 전체 %와 작업별 %(파일 읽기·페이지 합치기·저장) 표시, **병합 취소 후 임시 파일 없음**, 상한(512MB·200개)을 넘는 입력은 이유와 함께 거부, 앱 임시 폴더 밖 경로는 커맨드가 거부
 - [ ] Step 11
 
@@ -151,6 +157,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 ### Step 13. 보안, 테마, 창 (S)
 - 브랜치: `feat/tauri-security-theme`
 - 읽을 곳: 계획서 §5 P1-5, 토큰 문서 §3(`app/providers/theme-provider.tsx`)
+- 할 일(키트): `pnpm tauri add store`, `pnpm tauri add window-state`. 권한은 `pnpm tauri permission add`/`permission rm`으로 조정하고 `pnpm tauri permission ls`로 확인한다. capability JSON은 손으로 쓰지 않는다.
 - 완료 기준: animatedicons 제거, 테마 `system|light|dark` 선택이 재시작 후에도 유지, 창 크기·위치 기억, 최소 창 크기 1120×720, 에러 스냅샷이 앱 전용 설정으로 가고 경로·파일 이름이 지워져 전송되며 설정에서 끌 수 있음
 - [ ] Step 13
 
@@ -164,6 +171,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 ### Step 15. 아이콘과 로컬 빌드 (S)
 - 브랜치: `chore/tauri-icons-build`
 - 읽을 곳: 계획서 §5 P1-7
+- 할 일(키트): 1024px PNG 원본으로 `pnpm tauri icon` → `pnpm tauri build`
 - 완료 기준: Mac에서 `.dmg` 생성 후 설치·실행
 - [ ] Step 15
 
@@ -216,7 +224,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 | 30 | P4-1 CI 매트릭스 | PR에서 `pnpm validate` + `cargo fmt --check` + `cargo clippy -D warnings` + `cargo test`, Windows는 NSIS 설치 파일 | [ ] |
 | 31 | P4-2 릴리스 흐름 | `auto-version.yml` 제거, 태그 푸시로 Draft Release | [ ] |
 | 32 | P4-3 서명 | ad-hoc 서명 `.app`과 `libpdfium.dylib`가 같은 identity, `codesign --verify --deep --strict` 통과 | [ ] |
-| 33 | P4-4 자동 업데이트(선택) | `latest.json` 생성, 업데이트 동작 | [ ] |
+| 33 | P4-4 자동 업데이트(선택) | `pnpm tauri add updater`, 키는 `pnpm tauri signer generate`로 생성(개인 키는 시크릿에만), `latest.json` 생성, 업데이트 동작 | [ ] |
 | 34 | P4-5 라이선스와 고지 | `LICENSE`, `THIRD_PARTY_NOTICES.md` 번들, 허용 목록 밖 라이선스면 CI 실패, 앱 정보에서 고지 열림 | [ ] |
 
 ---

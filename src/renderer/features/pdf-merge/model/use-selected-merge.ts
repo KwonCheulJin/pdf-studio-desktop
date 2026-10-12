@@ -4,9 +4,10 @@ import {
   createPdfDocument,
   type PdfDocument
 } from "@/renderer/entities/merge-plan";
-import { ipcClient } from "@/renderer/shared/lib/ipc-client";
+import { getPlatform, MERGE_OUTPUT_KIND } from "@/renderer/shared/platform";
 import { useSelectionStore, useSelectedIds } from "./selection-store";
 import { SELECTION_TYPE } from "../config/selection-type";
+import { buildMergeSources } from "../lib/build-merge-request";
 
 interface UseSelectedMergeResult {
   startSelectedMerge: () => Promise<void>;
@@ -18,7 +19,7 @@ interface UseSelectedMergeResult {
 /**
  * 선택된 파일만 병합하는 훅
  * - merge-store 상태를 변경하지 않아 전체 병합 뷰에 영향 없음
- * - ipcRenderer.invoke 반환값을 직접 사용하여 IPC 리스너 충돌 방지
+ * - 진행률을 받지 않고 병합 결과(반환값)만 사용
  */
 export function useSelectedMerge(): UseSelectedMergeResult {
   const [isSelectedMerging, setIsSelectedMerging] = useState(false);
@@ -52,47 +53,26 @@ export function useSelectedMerge(): UseSelectedMergeResult {
 
     if (filteredOrder.length === 0) return;
 
-    // 파일 맵 및 페이지 인덱스 맵 구성
-    const fileMap = new Map(files.map((f) => [f.id, f]));
-    const pageIndexMap = new Map<string, number>();
-    for (const file of files) {
-      for (const page of file.pages) {
-        pageIndexMap.set(page.id, page.sourcePageIndex);
-      }
-    }
+    // 병합 소스 생성 (연속된 같은 파일 페이지 그룹화)
+    const sources = buildMergeSources({ files, mergeOrder: filteredOrder });
 
-    // FilePayload 배열 생성 (연속된 같은 파일 페이지 그룹화)
-    const segments = filteredOrder.reduce<{ path: string; pages: number[] }[]>(
-      (accumulator, item) => {
-        const file = fileMap.get(item.fileId);
-        if (!file) return accumulator;
-        const pageIndex = pageIndexMap.get(item.pageId);
-        if (pageIndex === undefined) return accumulator;
-
-        const last = accumulator[accumulator.length - 1];
-        if (last && last.path === file.path) {
-          return [
-            ...accumulator.slice(0, -1),
-            { path: last.path, pages: [...last.pages, pageIndex] }
-          ];
-        }
-        return [...accumulator, { path: file.path, pages: [pageIndex] }];
-      },
-      []
-    );
-
-    if (segments.length === 0) return;
+    if (sources.length === 0) return;
 
     setIsSelectedMerging(true);
     setSelectedMergedDocument(null);
 
     try {
-      // invoke 반환값으로 결과 수신 (이벤트 리스너 불필요)
-      const result = await ipcClient.merge.start({ files: segments });
+      const result = await getPlatform().mergePdfs({
+        request: {
+          jobId: crypto.randomUUID(),
+          sources,
+          output: { kind: MERGE_OUTPUT_KIND.TEMP }
+        }
+      });
 
       const mergedDocument = createPdfDocument(
         result.outputPath,
-        result.totalPages
+        result.pageCount
       );
       setSelectedMergedDocument(mergedDocument);
     } finally {

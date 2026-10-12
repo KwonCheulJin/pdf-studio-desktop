@@ -1,5 +1,5 @@
 import * as pdfjsLib from "pdfjs-dist";
-import { ipcClient } from "./ipc-client";
+import { getPlatform } from "@/renderer/shared/platform";
 
 // PDF.js Worker 설정
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -34,8 +34,7 @@ export async function generateThumbnail(
     scale = THUMBNAIL_DEFAULTS.SCALE
   } = options;
 
-  // IPC를 통해 Main 프로세스에서 파일 데이터 가져오기
-  const { data } = await ipcClient.file.readPdf(filePath);
+  const data = await getPlatform().readPdf(filePath);
 
   const loadingTask = pdfjsLib.getDocument({ data });
   const pdf = await loadingTask.promise;
@@ -102,8 +101,7 @@ export async function generateAllPageThumbnails(
     onPageGenerated
   } = options;
 
-  // IPC를 통해 Main 프로세스에서 파일 데이터 가져오기
-  const { data } = await ipcClient.file.readPdf(filePath);
+  const data = await getPlatform().readPdf(filePath);
 
   const loadingTask = pdfjsLib.getDocument({ data });
   const pdf = await loadingTask.promise;

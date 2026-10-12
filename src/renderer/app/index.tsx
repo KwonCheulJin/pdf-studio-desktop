@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { Toaster } from "sonner";
 import { ErrorSnapshotBoundary } from "@kwoncheulJin/error-snapshot";
 import { AppShell } from "./layout/app-shell";
+import { providePlatform } from "./providers";
 import { getErrorSnapshot } from "../shared/lib/error-snapshot";
 import "./styles/index.css";
 
@@ -16,17 +17,13 @@ const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
 applyTheme(prefersDark);
 
 // 시스템 테마 변경 감지
-if (window.api?.onThemeChanged) {
-  // Electron IPC 사용 (preload 스크립트가 로드된 경우)
-  window.api.onThemeChanged(applyTheme);
-} else {
-  // Fallback: CSS 미디어 쿼리 사용
-  window
-    .matchMedia("(prefers-color-scheme: dark)")
-    .addEventListener("change", (e) => {
-      applyTheme(e.matches);
-    });
-}
+window
+  .matchMedia("(prefers-color-scheme: dark)")
+  .addEventListener("change", (e) => {
+    applyTheme(e.matches);
+  });
+
+providePlatform();
 
 const container = document.getElementById("root");
 

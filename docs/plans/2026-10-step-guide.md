@@ -86,7 +86,7 @@ pnpm i && pnpm start                                           # 현재 Electron
   3. `ipc-client.ts`·`window.api` 호출을 `DesktopPlatform`으로 바꾼다
 - 커밋을 나눈다: 어댑터(+계약 연결) / 호출부 교체
 - 완료 기준: `window.api` 참조 0, `@tauri-apps/api` import는 `shared/platform/tauri-platform.ts`에만, `shared`가 `@/main`을 import하지 않음, typecheck와 기존 특성 테스트 통과
-- [ ] Step 2-b
+- [x] Step 2-b
 
 ### Step 3. 비파괴 회전 (S)
 - 실행 순서: 8번째 (앞: Step 14, 뒤: Step 4)
@@ -188,7 +188,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 - 실행 순서: 없음 (Step 2에 흡수)
 - 이 Step은 Step 2-b에 흡수됨. 어댑터(`tauri-platform.ts`)는 Step 2-b에서 한다(어댑터 전용 단위 테스트는 두지 않는다). 외부 파일 드롭(`onDragDropEvent`, `devicePixelRatio` 보정, `elementFromPoint` 판정)은 Step 5에서 한다.
 - 체크박스는 Step 2-b와 함께 체크한다.
-- [ ] Step 12
+- [x] Step 12
 
 ### Step 13. 보안, 테마, 창 (S)
 - 실행 순서: 12번째 (앞: Step 6, 뒤: Step 7)

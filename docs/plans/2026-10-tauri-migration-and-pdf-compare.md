@@ -171,23 +171,23 @@ Phase 5  고도화
 - `src/renderer/shared/platform/`: **경로 기반의 굵은 단위(coarse-grained) API**로 정의한다. 처리 주체(Rust)가 바뀌어도 같은 시그니처를 유지하기 위해서다.
   ```ts
   export interface DesktopPlatform {
-    pickFiles(options: PickFilesOptions): Promise<string[]>
-    pickSavePath(options: PickSaveOptions): Promise<string | null>
-    readPdfForDisplay(path: string): Promise<Uint8Array>           // pdf.js 전용
-    getPdfInfo(path: string): Promise<PdfInfo>
-    convertTiff(path: string): Promise<string>                      // 임시 PDF 경로
-    mergePdfs(request: MergeRequest, onProgress: ProgressFn): Promise<MergeResult>
-    copyFile(request: CopyFileRequest): Promise<void>
-    cleanupTemp(): Promise<void>
-    onFileDrop(handler: FileDropHandler): Promise<Unsubscribe>      // paths + client 좌표
-    log(level: LogLevel, message: string): void
-    getAppVersion(): Promise<string>
-    // Phase 3: comparePdfs, cancelJob, exportCompareReport
+    pickFiles(): Promise<string[]>
+    pickSavePath(options: { fileName: string }): Promise<string | null> // 처음 보일 폴더는 플랫폼이 정한다
+    openFiles(paths: string[]): Promise<OpenedFile[]>                  // 확장자 판별·TIFF 변환·정보 조회, 파일별 결과(D14)
+    readPdf(path: string): Promise<Uint8Array>                         // pdf.js 표시 전용
+    mergePdfs(params: { request: MergeRequest; onProgress?: (progress: MergeProgress) => void }): Promise<MergeResult>
+    cancelJob(jobId: string): Promise<void>
+    copyFile(params: { source: string; destination: string }): Promise<void>
+    discardTemp(path: string): Promise<void>
+    log(params: { level: LogLevel; message: string }): void
+    // P0-5: onFileDrop(handler) — paths + client 좌표
+    // Phase 3: comparePdfs, exportCompareReport
   }
   ```
+  - 계약 타입(`OpenedFile`, `MergeRequest`, `MergeProgress`, `MergeResult`)은 바인딩에서 `import type`으로 가져온다. 실패는 두 구현 모두 `PlatformError`(`{ code, message }`)로 던진다.
   - 구현체는 `tauri-platform.ts`와 `mock-platform.ts`(테스트, Playwright) 둘이다. Electron용 임시 어댑터는 만들지 않는다.
   - 어댑터에는 단위 테스트를 따로 두지 않는다. 계약 타입(`tauri-specta` 생성물)과 typecheck로 형태를 맞추고, 동작은 `mock-platform` 기반 E2E로 확인한다.
-  - 앱 부팅 시 하나를 주입한다(`app/providers`).
+  - 앱 부팅 시 하나를 주입한다(`app/providers`). Tauri 웹뷰(`isTauri()`)면 `tauri-platform`, 아니면(브라우저 E2E) `mock-platform`이다. 화면과 훅은 `getPlatform()`으로 가져온다.
 - FSD를 정리한다. `shared/hooks`의 업무 훅을 `features/*/model`로, `shared/model/merge-store`는 `entities/merge-plan` + `features/pdf-merge/model`로 나눈다.
 - 진행은 둘로 나눈다. FSD 재배치·스타일 이동(Step 2-a)은 Tauri와 무관하므로 Step 10과 병렬로 먼저 하고, 어댑터·계약 연결(Step 2-b)은 P1-3(Step 11) 뒤에 한다.
 - **완료 기준:** `window.api` 참조 0, `@tauri-apps/api` import는 `shared/platform/tauri-platform.ts`에만, `shared`가 상위 레이어나 `@/main`을 import하지 않음, 기존 특성 테스트 통과, typecheck 통과.

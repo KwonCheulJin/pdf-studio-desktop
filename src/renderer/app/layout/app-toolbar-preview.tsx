@@ -16,7 +16,7 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/renderer/shared/ui";
-import { ipcClient } from "@/renderer/shared/lib/ipc-client";
+import { getPlatform, LOG_LEVEL } from "@/renderer/shared/platform";
 
 export function AppToolbarPreview() {
   const mergedDocument = useMergedDocument();
@@ -28,10 +28,14 @@ export function AppToolbarPreview() {
 
   const deleteMergedFile = useCallback(async () => {
     if (!mergedFilePath) return;
+    const platform = getPlatform();
     try {
-      await ipcClient.file.delete({ path: mergedFilePath });
+      await platform.discardTemp(mergedFilePath);
     } catch (error) {
-      ipcClient.log.error(`임시 병합 파일 삭제 실패: ${String(error)}`);
+      platform.log({
+        level: LOG_LEVEL.ERROR,
+        message: `임시 병합 파일 삭제 실패: ${String(error)}`
+      });
     }
   }, [mergedFilePath]);
 

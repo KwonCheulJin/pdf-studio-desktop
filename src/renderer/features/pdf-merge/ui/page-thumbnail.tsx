@@ -19,7 +19,6 @@ interface PageThumbnailProps {
   fileId: string;
   page: PdfPage;
   pageNumber: number;
-  filePath: string;
   // drag 관련 (부모에서 전달)
   isDragging?: boolean;
   isDragOver?: boolean;
@@ -35,7 +34,6 @@ export function PageThumbnail({
   fileId,
   page,
   pageNumber,
-  filePath,
   isDragging = false,
   isDragOver = false,
   dragOverPosition = null,
@@ -55,8 +53,7 @@ export function PageThumbnail({
 
   const { handleRotateCw, handleRotateCcw } = usePageRotateHandlers({
     fileId,
-    page,
-    filePath
+    page
   });
 
   // 페이지 선택 모드에서만 선택 상태 표시

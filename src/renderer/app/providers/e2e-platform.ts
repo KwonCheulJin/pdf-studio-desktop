@@ -282,11 +282,34 @@ function recordSaveDialogs({
   };
 }
 
+/** 설정을 페이지 저장소에 두는 키 앞부분. 새로고침해도 남아 재시작처럼 확인할 수 있다. */
+const SETTING_STORAGE_PREFIX = "e2e-setting:";
+
+/**
+ * 설정 읽기·쓰기를 `localStorage`에 둔다(Tauri `plugin-store` 파일 대신).
+ * Playwright는 테스트마다 새 브라우저 컨텍스트라 테스트끼리 섞이지 않는다.
+ */
+function persistSettings(platform: DesktopPlatform): DesktopPlatform {
+  return {
+    ...platform,
+    getSetting: async (key) => {
+      const stored = localStorage.getItem(`${SETTING_STORAGE_PREFIX}${key}`);
+      return stored === null ? undefined : JSON.parse(stored);
+    },
+    setSetting: async ({ key, value }) => {
+      localStorage.setItem(
+        `${SETTING_STORAGE_PREFIX}${key}`,
+        JSON.stringify(value)
+      );
+    }
+  };
+}
+
 /** 시드가 없으면(개발 서버를 브라우저로 그냥 열었을 때) 빈 가짜 플랫폼 */
 export function createE2ePlatform(): DesktopPlatform {
   const seed = window.__E2E_MOCK_SEED__;
   if (!seed) {
-    return createMockPlatform();
+    return persistSettings(createMockPlatform());
   }
   const writes: E2eWriteCall[] = [];
   const reads: string[] = [];
@@ -305,11 +328,13 @@ export function createE2ePlatform(): DesktopPlatform {
     failures: seed.failures ?? {},
     mergeScripts: [...(seed.mergeScripts ?? [])]
   });
-  return recordSaveDialogs({
-    platform: recordReads({
-      platform: recordWrites(seededPlatform, writes),
-      reads
-    }),
-    saveDialogs
-  });
+  return persistSettings(
+    recordSaveDialogs({
+      platform: recordReads({
+        platform: recordWrites(seededPlatform, writes),
+        reads
+      }),
+      saveDialogs
+    })
+  );
 }

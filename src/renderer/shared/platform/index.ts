@@ -13,6 +13,8 @@ export {
   type MergePdfsParams,
   type MergeProgressHandler,
   type PickSavePathOptions,
+  type SetSettingParams,
+  type SettingValue,
   type Unsubscribe
 } from "./desktop-platform";
 export { getPlatform, setPlatform } from "./current-platform";

@@ -1,69 +1,48 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { Toaster } from "sonner";
-import { ErrorSnapshotBoundary } from "@kwoncheulJin/error-snapshot";
-import { AppShell } from "./layout/app-shell";
-import { providePlatform } from "./providers";
-import { getErrorSnapshot } from "../shared/lib/error-snapshot";
+import { loadErrorReportingSetting } from "@/renderer/features/error-reporting";
+import { loadThemeMode } from "@/renderer/features/theme-toggle";
+import { THEME_MODE } from "@/renderer/shared/config/theme";
+import { AppShell, AppToaster } from "./layout";
+import {
+  AppErrorBoundary,
+  applyThemeMode,
+  provideErrorReporting,
+  providePlatform,
+  ThemeProvider
+} from "./providers";
 import "./styles/index.css";
 
-// 테마 적용 함수
-function applyTheme(isDark: boolean): void {
-  document.documentElement.classList.toggle("dark", isDark);
+/**
+ * 저장된 설정을 읽은 뒤 첫 화면을 그린다. 테마는 읽기 전에 OS 설정으로 먼저 맞춰
+ * 설정을 기다리는 동안에도 배경색이 튀지 않게 한다.
+ */
+async function bootstrap(): Promise<void> {
+  applyThemeMode(THEME_MODE.SYSTEM);
+  providePlatform();
+  provideErrorReporting();
+
+  const container = document.getElementById("root");
+  if (!container) {
+    throw new Error("Root element not found");
+  }
+
+  const [themeMode] = await Promise.all([
+    loadThemeMode(),
+    loadErrorReportingSetting()
+  ]);
+  applyThemeMode(themeMode);
+
+  createRoot(container).render(
+    <StrictMode>
+      <ThemeProvider>
+        <AppErrorBoundary>
+          <AppShell />
+          <AppToaster />
+        </AppErrorBoundary>
+      </ThemeProvider>
+    </StrictMode>
+  );
 }
 
-// 초기 테마 설정 (CSS 미디어 쿼리 기반)
-const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-applyTheme(prefersDark);
-
-// 시스템 테마 변경 감지
-window
-  .matchMedia("(prefers-color-scheme: dark)")
-  .addEventListener("change", (e) => {
-    applyTheme(e.matches);
-  });
-
-providePlatform();
-
-const container = document.getElementById("root");
-
-if (!container) {
-  throw new Error("Root element not found");
-}
-
-// Error Snapshot 초기화 (전역 에러 핸들러 포함)
-const errorSnapshot = getErrorSnapshot();
-
-createRoot(container).render(
-  <StrictMode>
-    <ErrorSnapshotBoundary
-      instance={errorSnapshot}
-      fallback={(code, reset) => (
-        <div className="bg-background text-foreground flex h-screen flex-col items-center justify-center gap-4">
-          <div className="rounded-lg border border-red-200 bg-red-50 p-8 text-center dark:border-red-900 dark:bg-red-950">
-            <p className="text-lg font-medium text-red-700 dark:text-red-400">
-              앗, 문제가 생겼어요
-            </p>
-            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-              아래 에러 코드를 전달해주세요
-            </p>
-            <code className="mt-3 inline-block rounded bg-red-100 px-4 py-2 text-base font-bold text-red-600 dark:bg-red-900 dark:text-red-300">
-              {code}
-            </code>
-            <div className="mt-6">
-              <button
-                onClick={reset}
-                className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-600"
-              >
-                다시 시도
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    >
-      <AppShell />
-      <Toaster theme="system" position="bottom-right" richColors />
-    </ErrorSnapshotBoundary>
-  </StrictMode>
-);
+void bootstrap();

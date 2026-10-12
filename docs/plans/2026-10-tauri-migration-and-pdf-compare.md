@@ -319,21 +319,33 @@ Phase 5  고도화
 - 어댑터 동작은 `mock-platform` 기반 E2E로 확인한다(어댑터 전용 단위 테스트는 두지 않는다).
 
 ### P1-5 보안, 테마, 창 (S, B7/S1)
-- CSP를 `tauri.conf.json > app.security.csp`로 옮긴다.
-  - animatedicons를 제거한다.
-  - `worker-src 'self' blob:`, `img-src 'self' data: blob:`
-  - error-snapshot용 Firebase `connect-src`는 유지한다.
+- CSP를 `tauri.conf.json > app.security.csp`로 옮긴다(`index.html`의 meta는 지운다).
+  - animatedicons를 제거한다(스크립트만 로드되고 쓰는 곳은 없었다).
+  - 실제 값: `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self' ipc: http://ipc.localhost https://firestore.googleapis.com; object-src 'none'; base-uri 'self'`
+  - Tauri는 이 CSP를 `tauri://` 자산 중 HTML 응답에만 붙인다. 데스크톱 `tauri dev`는 Vite 개발 서버를 직접 띄우므로 적용되지 않는다(브라우저 E2E도 같다). 빌드 HTML에 인라인 `<style>`이 없어 Tauri가 style nonce를 넣지 않으므로 `'unsafe-inline'`(Radix·sonner가 런타임에 넣는 스타일)이 그대로 효력을 갖는다.
+  - error-snapshot용 `connect-src`는 Firestore(`https://firestore.googleapis.com`) 하나다. 화면 캡처를 보내지 않으므로 Storage 주소는 넣지 않는다.
 - 앱 origin이 바뀌므로(`tauri://localhost`, `http://tauri.localhost`) Firebase API 키에 HTTP 리퍼러 제한이 있으면 허용 목록을 갱신한다.
 - capabilities는 `main` 창 하나에만 연결하고, 필요한 권한만 둔다. 권한은 `pnpm tauri permission add <권한 ID>`로 넣고 `pnpm tauri permission ls`로 확인한다. capability 파일을 새로 만들어야 하면 `pnpm tauri capability new`를 쓴다. `tauri add`가 넣은 기본 권한 중 쓰지 않는 것은 `permission rm`으로 뺀다.
+  - 실제: `store:default` 대신 `store:allow-load`·`allow-get`·`allow-set`·`allow-save`(`LazyStore`가 부르는 것만). `window-state`는 Rust에서만 쓰므로 권한(`window-state:default`)과 JS 패키지를 뺐다.
 - 플러그인 추가: `pnpm tauri add store`, `pnpm tauri add window-state`
 - 테마: `matchMedia` 구독 + 수동 설정(`system|light|dark`)을 `plugin-store`로 영속화한다.
+  - 프론트는 `DesktopPlatform.getSetting/setSetting`만 쓴다(`plugin-store` import는 `tauri-platform.ts`에서만, 파일은 앱 데이터 폴더의 `settings.json`). mock은 메모리, 개발 서버(E2E)는 `localStorage`.
+  - 설정 키: `theme`(`system|light|dark`), `errorReporting.enabled`(boolean), `errorReporting.noticeShown`(boolean).
+  - 상태는 `features/theme-toggle`의 스토어, `.dark` 토글과 `system`일 때의 `matchMedia` 구독·해제는 `app/providers/theme-provider.tsx`. 부팅 때 저장된 테마를 읽어 적용한 뒤 첫 화면을 그린다(읽는 동안은 OS 설정). 토스트도 같은 테마를 따른다.
 - 메뉴: macOS 기본 메뉴(편집 단축키 포함)를 확인한다. 이후 `파일 > 열기 (⌘O)` 등을 추가한다.
-- 창 크기와 위치는 `plugin-window-state`로 기억한다.
-- **최소 창 크기(W1):** `tauri.conf.json`의 창에 `minWidth: 1120`, `minHeight: 720`. 비교 화면(목록 340px + 페이지 두 장 + 거터 120px)이 깨지지 않는 크기다.
+  - macOS는 Tauri 기본 메뉴(`Menu::default`)를 그대로 쓴다: 앱(정보·서비스·가리기·종료), 파일(창 닫기), 편집(실행 취소·다시 실행·잘라내기·복사·붙여넣기·전체 선택), 보기(전체 화면), 창, 도움말. 편집 단축키는 이 메뉴로 동작한다. `파일 > 열기`는 아직 넣지 않았다.
+- 창 크기와 위치는 `plugin-window-state`로 기억한다. 표시 여부(`VISIBLE`)는 기억하지 않는다 — 창 설정(`visible`)을 따른다.
+- **최소 창 크기(W1):** `tauri.conf.json`의 창에 `minWidth: 1120`, `minHeight: 720`. 비교 화면(목록 340px + 페이지 두 장 + 거터 120px)이 깨지지 않는 크기다. 처음 크기는 1280×800(최소보다 작게 열리지 않게).
 - **에러 스냅샷 점검(S2):**
   - 라이브러리 기본 Firebase 프로젝트가 아니라 **이 앱 전용 설정**을 넘긴다.
   - 보내는 필드를 확인하고, 파일 경로·파일 이름은 보내기 전에 지운다(예: 홈 디렉터리 → `~`, 파일 이름 → 확장자만).
   - 처음 실행할 때 오류 보고를 안내하고, 설정에서 끌 수 있게 한다(`plugin-store`에 저장).
+  - 실제 결정
+    - 앱 전용 설정은 빌드 환경 변수로만 받는다: `VITE_ERROR_SNAPSHOT_FIREBASE_API_KEY`, `_PROJECT_ID`, `_STORAGE_BUCKET`(필수), `_AUTH_DOMAIN`, `_MESSAGING_SENDER_ID`, `_APP_ID`(선택). 이름은 `.env.example`, 값은 `.env.local`(커밋하지 않음). **필수 값이 없으면 오류 보고 기능 자체가 꺼진다**(버튼·안내도 없음). 공개 레포라 기본값은 꺼짐이다.
+    - 라이브러리(와 Firebase)는 처음 보낼 때 동적 import한다. 라이브러리의 React 경계·훅·전역 핸들러는 쓰지 않고 앱의 `reportError`(`shared/lib/error-report`) 한 곳으로 보낸다.
+    - 보내는 필드: 메시지, 스택, 추가 필드(meta), 오류 코드, 시각, User-Agent, 앱 URL(`tauri://localhost/`). 화면 캡처는 파일 이름이 보이므로 보내지 않는다(`captureTarget`이 실패해 라이브러리가 캡처 없이 보낸다).
+    - 마스킹(`maskSensitiveText`, 순수 함수): 확장자가 있는 경로 → `*.확장자`, 확장자가 없는 경로 → 홈 아래면 `~/…` 아니면 `…`, 경로 없는 문서 이름(`.pdf`·`.tif`·`.tiff`) → `*.확장자`. POSIX·`~`·Windows 드라이브·UNC·`file://`를 찾고 `scheme://host/…` URL은 그대로 둔다. 메시지·스택·meta의 모든 문자열에 적용한다. 공백이 든 경로 없는 파일 이름(`계약 최종.pdf`)은 마지막 단어만 지워진다.
+    - 사용자 설정: 기능이 있는 빌드에서 기본은 켜짐. 첫 실행 때 안내 토스트(끄기 버튼 포함)를 한 번 띄우고, 아래 도구 막대의 오류 보고 버튼으로 켜고 끈다. 저장된 설정을 읽기 전에는 보내지 않는다.
 
 ### P1-6 Electron 제거와 문서 갱신 (S)
 - 삭제: `forge.config.mts`, `src/main`, `src/preload`, electron 관련 deps, **`pdf-lib`, `sharp`, `fs-extra`**, `icon.ico`. 루트 `icon.icns`는 P1-7의 아이콘 원본이라 그때 추출한 뒤 지운다(→ `src-tauri/icons`).

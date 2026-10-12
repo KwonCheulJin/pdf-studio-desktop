@@ -196,7 +196,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 - 읽을 곳: 계획서 §5 P1-5, 토큰 문서 §3(`app/providers/theme-provider.tsx`)
 - 할 일(키트): `pnpm tauri add store`, `pnpm tauri add window-state`. 권한은 `pnpm tauri permission add`/`permission rm`으로 조정하고 `pnpm tauri permission ls`로 확인한다. capability JSON은 손으로 쓰지 않는다.
 - 완료 기준: animatedicons 제거, 테마 `system|light|dark` 선택이 재시작 후에도 유지, 창 크기·위치 기억, 최소 창 크기 1120×720, 에러 스냅샷이 앱 전용 설정으로 가고 경로·파일 이름이 지워져 전송되며 설정에서 끌 수 있음
-- [ ] Step 13
+- [x] Step 13
 
 ### Step 14. Electron 제거와 문서 갱신 (S)
 - 실행 순서: 7번째 (앞: Step 2-b, 뒤: Step 3)

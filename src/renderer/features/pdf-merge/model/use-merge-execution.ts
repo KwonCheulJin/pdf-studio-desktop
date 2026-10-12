@@ -1,6 +1,5 @@
 import { useCallback } from "react";
 import { toast } from "sonner";
-import { useErrorSnapshot } from "@kwoncheulJin/error-snapshot";
 import type { MergeSource } from "@/renderer/shared/api/bindings";
 import {
   MERGE_STATUS,
@@ -15,7 +14,7 @@ import {
   MERGE_OUTPUT_KIND,
   toPlatformError
 } from "@/renderer/shared/platform";
-import { getErrorSnapshot } from "@/renderer/shared/lib/error-snapshot";
+import { reportError } from "@/renderer/shared/lib/error-report";
 import { buildMergeSources } from "../lib/build-merge-request";
 import { discardMergedFile } from "../lib/discard-merged-file";
 import { MERGE_ERROR_CODE } from "../config/merge-error-code";
@@ -30,7 +29,6 @@ interface UseMergeExecutionResult {
 
 /** 전체 병합 실행. 진행률·실패는 merge-run-store, 화면 상태는 merge-store에 둔다. */
 export function useMergeExecution(): UseMergeExecutionResult {
-  const { captureError } = useErrorSnapshot(getErrorSnapshot());
   const files = useMergeStore((state) => state.files);
   const mergeOrder = useMergeStore((state) => state.mergeOrder);
   const setStatus = useMergeStore((state) => state.setStatus);
@@ -100,14 +98,17 @@ export function useMergeExecution(): UseMergeExecutionResult {
           sourcePath: platformError.path
         });
         setStatus(MERGE_STATUS.ERROR);
-        captureError(platformError, {
-          source: "merge",
-          code: platformError.code,
-          sourceCount: sources.length
+        void reportError({
+          error: platformError,
+          meta: {
+            source: "merge",
+            code: platformError.code,
+            sourceCount: sources.length
+          }
         });
       }
     },
-    [captureError, setMergedDocument, setStatus, setView]
+    [setMergedDocument, setStatus, setView]
   );
 
   const startMerge = useCallback(async () => {

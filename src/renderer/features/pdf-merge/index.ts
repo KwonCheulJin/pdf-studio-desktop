@@ -11,5 +11,7 @@ export { useMergeExecution } from "./model/use-merge-execution";
 export { useDownloadMergedFile } from "./model/use-download-merged-file";
 export { usePageRotation } from "./model/use-page-rotation";
 export { useSelectionActions } from "./model/use-selection-actions";
+export { useSelectionShortcuts } from "./model/use-selection-shortcuts";
+export { useDeselectDeleted } from "./model/use-deselect-deleted";
 export { useSelectedMerge } from "./model/use-selected-merge";
 export { SELECTION_TYPE, type SelectionType } from "./config/selection-type";

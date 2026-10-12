@@ -41,20 +41,13 @@ export function AppToolbar() {
       {/* 좌측: Select All */}
       <div className="flex w-40 items-center gap-2">
         <Tooltip content="전체 선택">
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={handleSelectAll}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                handleSelectAll();
-              }
-            }}
-            className="hover:bg-accent inline-flex cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 text-sm"
-          >
-            <Checkbox checked={isAllSelected} />
-          </div>
+          <label className="hover:bg-accent inline-flex cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 text-sm">
+            <Checkbox
+              checked={isAllSelected}
+              onCheckedChange={handleSelectAll}
+              aria-label="전체 선택"
+            />
+          </label>
         </Tooltip>
         <Tooltip content="전체 삭제">
           <Button

@@ -5,7 +5,10 @@ import { SELECTION_TYPE } from "../config/selection-type";
 
 interface UseSelectAllResult {
   isAllSelected: boolean;
+  /** 전체 선택 체크박스: 모두 선택돼 있으면 해제, 아니면 전체 선택 */
   handleSelectAll: () => void;
+  /** 전체 선택 단축키: 늘 전체 선택 */
+  selectAllItems: () => void;
 }
 
 export function useSelectAll(): UseSelectAllResult {
@@ -27,17 +30,22 @@ export function useSelectAll(): UseSelectAllResult {
     return allIds.every((id) => selectedIds.has(id));
   }, [allIds, selectedIds]);
 
+  const selectAllItems = useCallback(() => {
+    setSelectionType(SELECTION_TYPE.FILE);
+    selectAll(allIds);
+  }, [allIds, selectAll, setSelectionType]);
+
   const handleSelectAll = useCallback(() => {
     if (isAllSelected) {
       clearSelection();
     } else {
-      setSelectionType(SELECTION_TYPE.FILE);
-      selectAll(allIds);
+      selectAllItems();
     }
-  }, [isAllSelected, allIds, selectAll, clearSelection, setSelectionType]);
+  }, [isAllSelected, clearSelection, selectAllItems]);
 
   return {
     isAllSelected,
-    handleSelectAll
+    handleSelectAll,
+    selectAllItems
   };
 }

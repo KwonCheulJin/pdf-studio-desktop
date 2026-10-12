@@ -166,7 +166,9 @@ export function ExpandedPageCard({
           <div
             className={cn(
               "absolute top-2 left-2 z-10 flex cursor-default items-center justify-center rounded-[4px] bg-black/60 p-2 transition-opacity",
-              isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+              isSelected
+                ? "opacity-100"
+                : "opacity-0 group-focus-within:opacity-100 group-hover:opacity-100"
             )}
             onClick={(e) => e.stopPropagation()}
           >
@@ -174,13 +176,14 @@ export function ExpandedPageCard({
               checked={isSelected}
               onCheckedChange={handleCheckboxChange}
               onClick={(e) => e.stopPropagation()}
+              aria-label={`${fileName} ${pageNumber}쪽 선택`}
               className="size-5"
             />
           </div>
 
           {/* 퀵 액션 버튼 (우상단) - Collapse, 미리보기, 회전, 삭제. 삭제된 페이지는 접기만 */}
           {(showCollapseButton || !page.isDeleted) && (
-            <div className="pointer-events-none absolute top-2 right-2 z-10 flex cursor-default flex-col gap-1 rounded-md bg-black/60 p-1 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
+            <div className="pointer-events-none absolute top-2 right-2 z-10 flex cursor-default flex-col gap-1 rounded-md bg-black/60 p-1 opacity-0 transition-opacity group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100">
               {showCollapseButton && (
                 <Tooltip content="접기">
                   <Button

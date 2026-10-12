@@ -29,6 +29,7 @@ import { GRID_CONFIG } from "@/renderer/shared/constants/grid-layout";
 import { GridItemWrapper, DropZoneIndicator } from "@/renderer/shared/ui";
 import { useFileDropZone } from "../model/use-file-drop-zone";
 import { useCardSize } from "../model/zoom-store";
+import { useCardSelection } from "../model/use-card-selection";
 import { flattenFileGrid, type FlatCard } from "../lib/flatten-file-grid";
 import {
   mergeUploadingFiles,
@@ -52,12 +53,15 @@ interface FileGridProps {
   files: PdfDocument[];
   onPreviewFile: (document: PdfDocument, groupPageIds: string[]) => void;
   onPreviewPage: (fileId: string, pageIndex: number) => void;
+  /** 카드를 집었는지(포인터·키보드). 집는 동안 선택 단축키를 끈다. */
+  onReorderingChange: (isReordering: boolean) => void;
 }
 
 export function FileGrid({
   files,
   onPreviewFile,
-  onPreviewPage
+  onPreviewPage,
+  onReorderingChange
 }: FileGridProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -99,6 +103,7 @@ export function FileGrid({
   );
 
   const sortIds = useMemo(() => flatCards.map(getCardSortId), [flatCards]);
+  const handleCardClick = useCardSelection(flatCards);
 
   const accessibility = useMemo(
     () => ({
@@ -122,8 +127,17 @@ export function FileGrid({
     })
   );
 
+  const handleDragStart = useCallback(() => {
+    onReorderingChange(true);
+  }, [onReorderingChange]);
+
+  const handleDragCancel = useCallback(() => {
+    onReorderingChange(false);
+  }, [onReorderingChange]);
+
   const handleDragEnd = useCallback(
     ({ active, over }: DragEndEvent) => {
+      onReorderingChange(false);
       if (!over) return;
       const move = resolveCardMove({
         flatCards,
@@ -143,7 +157,13 @@ export function FileGrid({
         });
       }
     },
-    [flatCards, sortIds, insertFileAtPosition, movePageInMergeOrder]
+    [
+      flatCards,
+      sortIds,
+      insertFileAtPosition,
+      movePageInMergeOrder,
+      onReorderingChange
+    ]
   );
 
   // 카드만 놓은 기본 레이아웃 (드롭 자리 계산용)
@@ -233,7 +253,9 @@ export function FileGrid({
       sensors={sensors}
       collisionDetection={closestCenter}
       accessibility={accessibility}
+      onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
+      onDragCancel={handleDragCancel}
     >
       <SortableContext items={sortIds} strategy={rectSortingStrategy}>
         {/* 절대 좌표 기반 그리드 컨테이너 */}
@@ -283,6 +305,7 @@ export function FileGrid({
                 position={position}
                 cardWidth={cardSize}
                 cardHeight={cardHeight}
+                onClick={(event) => handleCardClick({ card, event })}
               >
                 {card.type === FLAT_CARD_TYPE.FILE ? (
                   <DocumentCard

@@ -61,6 +61,10 @@ declare global {
     __E2E_PDF_CACHE_STATS__?: () => PdfCacheStats;
     /** 창 밖 파일 드래그·드롭을 흉내 낸다. 좌표는 물리 픽셀(CSS 픽셀 × `devicePixelRatio`) */
     __E2E_FILE_DROP__?: (event: NativeFileDropEvent) => void;
+    /** 테스트가 넣으면 병합 요청을 이 Promise가 풀릴 때까지 붙잡는다(진행 오버레이 확인용) */
+    __E2E_HOLD_MERGE__?: Promise<void>;
+    /** `__E2E_HOLD_MERGE__`를 푸는 함수. 테스트가 함께 넣는다. */
+    __E2E_RELEASE_MERGE__?: () => void;
   }
 }
 
@@ -79,11 +83,12 @@ function recordWrites(
 ): DesktopPlatform {
   return {
     ...platform,
-    mergePdfs: (params) => {
+    mergePdfs: async (params) => {
       writes.push({
         method: E2E_WRITE_METHOD.MERGE_PDFS,
         request: params.request
       });
+      await window.__E2E_HOLD_MERGE__;
       return platform.mergePdfs(params);
     },
     copyFile: (params) => {

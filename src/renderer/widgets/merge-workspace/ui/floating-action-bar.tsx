@@ -91,6 +91,7 @@ export function FloatingActionBar({
                 size="icon"
                 className="h-8 w-8"
                 onClick={onRotateCcw}
+                aria-label="선택 항목 왼쪽으로 회전"
               >
                 <RotateCcw size={16} />
               </Button>
@@ -101,12 +102,18 @@ export function FloatingActionBar({
                 size="icon"
                 className="h-8 w-8"
                 onClick={onRotateCw}
+                aria-label="선택 항목 오른쪽으로 회전"
               >
                 <RotateCw size={16} />
               </Button>
             </Tooltip>
             <Tooltip content="삭제">
-              <Button variant="ghost" size="sm" onClick={onDelete}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onDelete}
+                aria-label="선택 항목 삭제"
+              >
                 <Trash2 size={16} />
               </Button>
             </Tooltip>

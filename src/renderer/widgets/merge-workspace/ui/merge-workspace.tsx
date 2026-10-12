@@ -1,7 +1,9 @@
 import { useState, useCallback } from "react";
 import { Download } from "lucide-react";
 import {
+  MERGE_STATUS,
   useMergeFiles,
+  useMergeStatus,
   type PdfDocument
 } from "@/renderer/entities/merge-plan";
 import {
@@ -12,7 +14,10 @@ import {
   useSelectionType,
   usePageRotation,
   useSelectionActions,
-  useSelectedMerge
+  useSelectedMerge,
+  useSelectAll,
+  useSelectionShortcuts,
+  useDeselectDeleted
 } from "@/renderer/features/pdf-merge";
 import {
   PreviewModal,
@@ -63,6 +68,25 @@ export function MergeWorkspace() {
     clearSelectedMerge();
   }, [clearSelectedMerge]);
 
+  // 어떤 경로로든 지워진 파일·페이지는 선택에서 뺀다
+  useDeselectDeleted();
+
+  // 선택 단축키 (모달·병합 진행·카드 집기 중에는 끈다)
+  const [isReordering, setIsReordering] = useState(false);
+  const isMerging = useMergeStatus() === MERGE_STATUS.MERGING;
+  const { selectAllItems } = useSelectAll();
+  useSelectionShortcuts({
+    isEnabled:
+      hasFiles &&
+      !isPreviewOpen &&
+      !isMergePreviewOpen &&
+      !isMerging &&
+      !isReordering,
+    onDelete: handleDeleteSelected,
+    onSelectAll: selectAllItems,
+    onClearSelection: clearSelection
+  });
+
   // EmptyState용 파일 드롭 (파일이 없을 때만 사용)
   const { isDragOver: isEmptyDragOver } = useDroppedFiles({
     isEnabled: !hasFiles
@@ -112,6 +136,7 @@ export function MergeWorkspace() {
           files={files}
           onPreviewFile={handlePreviewFile}
           onPreviewPage={handlePreviewPage}
+          onReorderingChange={setIsReordering}
         />
       ) : (
         <div className="flex flex-1 items-center justify-center">

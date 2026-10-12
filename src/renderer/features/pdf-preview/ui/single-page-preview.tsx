@@ -15,12 +15,15 @@ interface SinglePagePreviewProps {
 /**
  * 단일 페이지 미리보기 컴포넌트
  * - 펼친 페이지 카드에서 클릭 시 표시
- * - 해당 페이지만 고해상도로 렌더링(PDF `/Rotate`는 적용하지 않는다)
+ * - 해당 페이지만 고해상도로, 스토어의 절대 회전으로 렌더링(PDF `/Rotate` 대신)
  */
 export function SinglePagePreview({
   document,
   pageIndex
 }: SinglePagePreviewProps) {
+  const rotation =
+    document.pages.find((page) => page.sourcePageIndex === pageIndex)
+      ?.rotation ?? PAGE_ROTATION.DEG_0;
   const {
     url: previewUrl,
     isLoading,
@@ -29,7 +32,7 @@ export function SinglePagePreview({
     path: document.path,
     pageIndex,
     scale: PREVIEW_CONFIG.SCALE,
-    rotation: PAGE_ROTATION.DEG_0,
+    rotation,
     isEnabled: true
   });
 
@@ -53,7 +56,7 @@ export function SinglePagePreview({
           </div>
         )}
 
-        {/* 이미지 렌더링 - PDF 파일 자체가 회전되므로 CSS 회전 불필요 */}
+        {/* 이미지 렌더링 - 회전은 렌더할 때 적용했으므로 CSS 회전 불필요 */}
         {previewUrl && !isLoading && (
           <img
             src={previewUrl}

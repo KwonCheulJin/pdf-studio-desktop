@@ -135,6 +135,14 @@ export function FileGrid({
     onReorderingChange(false);
   }, [onReorderingChange]);
 
+  // 카드를 집은 채로 그리드가 사라지면(전체 삭제 등) dnd-kit은 끝·취소 이벤트를 보내지 않는다.
+  useEffect(
+    () => () => {
+      onReorderingChange(false);
+    },
+    [onReorderingChange]
+  );
+
   const handleDragEnd = useCallback(
     ({ active, over }: DragEndEvent) => {
       onReorderingChange(false);

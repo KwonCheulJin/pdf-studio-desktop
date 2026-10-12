@@ -241,8 +241,12 @@ test("파일 읽기 중 실패하면 그 파일을 보이고 '이 파일 빼기'
   await openWorkspace(page, {
     files: [FILE_A, FILE_B],
     mergeScripts: [
-      // 첫 소스(alpha)를 끝내고 둘째 소스(bravo)를 열다 실패
-      { progress: [READ_START, READ_FIRST_DONE], failCode: "INVALID_PDF" }
+      // 첫 소스(alpha)를 끝내고 둘째 소스(bravo)를 열다 실패. Rust는 그 파일을 `AppError.path`에 담는다.
+      {
+        progress: [READ_START, READ_FIRST_DONE],
+        failCode: "INVALID_PDF",
+        failPath: FILE_B.path
+      }
     ]
   });
   await expect(documentCards(page)).toHaveCount(2);

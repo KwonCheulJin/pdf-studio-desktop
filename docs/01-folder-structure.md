@@ -47,7 +47,7 @@ project-root/
 │  │  ├─ files.rs, merge.rs    # 파일 열기, 병합 처리(경로 검증 후 pdf-core 위임)
 │  │  ├─ jobs.rs               # 작업 ID·취소 토큰
 │  │  ├─ pdf_engine.rs         # 번들 pdfium 바인딩, 엔진을 앱 상태로
-│  │  └─ error.rs              # 커맨드 에러 → { code, message }
+│  │  └─ error.rs              # 커맨드 에러 → { code, message, path }
 │  ├─ capabilities/            # main 창 권한
 │  ├─ icons/
 │  ├─ Entitlements.plist

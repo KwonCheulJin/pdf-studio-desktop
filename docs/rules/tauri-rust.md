@@ -9,7 +9,10 @@
 - **경로 검증:** 커맨드는 받은 경로를 `canonicalize`한 뒤 확장자 화이트리스트·허용 루트(사용자가 고른 경로, 앱 임시·캐시 디렉터리)·크기 상한을 확인한다.
 - **사용자 원본 파일은 절대 수정하지 않는다.** 쓰기는 임시 파일에 쓴 뒤 rename하는 원자적 쓰기로 한다.
 - **커맨드는 얇게:** `async fn` + 무거운 작업은 pdfium 전용 작업 스레드(또는 `spawn_blocking`)로 넘긴다. UI 스레드를 막지 않는다.
-- **에러:** 커맨드는 `Result<T, AppError>`를 돌려준다. `AppError`는 `thiserror` + `Serialize`로 `{ code, message }`를 만든다. 화면 문구는 프론트가 `code`로 찾고, `message`는 로그용이다. 커맨드 안에서 `unwrap`/`expect`/`panic!` 금지
+- **에러:** 커맨드는 `Result<T, AppError>`를 돌려준다. `AppError`는 `thiserror` + `Serialize`로 `{ code, message, path }`를 만든다(`src-tauri/src/error.rs`).
+  - `code`는 `enum ErrorCode`(specta `Type`, 직렬화 값 `PATH_NOT_ALLOWED` 등)라 바인딩에 문자열 union `ErrorCode`가 생긴다. TS는 코드 목록을 다시 적지 않고 이 타입을 쓴다(문구 표 `shared/config/error-messages.ts`는 빠짐없이 채워야 타입이 맞는다). pdf-core 에러 → `ErrorCode`는 `error.rs` 한 곳에서 변형마다 `match`로 짝지어, pdf-core에 변형이 늘면 컴파일이 멈춘다.
+  - `path`는 실패를 일으킨 입력 파일(pdf-core가 열다 실패한 문서·TIFF)이고 모르면 `null`이다. 출력(저장) 실패와 커맨드 자체의 거부(`PATH_NOT_ALLOWED` 등)는 `null`. 병합 실패의 "이 파일 빼기"가 이 경로로 파일을 찾는다.
+  - 화면 문구는 프론트가 `code`로 찾고, `message`는 로그용이다. 프론트 전용 코드(`IPC_FAILED`)는 `shared/platform/platform-error.ts`의 `PLATFORM_ERROR_CODE`에 둔다. 커맨드 안에서 `unwrap`/`expect`/`panic!` 금지
 - **IPC 전송:** 진행률 스트림은 `tauri::ipc::Channel`, 바이너리는 `tauri::ipc::Response`. `Vec<u8>`을 그대로 돌려주지 않는다(JSON 숫자 배열이 된다). 진행 이벤트는 1% 단위 이상으로만 보낸다.
 - **취소:** 오래 걸리는 작업은 작업 ID와 `Arc<AtomicBool>` 취소 토큰을 갖고, 취소되면 임시 파일을 지운다.
 - **상태:** 공유 상태는 `app.manage()` + `State<'_, T>`로만. 전역 `static mut` 금지

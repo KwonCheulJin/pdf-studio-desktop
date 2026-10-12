@@ -8,10 +8,7 @@ import {
   useMergeStore,
   createPdfDocument
 } from "@/renderer/entities/merge-plan";
-import {
-  ERROR_CODE,
-  getErrorMessage
-} from "@/renderer/shared/config/error-messages";
+import { getErrorMessage } from "@/renderer/shared/config/error-messages";
 import {
   getPlatform,
   LOG_LEVEL,
@@ -21,7 +18,7 @@ import {
 import { getErrorSnapshot } from "@/renderer/shared/lib/error-snapshot";
 import { buildMergeSources } from "../lib/build-merge-request";
 import { discardMergedFile } from "../lib/discard-merged-file";
-import { findFailedSourcePath } from "../lib/find-failed-source-path";
+import { MERGE_ERROR_CODE } from "../config/merge-error-code";
 import { useMergeRunStore } from "./merge-run-store";
 
 interface UseMergeExecutionResult {
@@ -68,7 +65,15 @@ export function useMergeExecution(): UseMergeExecutionResult {
           return;
         }
         setMergedDocument(
-          createPdfDocument(result.outputPath, result.pageCount)
+          createPdfDocument({
+            path: result.outputPath,
+            name: result.fileName,
+            pageCount: result.pageCount,
+            // 병합은 요청한 회전을 출력 페이지의 `/Rotate`로 그대로 쓴다.
+            pageRotations: sources.flatMap((source) =>
+              source.pages.map((page) => page.rotation)
+            )
+          })
         );
         endRun();
         setStatus(MERGE_STATUS.COMPLETE);
@@ -76,7 +81,10 @@ export function useMergeExecution(): UseMergeExecutionResult {
       } catch (error) {
         const platformError = toPlatformError(error);
         const { progress, isCancelRequested } = useMergeRunStore.getState();
-        if (platformError.code === ERROR_CODE.CANCELLED || isCancelRequested) {
+        if (
+          platformError.code === MERGE_ERROR_CODE.CANCELLED ||
+          isCancelRequested
+        ) {
           // 취소는 오류가 아니다. 조용히 작업 공간으로 돌아간다.
           endRun();
           setStatus(MERGE_STATUS.IDLE);
@@ -89,11 +97,7 @@ export function useMergeExecution(): UseMergeExecutionResult {
         failRun({
           code: platformError.code,
           stage: progress?.stage ?? null,
-          sourcePath: findFailedSourcePath({
-            code: platformError.code,
-            progress,
-            sources
-          })
+          sourcePath: platformError.path
         });
         setStatus(MERGE_STATUS.ERROR);
         captureError(platformError, {
@@ -110,7 +114,7 @@ export function useMergeExecution(): UseMergeExecutionResult {
     if (files.length === 0) return;
     const sources = buildMergeSources({ files, mergeOrder });
     if (sources.length === 0) {
-      toast.error(getErrorMessage(ERROR_CODE.EMPTY_REQUEST));
+      toast.error(getErrorMessage(MERGE_ERROR_CODE.EMPTY_REQUEST));
       return;
     }
     await runMerge(sources);

@@ -4,13 +4,14 @@ import type {
   MergeSource,
   MergeStage
 } from "@/renderer/shared/api/bindings";
+import type { PlatformErrorCode } from "@/renderer/shared/platform";
 
 /** 병합 실패. 화면은 `code`로 문구를 찾는다. */
 export interface MergeFailure {
-  code: string;
+  code: PlatformErrorCode;
   /** 멈춘 단계(마지막으로 진행률을 받은 단계). 진행률 전에 실패했으면 `null` */
   stage: MergeStage | null;
-  /** 실패가 가리키는 소스 파일. 특정할 수 없으면 `null` */
+  /** 실패를 일으킨 입력 파일(`AppError.path`). 모르면 `null` */
   sourcePath: string | null;
 }
 

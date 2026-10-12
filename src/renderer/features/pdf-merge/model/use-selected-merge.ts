@@ -77,10 +77,15 @@ export function useSelectedMerge(): UseSelectedMergeResult {
         }
       });
 
-      const mergedDocument = createPdfDocument(
-        result.outputPath,
-        result.pageCount
-      );
+      const mergedDocument = createPdfDocument({
+        path: result.outputPath,
+        name: result.fileName,
+        pageCount: result.pageCount,
+        // 병합은 요청한 회전을 출력 페이지의 `/Rotate`로 그대로 쓴다.
+        pageRotations: sources.flatMap((source) =>
+          source.pages.map((page) => page.rotation)
+        )
+      });
       setSelectedMergedDocument(mergedDocument);
       return true;
     } catch (error) {

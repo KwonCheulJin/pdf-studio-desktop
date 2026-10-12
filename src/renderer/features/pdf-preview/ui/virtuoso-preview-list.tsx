@@ -1,6 +1,9 @@
 import { useCallback, useRef, type HTMLAttributes, type Ref } from "react";
 import { Virtuoso } from "react-virtuoso";
-import type { PdfDocument } from "@/renderer/entities/merge-plan";
+import {
+  PAGE_ROTATION,
+  type PdfDocument
+} from "@/renderer/entities/merge-plan";
 import { cn } from "@/renderer/shared/lib/utils";
 import { PREVIEW_CONFIG } from "../config/preview";
 import { PreviewPageItem } from "./preview-page-item";
@@ -57,14 +60,14 @@ export function VirtuosoPreviewList({ document }: VirtuosoPreviewListProps) {
   const totalPages = document.pages.length;
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  // 페이지 아이템 렌더링
-  // PDF 파일 자체가 회전되므로 CSS 회전 불필요
+  // 페이지 아이템 렌더링. 스토어의 절대 회전으로 그린다(원본 파일은 회전하지 않는다).
   const renderItem = useCallback(
     (index: number) => (
       <PreviewPageItem
         filePath={document.path}
         pageIndex={index}
         sourcePageIndex={document.pages[index]?.sourcePageIndex ?? index}
+        rotation={document.pages[index]?.rotation ?? PAGE_ROTATION.DEG_0}
         itemHeight={FIXED_ITEM_HEIGHT}
       />
     ),

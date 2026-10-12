@@ -1,9 +1,6 @@
 export { EmptyState, FileGrid, MergeProgressOverlay } from "./ui";
-export {
-  useSelectionStore,
-  useSelectedCount,
-  useSelectionType
-} from "./model/selection-store";
+export { useSelectionStore, useSelectionType } from "./model/selection-store";
+export { useSelectedCount } from "./model/use-selected-count";
 export { useZoomStore, useCardSize } from "./model/zoom-store";
 export { useAddFiles, useAddDroppedFiles } from "./model/use-add-files";
 export { useSelectAll } from "./model/use-select-all";

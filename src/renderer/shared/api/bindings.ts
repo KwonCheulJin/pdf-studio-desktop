@@ -38,9 +38,20 @@ export const OPENABLE_EXTENSIONS = ["pdf","tif","tiff"] as const;
 /* Types */
 /**  커맨드가 프론트에 돌려주는 에러 */
 export type AppError = {
-	code: string,
+	code: ErrorCode,
 	message: string,
+	/**
+	 *  실패를 일으킨 입력 파일(pdf-core가 열다 실패한 문서 등). 알 수 없으면 `null`이다.
+	 *  검증을 거친 canonical 경로라, 병합 소스면 `open_files`가 돌려준 `pdfPath`와 같다.
+	 */
+	path: string | null,
 };
+
+/**
+ *  화면 문구를 고르는 오류 코드. 직렬화 값(`PATH_NOT_ALLOWED` 등)이 바인딩의 문자열 union이 되고,
+ *  변형의 이름이 바뀌어도 값은 유지한다.
+ */
+export type ErrorCode = "PATH_NOT_ALLOWED" | "UNSUPPORTED_FILE_TYPE" | "OUTPUT_IS_SOURCE" | "JOB_ALREADY_RUNNING" | "INVALID_DIALOG_PATH" | "ENGINE_UNAVAILABLE" | "NOT_READY" | "TASK_FAILED" | "NOT_FOUND" | "FILE_UNREADABLE" | "INPUT_TOO_LARGE" | "INVALID_PDF" | "PASSWORD_PROTECTED" | "PDFIUM_FAILURE" | "OUTPUT_DIRECTORY_NOT_FOUND" | "WRITE_FAILED" | "EMPTY_REQUEST" | "TOO_MANY_FILES" | "EMPTY_SOURCE" | "INVALID_PAGE" | "CANCELLED" | "INVALID_TIFF" | "UNSUPPORTED_TIFF_COMPRESSION" | "UNSUPPORTED_TIFF_FORMAT" | "IMAGE_TOO_LARGE";
 
 /**  병합 결과를 쓸 곳 */
 export type MergeOutput = 
@@ -74,6 +85,11 @@ export type MergeRequest = {
 
 export type MergeResult = {
 	outputPath: string,
+	/**
+	 *  `output_path`의 파일 이름. 화면 표시와 저장 다이얼로그의 기본 이름에 쓴다
+	 *  (프론트가 경로 문자열을 나누지 않게 한다).
+	 */
+	fileName: string,
 	pageCount: number,
 };
 

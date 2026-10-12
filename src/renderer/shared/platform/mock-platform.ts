@@ -1,5 +1,8 @@
 import {
   OPENABLE_EXTENSIONS,
+  type AppError,
+  type ErrorCode,
+  type MergeResult,
   type OpenedFile,
   type PageInfo
 } from "@/renderer/shared/api/bindings";
@@ -20,11 +23,21 @@ export interface MockPdfFile {
   pages: PageInfo[];
   title?: string;
   bytes?: Uint8Array;
+  /**
+   * TIFF처럼 열 때 PDF로 변환되는 파일이면 `openFiles`가 `pdfPath`로 돌려줄 변환 결과 경로.
+   * Rust의 앱 캐시 폴더처럼 고르지 않아도 읽을 수 있고, 바이트는 `bytes`를 쓴다.
+   */
+  convertedPath?: string;
 }
+
+/** 병합 결과를 쓸 임시 경로와 그 파일 이름(`MergeResult`의 같은 필드) */
+export type MockMergeOutput = Pick<MergeResult, "outputPath" | "fileName">;
 
 export interface MockPlatformOptions {
   /** 열기 다이얼로그가 고르는 파일들. 드롭으로도 열 수 있다. */
   files?: MockPdfFile[];
+  /** 있으면 `temp` 출력 병합이 이 경로에 쓴다. 없으면 작업 ID로 이름을 만든다. */
+  mergeOutput?: MockMergeOutput;
 }
 
 export interface MockPlatform extends DesktopPlatform {
@@ -39,8 +52,9 @@ export interface MockPlatform extends DesktopPlatform {
 /** Rust 커맨드가 같은 상황에서 돌려주는 코드 */
 const MOCK_ERROR_CODE = {
   NOT_FOUND: "NOT_FOUND",
-  PATH_NOT_ALLOWED: "PATH_NOT_ALLOWED"
-} as const;
+  PATH_NOT_ALLOWED: "PATH_NOT_ALLOWED",
+  UNSUPPORTED_FILE_TYPE: "UNSUPPORTED_FILE_TYPE"
+} as const satisfies Record<string, ErrorCode>;
 
 const MOCK_DIRECTORY = {
   TEMP: "/mock/temp",
@@ -50,17 +64,34 @@ const MOCK_DIRECTORY = {
 const PERCENT_COMPLETE = 100;
 
 const EXTENSION_SEPARATOR = ".";
+const PDF_EXTENSION = "pdf";
+const MERGED_FILE_PREFIX = "merged-";
+
+function extensionOf(path: string): string {
+  return path.slice(path.lastIndexOf(EXTENSION_SEPARATOR) + 1).toLowerCase();
+}
 
 /** Rust `allow_dropped`처럼 열 수 있는 확장자만 기록한다. */
 function isOpenable(path: string): boolean {
-  const extension = path
-    .slice(path.lastIndexOf(EXTENSION_SEPARATOR) + 1)
-    .toLowerCase();
+  const extension = extensionOf(path);
   return OPENABLE_EXTENSIONS.some((openable) => openable === extension);
 }
 
-function reject(code: string, path: string): PlatformError {
-  return new PlatformError({ code, message: path });
+interface RejectedPathParams {
+  code:
+    | typeof MOCK_ERROR_CODE.PATH_NOT_ALLOWED
+    | typeof MOCK_ERROR_CODE.UNSUPPORTED_FILE_TYPE;
+  path: string;
+}
+
+/** Rust처럼 커맨드가 거부한 경로는 `AppError.path`에 담지 않는다. */
+function rejectedPath({ code, path }: RejectedPathParams): AppError {
+  return { code, message: path, path: null };
+}
+
+/** Rust처럼 열려던 파일이 없으면 그 경로를 `AppError.path`에 담는다. */
+function missingFile(path: string): AppError {
+  return { code: MOCK_ERROR_CODE.NOT_FOUND, message: path, path };
 }
 
 /**
@@ -68,48 +99,85 @@ function reject(code: string, path: string): PlatformError {
  * 허용 경로 규칙과 에러 코드는 Tauri 커맨드와 같다.
  */
 export function createMockPlatform({
-  files = []
+  files = [],
+  mergeOutput
 }: MockPlatformOptions = {}): MockPlatform {
   const filesByPath = new Map(files.map((file) => [file.path, file]));
+  const convertedFiles = new Map(
+    files.flatMap((file) =>
+      file.convertedPath ? [[file.convertedPath, file] as const] : []
+    )
+  );
   const pickedPaths = new Set<string>();
   const dropHandlers = new Set<FileDropHandler>();
-  const saveTargets = new Set<string>();
+  /** 저장 다이얼로그에서 고른 경로 → 그 파일 이름 */
+  const saveTargets = new Map<string, string>();
   const tempOutputs = new Set<string>();
 
   const ensureReadable = (path: string): void => {
-    if (!pickedPaths.has(path) && !tempOutputs.has(path)) {
-      throw reject(MOCK_ERROR_CODE.PATH_NOT_ALLOWED, path);
+    if (
+      !pickedPaths.has(path) &&
+      !tempOutputs.has(path) &&
+      !convertedFiles.has(path)
+    ) {
+      throw new PlatformError(
+        rejectedPath({ code: MOCK_ERROR_CODE.PATH_NOT_ALLOWED, path })
+      );
     }
   };
 
   const ensureTemp = (path: string): void => {
     if (!tempOutputs.has(path)) {
-      throw reject(MOCK_ERROR_CODE.PATH_NOT_ALLOWED, path);
+      throw new PlatformError(
+        rejectedPath({ code: MOCK_ERROR_CODE.PATH_NOT_ALLOWED, path })
+      );
     }
   };
 
-  const ensureSaveTarget = (path: string): void => {
-    if (!saveTargets.has(path)) {
-      throw reject(MOCK_ERROR_CODE.PATH_NOT_ALLOWED, path);
+  /** 저장 다이얼로그에서 고른 경로의 파일 이름 */
+  const saveTargetName = (path: string): string => {
+    const fileName = saveTargets.get(path);
+    if (fileName === undefined) {
+      throw new PlatformError(
+        rejectedPath({ code: MOCK_ERROR_CODE.PATH_NOT_ALLOWED, path })
+      );
     }
+    return fileName;
+  };
+
+  /** Rust `merge`처럼 소스는 허용 목록 안의 PDF만 받는다. */
+  const ensureMergeSource = (path: string): void => {
+    ensureReadable(path);
+    if (extensionOf(path) !== PDF_EXTENSION) {
+      throw new PlatformError(
+        rejectedPath({ code: MOCK_ERROR_CODE.UNSUPPORTED_FILE_TYPE, path })
+      );
+    }
+  };
+
+  const newTempOutput = (jobId: string): MockMergeOutput => {
+    const fileName = `${MERGED_FILE_PREFIX}${jobId}.${PDF_EXTENSION}`;
+    return {
+      outputPath: `${MOCK_DIRECTORY.TEMP}/${fileName}`,
+      fileName
+    };
   };
 
   const openFile = (path: string): OpenedFile => {
     const file = filesByPath.get(path);
     if (!pickedPaths.has(path) || !file) {
-      const code = file
-        ? MOCK_ERROR_CODE.PATH_NOT_ALLOWED
-        : MOCK_ERROR_CODE.NOT_FOUND;
       return {
         status: "error",
         sourcePath: path,
-        error: { code, message: path }
+        error: file
+          ? rejectedPath({ code: MOCK_ERROR_CODE.PATH_NOT_ALLOWED, path })
+          : missingFile(path)
       };
     }
     return {
       status: "ok",
       sourcePath: path,
-      pdfPath: path,
+      pdfPath: file.convertedPath ?? path,
       displayName: file.displayName,
       info: {
         pageCount: file.pages.length,
@@ -128,30 +196,32 @@ export function createMockPlatform({
     },
     pickSavePath: async ({ fileName }) => {
       const path = `${MOCK_DIRECTORY.SAVE}/${fileName}`;
-      saveTargets.add(path);
+      saveTargets.set(path, fileName);
       return path;
     },
     openFiles: async (paths) => paths.map(openFile),
     readPdf: async (path) => {
       ensureReadable(path);
-      const bytes = filesByPath.get(path)?.bytes;
+      const bytes = (filesByPath.get(path) ?? convertedFiles.get(path))?.bytes;
       if (!bytes) {
-        throw reject(MOCK_ERROR_CODE.NOT_FOUND, path);
+        throw new PlatformError(missingFile(path));
       }
       return bytes.slice();
     },
     mergePdfs: async ({ request, onProgress }) => {
       for (const source of request.sources) {
-        ensureReadable(source.path);
+        ensureMergeSource(source.path);
       }
       const { output } = request;
-      let outputPath: string;
+      let written: MockMergeOutput;
       if (output.kind === MERGE_OUTPUT_KIND.TEMP) {
-        outputPath = `${MOCK_DIRECTORY.TEMP}/merged-${request.jobId}.pdf`;
-        tempOutputs.add(outputPath);
+        written = mergeOutput ?? newTempOutput(request.jobId);
+        tempOutputs.add(written.outputPath);
       } else {
-        ensureSaveTarget(output.path);
-        outputPath = output.path;
+        written = {
+          outputPath: output.path,
+          fileName: saveTargetName(output.path)
+        };
       }
       const pageCount = request.sources.reduce(
         (total, source) => total + source.pages.length,
@@ -164,12 +234,12 @@ export function createMockPlatform({
         stagePercent: PERCENT_COMPLETE,
         overallPercent: PERCENT_COMPLETE
       });
-      return { outputPath, pageCount };
+      return { ...written, pageCount };
     },
     cancelJob: async () => {},
     copyFile: async ({ source, destination }) => {
       ensureTemp(source);
-      ensureSaveTarget(destination);
+      saveTargetName(destination);
     },
     discardTemp: async (path) => {
       ensureTemp(path);

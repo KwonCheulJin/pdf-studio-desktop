@@ -158,8 +158,5 @@ export const useSelectionType = () =>
 export const useSelectedIds = () =>
   useSelectionStore((state) => state.selectedIds);
 
-export const useSelectedCount = () =>
-  useSelectionStore((state) => state.selectedIds.size);
-
 export const useIsSelected = (id: string) =>
   useSelectionStore((state) => state.selectedIds.has(id));

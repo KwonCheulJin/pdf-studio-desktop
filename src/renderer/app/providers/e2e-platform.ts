@@ -1,20 +1,23 @@
 import type {
+  ErrorCode,
   MergeProgress,
   MergeRequest,
   OpenedFile
 } from "@/renderer/shared/api/bindings";
-import { ERROR_CODE } from "@/renderer/shared/config/error-messages";
 import {
   getPdfCacheStats,
   type PdfCacheStats
 } from "@/renderer/shared/lib/pdfjs";
 import {
   createMockPlatform,
-  PlatformError,
+  toPlatformError,
   type CopyFileParams,
   type DesktopPlatform,
+  type MockMergeOutput,
   type MockPdfFile,
-  type NativeFileDropEvent
+  type NativeFileDropEvent,
+  type PickSavePathOptions,
+  type PlatformError
 } from "@/renderer/shared/platform";
 
 /**
@@ -28,18 +31,21 @@ export interface E2eMockFile extends Omit<MockPdfFile, "bytes"> {
   bytesBase64?: string;
 }
 
-/** 일부러 실패시킬 호출. 코드는 Rust `AppError.code`와 같은 값을 쓴다. */
+/** 일부러 실패시킬 호출. 코드는 Rust `ErrorCode`(바인딩) 값을 쓴다. */
 export interface E2eMockFailures {
   /** 경로 → `openFiles`가 그 파일에 돌려줄 오류 코드(파일별 실패) */
-  openFiles?: Record<string, string>;
+  openFiles?: Record<string, ErrorCode>;
   /** 있으면 `copyFile`이 이 코드로 실패한다. */
-  copyFile?: string;
+  copyFile?: ErrorCode;
 }
 
 /** `mergePdfs` 한 번의 흉내. 진행률을 차례로 보낸 뒤 `failCode`가 있으면 그 코드로 실패한다. */
 export interface E2eMergeScript {
   progress: MergeProgress[];
+  /** IPC로 온 값처럼 넘기므로 바인딩에 없는 코드도 넣을 수 있다(모르는 코드 표시 확인용). */
   failCode?: string;
+  /** 실패를 일으킨 입력 파일(Rust `AppError.path`). 없으면 `null` */
+  failPath?: string;
 }
 
 export interface E2eMockSeed {
@@ -47,7 +53,12 @@ export interface E2eMockSeed {
   failures?: E2eMockFailures;
   /** `mergePdfs`를 부를 때마다 앞에서부터 하나씩 쓴다. 다 쓰면 mock 그대로 성공한다. */
   mergeScripts?: E2eMergeScript[];
+  /** 있으면 `temp` 출력 병합 결과가 이 경로·파일 이름이 된다. */
+  mergeOutput?: MockMergeOutput;
 }
+
+/** 작업 취소를 Rust처럼 알리는 코드 */
+const CANCELLED_CODE = "CANCELLED" satisfies ErrorCode;
 
 /** 파일을 쓰거나 지우거나 작업을 멈추는 플랫폼 호출 */
 export const E2E_WRITE_METHOD = {
@@ -101,6 +112,8 @@ declare global {
     __E2E_HOLD_MERGE__?: Promise<void>;
     /** `__E2E_HOLD_MERGE__`를 푸는 함수. 테스트가 함께 넣는다. */
     __E2E_RELEASE_MERGE__?: () => void;
+    /** 앱이 저장 다이얼로그(`pickSavePath`)를 연 옵션을 부른 순서대로 기록하는 곳 */
+    __E2E_MOCK_SAVE_DIALOGS__?: PickSavePathOptions[];
   }
 }
 
@@ -112,8 +125,19 @@ function toMockFile({ bytesBase64, ...file }: E2eMockFile): MockPdfFile {
   return bytesBase64 ? { ...file, bytes: decodeBase64(bytesBase64) } : file;
 }
 
-function seededError(code: string, detail: string): PlatformError {
-  return new PlatformError({ code, message: `E2E 시드 실패: ${detail}` });
+interface SeededErrorParams {
+  code: string;
+  path?: string;
+  detail: string;
+}
+
+/** Rust가 보낸 `AppError`처럼 만든다. 코드 확인은 앱이 IPC 값을 받을 때와 같은 경로를 탄다. */
+function seededError({ code, path, detail }: SeededErrorParams): PlatformError {
+  return toPlatformError({
+    code,
+    message: `E2E 시드 실패: ${detail}`,
+    path: path ?? null
+  });
 }
 
 /** 쓰기 계열 호출을 위임 전에 기록한다. 거부된 요청도 남는다. */
@@ -171,7 +195,11 @@ function injectFailures({
     return {
       status: "error",
       sourcePath: opened.sourcePath,
-      error: { code, message: `E2E 시드 실패: ${opened.sourcePath}` }
+      error: {
+        code,
+        message: `E2E 시드 실패: ${opened.sourcePath}`,
+        path: opened.sourcePath
+      }
     };
   };
 
@@ -191,10 +219,14 @@ function injectFailures({
       await Promise.race([window.__E2E_HOLD_MERGE__, cancelled]);
       cancelWaiters.delete(jobId);
       if (cancelledJobs.has(jobId)) {
-        throw seededError(ERROR_CODE.CANCELLED, jobId);
+        throw seededError({ code: CANCELLED_CODE, detail: jobId });
       }
       if (script?.failCode !== undefined) {
-        throw seededError(script.failCode, jobId);
+        throw seededError({
+          code: script.failCode,
+          path: script.failPath,
+          detail: jobId
+        });
       }
       return platform.mergePdfs(params);
     },
@@ -205,7 +237,10 @@ function injectFailures({
     },
     copyFile: async (params) => {
       if (failures.copyFile !== undefined) {
-        throw seededError(failures.copyFile, params.destination);
+        throw seededError({
+          code: failures.copyFile,
+          detail: params.destination
+        });
       }
       await platform.copyFile(params);
     }
@@ -228,6 +263,25 @@ function recordReads({ platform, reads }: RecordReadsParams): DesktopPlatform {
   };
 }
 
+interface RecordSaveDialogsParams {
+  platform: DesktopPlatform;
+  saveDialogs: PickSavePathOptions[];
+}
+
+/** 저장 다이얼로그를 연 옵션(기본 파일 이름)을 위임 전에 기록한다. */
+function recordSaveDialogs({
+  platform,
+  saveDialogs
+}: RecordSaveDialogsParams): DesktopPlatform {
+  return {
+    ...platform,
+    pickSavePath: (options) => {
+      saveDialogs.push(options);
+      return platform.pickSavePath(options);
+    }
+  };
+}
+
 /** 시드가 없으면(개발 서버를 브라우저로 그냥 열었을 때) 빈 가짜 플랫폼 */
 export function createE2ePlatform(): DesktopPlatform {
   const seed = window.__E2E_MOCK_SEED__;
@@ -236,11 +290,14 @@ export function createE2ePlatform(): DesktopPlatform {
   }
   const writes: E2eWriteCall[] = [];
   const reads: string[] = [];
+  const saveDialogs: PickSavePathOptions[] = [];
   window.__E2E_MOCK_WRITES__ = writes;
   window.__E2E_MOCK_READS__ = reads;
+  window.__E2E_MOCK_SAVE_DIALOGS__ = saveDialogs;
   window.__E2E_PDF_CACHE_STATS__ = getPdfCacheStats;
   const mockPlatform = createMockPlatform({
-    files: seed.files.map(toMockFile)
+    files: seed.files.map(toMockFile),
+    mergeOutput: seed.mergeOutput
   });
   window.__E2E_FILE_DROP__ = mockPlatform.simulateFileDrop;
   const seededPlatform = injectFailures({
@@ -248,8 +305,11 @@ export function createE2ePlatform(): DesktopPlatform {
     failures: seed.failures ?? {},
     mergeScripts: [...(seed.mergeScripts ?? [])]
   });
-  return recordReads({
-    platform: recordWrites(seededPlatform, writes),
-    reads
+  return recordSaveDialogs({
+    platform: recordReads({
+      platform: recordWrites(seededPlatform, writes),
+      reads
+    }),
+    saveDialogs
   });
 }

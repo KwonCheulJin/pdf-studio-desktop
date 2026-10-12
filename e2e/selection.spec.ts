@@ -361,3 +361,49 @@ test("병합 진행 오버레이는 role=status live region이다", async ({ pag
   await expect(progress).toHaveCount(0);
   await expect(page.getByRole("button", { name: "다운로드" })).toBeVisible();
 });
+
+test("파일 모드 선택 수는 고른 파일 수이고 '병합하기'도 파일이 둘 이상일 때만 보인다", async ({
+  page
+}) => {
+  await openWorkspace(page);
+  const mergeSelected = page.getByRole("button", {
+    name: "선택 파일 병합",
+    exact: true
+  });
+
+  await sortableCard(page, documentName(FILE_A)).click();
+  await expect(selectionLabel(page)).toHaveText("1개 파일 선택됨");
+  await expect(mergeSelected).toHaveCount(0);
+
+  await sortableCard(page, documentName(FILE_B)).click({
+    modifiers: ["Meta"]
+  });
+  await expect(selectionLabel(page)).toHaveText("2개 파일 선택됨");
+  await expect(mergeSelected).toBeVisible();
+
+  await page.keyboard.press("Meta+a");
+  await expect(selectionLabel(page)).toHaveText("3개 파일 선택됨");
+});
+
+test("카드를 집은 채로 전체 삭제해도 파일을 다시 넣으면 선택 단축키가 동작한다", async ({
+  page
+}) => {
+  await openWorkspace(page);
+  const alpha = documentName(FILE_A);
+  await sortableCard(page, alpha).focus();
+  await page.keyboard.press("Space");
+  await expect(announcer(page)).toContainText(alpha);
+
+  // 집은 채로 마우스로 전체 삭제 → 그리드가 사라진다(dnd-kit은 끝 이벤트를 보내지 않는다)
+  await page.getByRole("button", { name: "전체 삭제" }).click();
+  await expect(page.getByTestId("document-card")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "파일 선택" }).click();
+  await expect(page.getByTestId("document-card")).toHaveCount(
+    SEED_FILES.length
+  );
+  await page.keyboard.press("Meta+a");
+  await expect(selectionLabel(page)).toHaveText(
+    `${SEED_FILES.length}개 파일 선택됨`
+  );
+});

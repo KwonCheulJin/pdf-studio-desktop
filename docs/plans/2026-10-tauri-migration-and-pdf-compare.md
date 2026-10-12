@@ -94,7 +94,7 @@
 | B2 | 빈 화면에 TIFF를 드롭하면 변환을 건너뛰어 병합이 실패한다(`use-dropped-files.ts`). | P0-6 |
 | B3 | TIFF 변환 결과를 `~/Documents/PDF Studio/<basename>.pdf`에 저장해 이름이 충돌하고 정리되지 않는다. | P1-2 (캐시 디렉터리 + 고유 이름) |
 | B4 | 병합 임시 파일이 Documents에 남고, 임의 경로를 삭제하는 API로 지운다. | P1-3 |
-| B5 | 다운로드 기본 경로를 `lastIndexOf("/")`로 계산해 Windows에서 깨진다. | P0-6 (`@tauri-apps/api/path` 사용) |
+| B5 | 다운로드 기본 경로를 `lastIndexOf("/")`로 계산해 Windows에서 깨진다. | P0-6 (기본 파일 이름은 Rust `MergeResult.fileName`, 처음 폴더는 `tauri-platform`이 `@tauri-apps/api/path`로. 프론트는 경로 문자열을 나누지 않는다) |
 | B6 | `try { return service.x() }`에 `await`가 없어 에러 로깅이 동작하지 않는다(3곳). | Rust 전환 시 자연 해소 |
 | B7 | 테마 토글이 `removeAllListeners`로 전역 리스너까지 제거한다. 수동 설정이 영속되지 않는다. | P1-5 |
 | B8 | 드롭한 파일의 `pageRotations`가 전달되지 않는다. | P0-6 |
@@ -184,7 +184,7 @@ Phase 5  고도화
     // Phase 3: comparePdfs, exportCompareReport
   }
   ```
-  - 계약 타입(`OpenedFile`, `MergeRequest`, `MergeProgress`, `MergeResult`)은 바인딩에서 `import type`으로 가져온다. 실패는 두 구현 모두 `PlatformError`(`{ code, message }`)로 던진다.
+  - 계약 타입(`OpenedFile`, `MergeRequest`, `MergeProgress`, `MergeResult`)은 바인딩에서 `import type`으로 가져온다. 실패는 두 구현 모두 `PlatformError`(`{ code, message, path }`)로 던진다.
   - 구현체는 `tauri-platform.ts`와 `mock-platform.ts`(테스트, Playwright) 둘이다. Electron용 임시 어댑터는 만들지 않는다.
   - 어댑터에는 단위 테스트를 따로 두지 않는다. 계약 타입(`tauri-specta` 생성물)과 typecheck로 형태를 맞추고, 동작은 `mock-platform` 기반 E2E로 확인한다.
   - 앱 부팅 시 하나를 주입한다(`app/providers`). Tauri 웹뷰(`isTauri()`)면 `tauri-platform`, 아니면(브라우저 E2E) `mock-platform`이다. 화면과 훅은 `getPlatform()`으로 가져온다.
@@ -300,7 +300,7 @@ Phase 5  고도화
 - 모든 처리 커맨드는 `async` + **pdfium 전용 작업 스레드**로 위임한다. UI 스레드는 막히지 않는다.
 - 진행률은 `tauri::ipc::Channel`로 보내고, 취소는 작업별 `Arc<AtomicBool>` 토큰으로 처리한다.
 - **병합 진행률(시안 7):** 비교와 같은 `Progress` 모양을 쓴다. 단계 `readFiles`(파일, 가중치 20) → `mergePages`(쪽, 70) → `save`(10). 오버레이에 전체 %와 단계별 %·막대, "취소". 실패하면 같은 자리에 원인·멈춘 단계·오류 코드와 "다시 시도 / 이 파일 빼기 / 닫기"(시안 8).
-- 에러는 `{ code, message }` 형태로 직렬화한다. 프론트는 `code`로 P0-6의 `error-messages.ts` 문구를 찾아 토스트나 오버레이로 보여 준다(B12). `message`는 로그용이며 화면에 그대로 내보내지 않는다.
+- 에러는 `{ code, message, path }` 형태로 직렬화한다. `code`는 Rust `ErrorCode` enum이라 바인딩에 문자열 union으로 나오고, 프론트는 `code`로 P0-6의 `error-messages.ts` 문구를 찾아 토스트나 오버레이로 보여 준다(B12). `path`는 실패를 일으킨 입력 파일(알 때만)이고 병합 실패의 "이 파일 빼기"가 쓴다. `message`는 로그용이며 화면에 그대로 내보내지 않는다.
 - **병합 취소(C1):** `merge_pdfs`도 작업 ID와 취소 토큰을 갖는다. 진행 오버레이에 "취소" 버튼, 취소되면 임시 파일을 지운다. (`cancel_job`은 Phase 1부터 쓴다.)
 - **입력 상한(I1):** `pdf-core`의 상수로 둔다. 시작값: 파일 하나 `MAX_INPUT_FILE_BYTES` = 512MB, 병합 입력 `MAX_MERGE_FILES` = 200개, 비교 문서 `MAX_COMPARE_PAGES` = 2,000쪽(넘으면 `Truncated` 안내). 넘으면 `InputTooLarge` 에러로 거부하고 화면에 이유를 보인다. 측정 후 조정한다.
 - 타입은 `tauri-specta`로 TS 바인딩을 생성해 `src/shared/contracts`를 대체한다. 생성 파일은 `src/renderer/shared/api/bindings.ts`이고 커밋한다. `cargo test`의 `exports_typescript_bindings`가 다시 만들며, 경계 타입에 JS 숫자로 보낼 수 없는 타입(`usize`·`u64`)이 들어오면 실패한다. 경계의 개수·번호는 `u32`다.

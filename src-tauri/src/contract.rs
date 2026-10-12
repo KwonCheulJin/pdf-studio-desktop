@@ -211,6 +211,9 @@ pub(crate) enum MergeOutput {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct MergeResult {
     pub(crate) output_path: PathBuf,
+    /// `output_path`의 파일 이름. 화면 표시와 저장 다이얼로그의 기본 이름에 쓴다
+    /// (프론트가 경로 문자열을 나누지 않게 한다).
+    pub(crate) file_name: String,
     pub(crate) page_count: u32,
 }
 

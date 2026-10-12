@@ -299,6 +299,7 @@ fn ensure_extension(path: &Path, extensions: &[&str]) -> Result<(), CommandError
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::ErrorCode;
     use crate::test_support::TestDir;
 
     #[test]
@@ -336,7 +337,7 @@ mod tests {
         let path = test_dir.copy_fixture("one-page.pdf", "contract.pdf");
 
         let before = access.readable(&path, &[PDF_EXTENSION]).unwrap_err();
-        assert_eq!(before.code(), "PATH_NOT_ALLOWED");
+        assert_eq!(before.code(), ErrorCode::PathNotAllowed);
 
         let picked = access.allow_opened(&path).expect("pick");
         assert_eq!(

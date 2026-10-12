@@ -72,7 +72,7 @@ export function AppToolbar() {
 
       {/* 우측: 병합 */}
       <div className="flex w-40 items-center justify-end">
-        <Tooltip content="선택한 파일을 하나의 PDF로 병합">
+        <Tooltip content="모든 파일을 하나의 PDF로 병합">
           <Button disabled={!hasFiles || isMerging} onClick={startMerge}>
             {isMerging ? "병합 중..." : "병합"}
           </Button>

@@ -150,7 +150,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 - Electron Forge 설정(`forge.config.mts`, `vite.main.config.mts`, `vite.preload.config.mts`, `vite.renderer.config.mts`)은 Step 14까지 그대로 두고, Tauri용 `vite.config.ts`를 새로 만든다.
 - 할 일(키트): `pnpm add -D @tauri-apps/cli` → `pnpm add @tauri-apps/api` → `pnpm tauri init` → `cargo new --lib crates/pdf-core`. 루트 `Cargo.toml`의 `[workspace]`만 직접 쓴다.
 - 완료 기준: `pnpm tauri dev`로 빈 셸에 기존 renderer가 뜸, 버전이 `package.json` 하나에서 나옴. 파일 처리 기능은 Step 11·2 전까지 동작하지 않아도 된다
-- [ ] Step 9
+- [x] Step 9
 
 ### Step 10. pdf-core 기본 처리 (L)
 - 실행 순서: 4번째 (앞: Step 8, 뒤: Step 11)

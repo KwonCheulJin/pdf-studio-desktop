@@ -94,8 +94,20 @@
 | S1 | `sandbox:false`, 입력 검증이 없다, 외부 스크립트(animatedicons)를 로드한다. | P1-5 |
 | P1 | 썸네일을 요청할 때마다 파일 전체를 IPC로 받아 재파싱한다. PNG data URL이 스토어에 무한히 쌓인다. | P0-4 |
 | P2 | 모든 PDF 연산이 main 스레드에서 동기로 돈다. | Rust 전환(`spawn_blocking` + 작업 큐) |
+| B9 | 툴바 "병합" 버튼은 툴팁("선택한 파일을 병합")과 달리 `mergeOrder` 전체를 병합한다. | P0-6 |
+| B10 | 페이지 삭제는 소프트 삭제(`isDeleted`)인데 **복원할 화면이 없다.** 복원 컴포넌트(`page-thumbnail.tsx`)는 렌더되지 않고, `restorePage`는 `mergeOrder`에 되돌려 넣지 않는다. 상태바 전체 페이지 수에 삭제된 페이지가 섞인다. | P0-6 (복원 화면 연동) |
+| B11 | 선택 정합성: 카드 자체 버튼으로 지우면 선택 목록에 남는다. shift/⌘ 범위 선택이 없다(`selectRange` 미사용). 카드 본문 클릭으로 선택되지 않는다. | P0-6 |
+| B12 | 오류가 거의 보이지 않는다: `errorMessage` 미렌더, 선택 병합에 `catch` 없음, 다운로드 실패 미표시, `setError(null)`이 상태를 되돌리지 않음. 토스트는 파일 추가 실패 하나뿐. | P0-6 (화면) / P1-3 (코드 체계) |
+| A1 | 키보드·접근성: 단축키 없음, 재정렬 마우스 전용, hover 버튼이 Tab 포커스 때 보이지 않음, 회전·삭제 버튼에 접근 가능한 이름 없음, 진행 오버레이에 live region 없음, 전체 선택이 `role="button"` 안에 체크박스를 중첩 | P0-5 / P0-6 |
+| P3 | 파일을 추가하면 모든 페이지 썸네일을 즉시 생성하고, 문서 카드는 첫 페이지를 따로 또 렌더한다. | P0-4 |
+| C1 | 병합 취소가 없다. | P1-3 |
+| I1 | 파일 개수·크기 상한이 없다. | P1-3 |
+| S2 | 에러 스냅샷이 앱 설정 없이 라이브러리 기본 Firebase 프로젝트로 전송된다. 오류 메시지에 파일 경로·이름이 섞일 수 있다. | P1-5 |
+| W1 | 최소 창 크기가 없다(비교 화면은 약 1100px 필요). | P1-5 |
+| T2 | 상태 스토어(`merge-store`의 `mergeOrder`·페이지 이동·그룹)에 테스트가 0개인데 P0-2에서 이 스토어를 쪼갠다. | P0-2 선행 |
+| L1 | `package.json`은 MIT인데 `LICENSE` 파일이 없다. pdfium(BSD)·pdf.js(Apache)·글꼴(OFL)의 제3자 고지도 없다. | P4-5 |
 | D1 | `use-add-files` ≈ `load-dropped-files`, 세그먼트 그룹핑 중복, 캔버스 렌더 중복, `ValueOf`/`isTiffFile` 중복 | P0-6 |
-| D2 | 미사용 코드: `@dnd-kit`(P0-5에서 사용 예정), `zod`, `electron-squirrel-startup`, edit delete/reorder, `merge-state.ts` 등 | P0-6 / P1-6 |
+| D2 | 미사용 코드: `@dnd-kit`(P0-5에서 사용 예정), `zod`, `electron-squirrel-startup`, edit delete/reorder, `merge-state.ts`, 스토어 액션 `expandAll`/`collapseAll`/`reorderFiles`(실행 시 페이지 순서 유실)/`reorderPageWithinFile`/`movePage`/`resetZoom`/`reset`, `generatePreview`/`generatePageThumbnail`, `Card`/`Icon`, `useActivePages`, 미사용 AbortController 등. **`selectRange`(B11)와 `restorePage`(B10)는 살려서 쓴다.** | P0-6 / P1-6 |
 | F1 | `shared/hooks`, `shared/model`에 도메인 로직이 있다(FSD 위반). renderer가 `@/main/types`를 import한다. | P0-2 |
 | T1 | Node 버전 불일치(.tool-versions 25 / CI 22 / README 18). 버전이 이중 bump된다. README와 docs가 낡았다. `.claude` 훅이 Mac 절대경로다. | P0-1, P4 |
 
@@ -135,6 +147,7 @@ Phase 5  고도화
 - **완료 기준:** Mac과 Windows에서 클론 직후 `pnpm i && pnpm validate`가 통과한다.
 
 ### P0-2 플랫폼 어댑터 도입과 계약 분리 (M)
+- **먼저 특성 테스트(T2):** 스토어를 옮기기 전에 지금 동작을 고정하는 테스트를 쓴다. 대상: `merge-store`의 파일 추가·삽입 위치, `movePageInMergeOrder`(파일 간 이동 포함), `insertFileAtPosition`, 그룹 접기/펼치기, 페이지 삭제, `selection-store`의 FILE/PAGE 전환. 리팩터링 중 이 테스트는 그대로 통과해야 한다(B10·B11에서 의도적으로 바꾸는 동작은 그 단계에서 테스트를 갱신).
 - `src/shared/contracts/`(프로세스 중립)로 DTO와 상수를 옮긴다. renderer는 `@/main/*`을 import하지 않는다. Phase 1 이후에는 이 타입을 `tauri-specta` 생성물로 대체한다.
 - `src/renderer/shared/platform/`: **경로 기반의 굵은 단위(coarse-grained) API**로 정의한다. 처리 주체가 Electron main이든 Rust든 같은 시그니처를 유지하기 위해서다.
   ```ts
@@ -171,16 +184,30 @@ Phase 5  고도화
 - `PdfDocumentCache`: 파일당 `PDFDocumentProxy` 하나를 두고 refcount와 `destroy()`로 관리한다.
 - 썸네일과 미리보기는 data URL 대신 **`ImageBitmap` 또는 `blob:` URL + LRU(개수/메모리 상한)** 로 바꾼다. 화면에 보이는 페이지만 렌더한다(virtuoso).
 - 캔버스 렌더 코드 3곳을 `renderPageToBitmap({ document, pageIndex, scale })` 하나로 통합한다. 비교 뷰어도 이 함수를 쓴다.
+- 파일 추가 시 전체 페이지 썸네일을 즉시 만드는 동작을 없앤다(P3). 문서 카드의 첫 페이지 썸네일도 같은 캐시를 쓴다(따로 렌더하지 않는다).
 - **완료 기준:** 같은 파일을 여러 번 읽지 않는다. 파일을 제거하면 메모리가 회수된다.
 
 ### P0-5 내부 드래그 정렬을 `@dnd-kit`으로 전환 (M)
 - **이유:** Tauri v2에서 OS 파일 드롭 경로를 받으려면 `dragDropEnabled: true`(기본값)여야 한다. 이 경우 **Windows WebView2에서 HTML5 DnD가 동작하지 않는다.** 현재 페이지·파일 재정렬은 HTML5 DnD 기반이므로 pointer 기반 dnd-kit(이미 설치됨)으로 바꾼다.
 - 외부 파일 드롭은 `platform.onFileDrop`으로 분리한다. 드롭 위치에 삽입하는 로직(`calculateDropIndex`)은 **좌표 기반 순수 함수**로 만든다.
-- **완료 기준:** HTML5 DnD 이벤트(`onDragStart` 등) 의존이 0이다.
+- `KeyboardSensor`를 함께 등록해 키보드 재정렬을 지원한다(A1): 카드에 포커스 → Space로 집기 → 방향키 이동 → Space로 놓기 / Esc 취소. 이동 결과를 live region으로 알린다.
+- **완료 기준:** HTML5 DnD 이벤트(`onDragStart` 등) 의존이 0이다. 마우스 없이 파일과 페이지 순서를 바꿀 수 있다.
 
-### P0-6 버그 수정과 정리 (S)
-- B2, B5, B8, D1, D2를 처리한다.
+### P0-6 버그 수정과 정리 (M)
+- B2, B5, B8, B9, B10, B11, B12(화면), D1, D2, A1(나머지)을 처리한다.
 - `use-add-files`와 `load-dropped-files`를 `ingestPaths({ paths, insertAt })` 하나로 통합한다.
+- **B9 병합 버튼:** 툴바 "병합"은 전체 병합으로 두고 툴팁을 "모든 파일을 하나의 PDF로 병합"으로 고친다. 선택 병합은 플로팅 바의 "병합하기"가 맡는다.
+- **B10 페이지 복원(화면 연동):**
+  - 삭제해도 페이지를 `mergeOrder`에서 빼지 않고 `isDeleted`만 켠다. 병합 요청에서는 이미 삭제 페이지를 제외한다(`build-merge-request`).
+  - 화면 시안: 캔버스 6번 "병합: 페이지 삭제·복원".
+  - 펼친 그룹에서 삭제된 페이지는 **제자리에 흐리게**(점선 테두리) 남기고 "삭제됨" 배지와 "복원" 버튼을 보인다. 지금 렌더되지 않는 `page-thumbnail.tsx`의 복원 UI를 연결한다.
+  - 접힌 문서 카드의 쪽 범위와 상태바 페이지 수는 삭제되지 않은 페이지만 센다. 삭제된 페이지가 있으면 카드에 "n쪽 삭제됨" 배지.
+  - 플로팅 바: 선택에 삭제된 페이지가 섞이면 "복원" 버튼을 함께 보인다.
+  - 파일 단위 삭제(카드의 파일 삭제)는 지금처럼 영구 삭제로 둔다.
+  - 완료 기준: 삭제 → 복원 후 병합 결과가 삭제 전과 같다(스토어 테스트).
+- **B11 선택:** 카드 본문 클릭 = 단일 선택, ⌘/Ctrl+클릭 = 추가·해제, Shift+클릭 = 범위(`selectRange`). 어떤 경로로든 삭제되면 선택 목록에서도 뺀다.
+- **B12 오류 표시(시안 8):** 실패는 모두 사용자에게 보인다. 짧은 실패(파일 하나 읽기 실패, 다운로드 실패)는 토스트, 병합 실패는 진행 오버레이 자리에 원인 + 멈춘 단계 + 오류 코드 + "다시 시도 / 이 파일 빼기 / 닫기". 오류 코드 → 한국어 문구 표는 `shared/config/error-messages.ts` 한 곳에 둔다.
+- **A1 나머지:** 단축키(Delete 삭제, ⌘/Ctrl+A 전체 선택, Esc 선택 해제), hover 버튼을 `:focus-within`에서도 보이기, 아이콘 버튼마다 `aria-label`, 진행 오버레이 `role="status"`, 전체 선택을 진짜 `<button>` 또는 `<label>`+체크박스로.
 
 ---
 
@@ -237,7 +264,10 @@ Phase 5  고도화
 | `cancel_job` | `(job_id)` | Phase 2부터 사용 |
 - 모든 처리 커맨드는 `async` + **pdfium 전용 작업 스레드**로 위임한다. UI 스레드는 막히지 않는다.
 - 진행률은 `tauri::ipc::Channel`로 보내고, 취소는 작업별 `Arc<AtomicBool>` 토큰으로 처리한다.
-- 에러는 `{ code, message }` 형태로 직렬화해 프론트에서 토스트로 구분 처리한다.
+- **병합 진행률(시안 7):** 비교와 같은 `Progress` 모양을 쓴다. 단계 `read_files`(파일, 가중치 20) → `merge_pages`(쪽, 70) → `save`(10). 오버레이에 전체 %와 단계별 %·막대, "취소". 실패하면 같은 자리에 원인·멈춘 단계·오류 코드와 "다시 시도 / 이 파일 빼기 / 닫기"(시안 8).
+- 에러는 `{ code, message }` 형태로 직렬화한다. 프론트는 `code`로 P0-6의 `error-messages.ts` 문구를 찾아 토스트나 오버레이로 보여 준다(B12). `message`는 로그용이며 화면에 그대로 내보내지 않는다.
+- **병합 취소(C1):** `merge_pdfs`도 작업 ID와 취소 토큰을 갖는다. 진행 오버레이에 "취소" 버튼, 취소되면 임시 파일을 지운다. (`cancel_job`은 Phase 1부터 쓴다.)
+- **입력 상한(I1):** `pdf-core`의 상수로 둔다. 시작값: 파일 하나 `MAX_INPUT_FILE_BYTES` = 512MB, 병합 입력 `MAX_MERGE_FILES` = 200개, 비교 문서 `MAX_COMPARE_PAGES` = 2,000쪽(넘으면 `Truncated` 안내). 넘으면 `InputTooLarge` 에러로 거부하고 화면에 이유를 보인다. 측정 후 조정한다.
 - 타입은 `tauri-specta`로 TS 바인딩을 생성해 `src/shared/contracts`를 대체한다.
 - 사용할 플러그인: `dialog`, `log`, `store`, `opener`, `window-state`. **`fs` 플러그인은 쓰지 않는다**(커스텀 커맨드에서 경로를 검증해 권한 표면을 최소화).
 
@@ -259,6 +289,11 @@ Phase 5  고도화
 - 테마: `matchMedia` 구독 + 수동 설정(`system|light|dark`)을 `plugin-store`로 영속화한다.
 - 메뉴: macOS 기본 메뉴(편집 단축키 포함)를 확인한다. 이후 `파일 > 열기 (⌘O)` 등을 추가한다.
 - 창 크기와 위치는 `plugin-window-state`로 기억한다.
+- **최소 창 크기(W1):** `tauri.conf.json`의 창에 `minWidth: 1120`, `minHeight: 720`. 비교 화면(목록 340px + 페이지 두 장 + 거터 120px)이 깨지지 않는 크기다.
+- **에러 스냅샷 점검(S2):**
+  - 라이브러리 기본 Firebase 프로젝트가 아니라 **이 앱 전용 설정**을 넘긴다.
+  - 보내는 필드를 확인하고, 파일 경로·파일 이름은 보내기 전에 지운다(예: 홈 디렉터리 → `~`, 파일 이름 → 확장자만).
+  - 처음 실행할 때 오류 보고를 안내하고, 설정에서 끌 수 있게 한다(`plugin-store`에 저장).
 
 ### P1-6 Electron 제거와 문서 갱신 (S)
 - 삭제: `forge.config.mts`, `src/main`, `src/preload`, electron 관련 deps, **`pdf-lib`, `sharp`, `fs-extra`**, `icon.*`(→ `src-tauri/icons`)
@@ -270,8 +305,10 @@ Phase 5  고도화
 
 ### Phase 1 완료 기준 (기능 동등성 체크리스트)
 - [ ] 다이얼로그 및 드롭으로 PDF/TIFF 추가, 위치 지정 삽입
-- [ ] 썸네일, 펼치기, 파일 간 페이지 재정렬, 소프트 삭제/복원
-- [ ] 회전(비파괴), 전체/선택 병합(진행률·UI 비차단), 미리보기, 저장, 임시파일 정리
+- [ ] 썸네일, 펼치기, 파일 간 페이지 재정렬(마우스·키보드), 페이지 삭제와 화면에서 복원(B10)
+- [ ] 클릭·⌘·Shift 선택, 단축키(Delete, ⌘A, Esc)
+- [ ] 회전(비파괴), 전체/선택 병합(진행률·UI 비차단·취소), 미리보기, 저장, 임시파일 정리
+- [ ] 모든 실패가 토스트나 오버레이로 보인다(B12)
 - [ ] 테마(시스템 추종 + 수동), 버전 표시, 에러 스냅샷 전송
 - [ ] macOS, Windows, Linux에서 실행 (Windows/Linux는 CI 아티팩트로 확인)
 
@@ -335,7 +372,17 @@ pub struct CompareResult {
    - 반복 줄 제외는 **머리말, 꼬리말, 쪽번호를 따로** 켠다(상단/하단 N pt 밴드, 쪽번호는 하단 밴드 안의 숫자만 있는 줄). 양쪽 문서에 같이 적용한다. 자동 머리글 감지는 Phase 5로 미룬다.
    - 대소문자 무시.
 6. **작업 실행기 (P2-7, S)**
-   - 진행 단계(추출 n/N → 정렬 → diff)를 `Channel`로 보고하고, 취소 토큰을 단계마다 확인한다.
+   - 진행 단계를 `Channel`로 보고하고, 취소 토큰을 단계마다(추출은 쪽마다) 확인한다.
+   - **진행률 이벤트(작업별 %):** `Progress { job_id, stage, done, total, stage_percent, overall_percent, detail }`. 화면(시안 9)은 단계마다 %와 막대, 위에 전체 %를 보인다.
+     | 단계 `stage` | 화면 이름 | `done / total` 단위 | 전체 가중치 |
+     |---|---|---|---|
+     | `extract_a` | A 문서 읽기 | 쪽 | 30 |
+     | `extract_b` | B 문서 읽기 | 쪽 | 30 |
+     | `normalize` | 글자 정리 | 쪽 | 10 |
+     | `diff` | 차이 찾기 | 앵커 사이 구간 | 20 |
+     | `align_pages` | 쪽 맞추기 | 페이지 쌍 행 | 10 |
+   - `overall_percent = Σ(stage_percent × 가중치) / 100`. 가중치는 `pdf-core`의 상수이고, 실제 소요 시간을 측정해 조정한다. 추출 캐시가 맞으면 그 단계는 바로 100%로 보고한다.
+   - 이벤트는 단계 안에서 최소 1% 단위로만 보낸다(쪽마다 보내면 큰 문서에서 IPC가 넘친다). `%`는 정수로 내림해 100%는 실제로 끝났을 때만 보인다.
    - **추출 결과 캐시:** (파일 경로, 크기, mtime) 또는 해시를 키로 메모리 LRU에 둔다. 옵션만 바꿔 다시 실행할 때 추출을 건너뛴다.
 7. **리포트 내보내기 (P2-8, M)**
    - **비교 PDF:** pdfium으로 새 문서를 만들고 A4 가로 한 장에 좌우 페이지를 배치한다. 옵션: 배치(`side_by_side | a_only | b_only`), 차이 있는 쪽만(`changed_pages_only`), 색 상자 넣기(`draw_boxes`). 화면의 필터(숨긴 종류)를 그대로 받는다.
@@ -359,6 +406,7 @@ pub struct CompareResult {
 - **홈(시안 1):** 파일이 없을 때 보이는 첫 화면. "PDF 병합", "PDF 비교" 카드 두 장. 카드를 누르거나 카드 위에 파일을 놓으면 그 모드로 들어간다(병합은 여러 개, 비교는 2개).
 - **모드 전환:** 병합·비교 화면 툴바 맨 왼쪽에 `[병합 | 비교]` 세그먼트 탭. 모드를 바꿔도 각 모드의 작업 상태(병합 파일 목록, 비교 세션)는 유지한다.
 - **병합 화면(시안 2)은 지금 화면 구조를 그대로 둔다.** 툴바(전체 선택·전체 삭제 / 파일 추가 / 병합), 문서 카드 그리드, 하단 플로팅 바, 상태바. 추가되는 것은 모드 탭뿐이다.
+- **병합 모드의 하위 화면:** 지금의 `view: 'workspace' | 'preview'`(전체 병합 후 결과 미리보기 화면)는 병합 모드 안에 그대로 둔다. 선택 병합은 지금처럼 모달. 결과 미리보기 화면에 있는 동안 모드 탭은 보이되, 비교로 넘어갈 때 임시 결과 파일이 남아 있으면 "저장하지 않은 병합 결과가 있어요"를 확인한다.
 
 ### FSD 배치
 ```
@@ -380,7 +428,12 @@ pages/compare              옵션 화면 / 결과 화면 조립
   - **페이지 범위는 A·B 따로** 입력한다(`"1,3-5"`, 비우면 전체). 입력칸 끝에 `/ N쪽`. 쪽수를 넘으면 빨간 테두리와 이유 문구.
   - **비교 대상 표:** 글자(기본, 켬) + 하위 옵션 대소문자 무시. 스타일·레이아웃·그림은 Phase 5라 "준비 중"으로 꺼 둔 채 보여 준다.
   - **반복 줄 제외 표:** 머리말, 꼬리말, 쪽번호를 따로 고른다. 옆에 작은 페이지 그림으로 빠지는 줄을 표시. 양쪽 문서에 같이 적용.
-  - 바닥: 실행할 수 없는 이유(또는 "A 18쪽 · B 19쪽을 비교해요") / 취소 / ▶ 비교 실행(이유가 있으면 비활성). 실행 중에는 진행률과 취소.
+  - 바닥: 실행할 수 없는 이유(또는 "A 18쪽 · B 19쪽을 비교해요") / 취소 / ▶ 비교 실행(이유가 있으면 비활성).
+- **P3-3a 비교 진행 화면 (S, 시안 9):** 실행하면 옵션 화면 자리에 진행 카드가 뜬다.
+  - 위: A → B 파일 이름, **전체 진행률 %**(큰 숫자)와 막대, 경과 시간.
+  - 가운데: **작업별 행**(A 문서 읽기 / B 문서 읽기 / 글자 정리 / 차이 찾기 / 쪽 맞추기). 행마다 상태 점(완료 ✓ · 진행 중 회전 · 대기 번호), 이름, 세부(`12 / 19쪽` 등), **작업별 %**, 얇은 막대. 완료 막대는 `success`, 진행 중은 `primary`.
+  - 아래: 취소(옵션 화면으로 돌아감). 다른 모드로 가도 작업은 계속되고, 상태바에 `비교 중 49%`를 보인다.
+  - 모든 막대에 `role="progressbar"`와 `aria-valuenow`, 상태바는 `role="status"`.
 - **P3-4 결과 미리보기 (L, 시안 4)**
   - 머리: 뒤로(옵션으로), 제목(A → B), A/B 파일 이름·쪽수·소요 시간, "새 비교", "내보내기", ⋯(다시 실행).
   - 툴바: 종류 칩(추가·삭제·변경, 개수 표시, 끈 칩은 회색+취소선, "n개 숨김"), 이전/다음 이동(`3 / 17`, 키보드 ↑↓·j/k), 보기 방식 `나란히 | A만 | B만`, 확대·축소·맞춤, 현재 쪽.
@@ -464,6 +517,7 @@ A의 변경 상자와 B의 대응 상자를 거터를 가로지르는 곡선으�
 - 각 잡에서 `scripts/fetch-pdfium.mjs`를 실행한다(버전 고정, 캐시).
 - `Swatinem/rust-cache`, pnpm 캐시, `NODE_AUTH_TOKEN`(GitHub Packages)을 유지한다.
 - PR에서는 `pnpm validate` + `cargo fmt --check` + `cargo clippy -D warnings` + `cargo test`를 실행한다.
+- Windows 설치 파일은 **NSIS**(`bundle.targets`에 `nsis`) 하나로 한다. 사용자 단위 설치라 관리자 권한이 필요 없다. 지금 `release.yml`의 `*.exe` 패턴이 아무것과도 맞지 않는 문제도 이걸로 해소된다.
 
 ### P4-2 릴리스 흐름 정리 (T1)
 - **`auto-version.yml`을 제거한다.** `pnpm release:*` → 태그 푸시 → `release.yml`이 tauri-action으로 Draft Release를 만들고 아티팩트를 업로드한다.
@@ -478,6 +532,11 @@ A의 변경 상자와 B의 대응 상자를 거터를 가로지르는 곡선으�
 
 ### P4-4 (선택) 자동 업데이트
 - `plugin-updater` + minisign 키(`TAURI_SIGNING_PRIVATE_KEY`)를 쓴다. tauri-action이 GitHub Releases에 `latest.json`을 생성한다.
+
+### P4-5 라이선스와 고지 (S, L1)
+- 루트에 `LICENSE`(MIT) 파일을 둔다.
+- `THIRD_PARTY_NOTICES.md`를 만들어 앱과 함께 번들한다: pdfium(BSD-3/Apache-2.0), pdf.js(Apache-2.0), IBM Plex(OFL), Rust·npm 의존성. `cargo-about`과 `license-checker`류로 생성하고 CI에서 §1.2 허용 목록 밖 라이선스가 들어오면 실패시킨다.
+- 앱 정보 화면(또는 메뉴 "PDF Studio 정보")에서 고지를 열 수 있게 한다.
 
 ---
 
@@ -581,4 +640,4 @@ pnpm tauri dev                           # P1-1 이후
 - [ ] P2-7 작업 실행기 (진행률·취소·캐시)
 - [ ] P2-8 리포트 내보내기
 - [ ] P3-1 ~ P3-5 홈·모드 전환, 비교 UI
-- [ ] P4-1 ~ P4-4 빌드, 배포, 서명
+- [ ] P4-1 ~ P4-5 빌드, 배포, 서명, 라이선스 고지

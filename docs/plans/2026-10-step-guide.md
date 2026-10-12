@@ -74,7 +74,7 @@ pnpm i && pnpm start                                           # 현재 Electron
   2. `src/renderer/styles/` → `src/renderer/app/styles/`로 옮기고 `tokens.css`, `theme.css`, `base.css`로 나눈다. **값은 그대로 둔다.**
   3. `components.json` 경로 수정(`app/styles/index.css`, `components` 별칭)
 - `shared/lib/ipc-client.ts`와 `window.api` 호출은 위치·동작을 그대로 둔다(2-b에서 바꾼다).
-- 완료 기준: `shared`가 상위 레이어를 import하지 않음(`@/main`은 2-b 전까지 `ipc-client.ts`만 예외), 같은 레이어 슬라이스끼리 import하지 않음, 특성 테스트가 기대값 변경 없이 통과, 스타일 이동 전후 `vite build`의 CSS 결과가 같음
+- 완료 기준: `shared`가 상위 레이어를 import하지 않음(`@/main`은 2-b 전까지 `ipc-client.ts`만 예외), 같은 레이어 슬라이스끼리 import하지 않음, 기존 특성 테스트가 기대값 변경 없이 통과, 스타일 이동 전후 `vite build`의 CSS 결과가 같음
 - [x] Step 2-a
 
 #### Step 2-b. 플랫폼 어댑터, 계약 연결 (M)
@@ -82,10 +82,10 @@ pnpm i && pnpm start                                           # 현재 Electron
 - 브랜치: `refactor/platform-adapter`
 - 할 일
   1. 손으로 쓴 `src/shared/contracts`를 만들지 않는다. Step 11에서 만든 tauri-specta 생성물을 계약 타입으로 쓴다. renderer의 `@/main/*` import 제거
-  2. `shared/platform/`에 `DesktopPlatform` 인터페이스와 `tauri-platform.ts`, `mock-platform.ts`. **Electron용 임시 어댑터는 만들지 않는다.** 어댑터 단위 테스트(`mockIPC`)를 여기서 쓴다(구 Step 12)
+  2. `shared/platform/`에 `DesktopPlatform` 인터페이스와 `tauri-platform.ts`, `mock-platform.ts`. **Electron용 임시 어댑터는 만들지 않는다.** 어댑터에는 단위 테스트를 따로 두지 않는다. 계약 타입과 typecheck로 형태를 맞추고 동작은 E2E(mock-platform)로 확인한다(구 Step 12)
   3. `ipc-client.ts`·`window.api` 호출을 `DesktopPlatform`으로 바꾼다
-- 커밋을 나눈다: 어댑터(+계약 연결, `mockIPC` 테스트) / 호출부 교체
-- 완료 기준: `window.api` 참조 0, `@tauri-apps/api` import는 `shared/platform/tauri-platform.ts`에만, `shared`가 `@/main`을 import하지 않음, `mockIPC` 테스트 통과
+- 커밋을 나눈다: 어댑터(+계약 연결) / 호출부 교체
+- 완료 기준: `window.api` 참조 0, `@tauri-apps/api` import는 `shared/platform/tauri-platform.ts`에만, `shared`가 `@/main`을 import하지 않음, typecheck와 기존 특성 테스트 통과
 - [ ] Step 2-b
 
 ### Step 3. 비파괴 회전 (S)
@@ -93,7 +93,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 - 브랜치: `fix/non-destructive-rotation`
 - 읽을 곳: 계획서 §4 P0-3 (버그 B1)
 - 할 일: 병합은 Rust(`merge_pdfs`, Step 10·11)가 요청의 페이지별 rotation을 적용한다. 프론트에서 원본을 덮어쓰는 편집·회전 호출(`pdf.edit:apply`, `pdf.page:rotate`에 해당하는 호출)을 없애고, 회전은 스토어 상태로만 들고 있다가 `MergeRequest`에 담는다.
-- 완료 기준: 어떤 조작 후에도 원본 파일의 mtime과 해시가 그대로라는 테스트 통과
+- 완료 기준: 어떤 조작 후에도 원본 파일의 mtime과 해시가 그대로라는 E2E 시나리오 통과
 - [ ] Step 3
 
 ### Step 4. pdf.js 로더 단일화와 렌더 캐시 (M)
@@ -120,8 +120,8 @@ pnpm i && pnpm start                                           # 현재 Electron
 - 파일 추가 경로 처리는 Rust `open_files`(Step 11)가 맡는다(D14). 프론트에는 삽입 위치와 업로드 표시만 남기고, `ingestPaths`로 TS에서 다시 통합하지 않는다.
 - 화면 시안: 6 "병합: 페이지 삭제·복원", 8 "병합: 실패"(오류 오버레이와 토스트)
 - 완료 기준
-  - 빈 화면 TIFF 드롭 후 병합 성공, Windows 경로로 기본 저장 경로 계산 테스트 통과
-  - 페이지 삭제 → 흐린 카드의 "복원" → 병합 결과가 삭제 전과 같음(스토어 테스트), 상태바·카드 쪽수는 삭제 안 된 페이지만 셈
+  - 빈 화면 TIFF 드롭 후 병합 성공, Windows 경로 입력에서 기본 저장 경로가 맞게 계산되는 E2E 시나리오 통과
+  - 페이지 삭제 → 흐린 카드의 "복원" → 병합 결과가 삭제 전과 같음(기존 특성 테스트 유지 + E2E 시나리오), 상태바·카드 쪽수는 삭제 안 된 페이지만 셈
   - 클릭·⌘·Shift 선택, 삭제 후 선택 목록 정리, 단축키(Delete, ⌘A, Esc)
   - 일부러 실패시킨 파일 읽기·병합·다운로드가 모두 화면에 보임
   - 미사용 코드 제거 후 `pnpm validate` 통과(`selectRange`, `restorePage`는 남김)
@@ -186,7 +186,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 
 ### Step 12. Tauri 어댑터와 드롭 (M)
 - 실행 순서: 없음 (Step 2에 흡수)
-- 이 Step은 Step 2-b에 흡수됨. 어댑터(`tauri-platform.ts`)와 `mockIPC` 단위 테스트는 Step 2-b에서 한다. 외부 파일 드롭(`onDragDropEvent`, `devicePixelRatio` 보정, `elementFromPoint` 판정)은 Step 5에서 한다.
+- 이 Step은 Step 2-b에 흡수됨. 어댑터(`tauri-platform.ts`)는 Step 2-b에서 한다(어댑터 전용 단위 테스트는 두지 않는다). 외부 파일 드롭(`onDragDropEvent`, `devicePixelRatio` 보정, `elementFromPoint` 판정)은 Step 5에서 한다.
 - 체크박스는 Step 2-b와 함께 체크한다.
 - [ ] Step 12
 
@@ -224,7 +224,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 | Step | 계획서 | 브랜치 | 완료 기준 | |
 |---|---|---|---|---|
 | 16 | P2-1 결과 모델 ADR | `docs/adr-compare-result` | `CompareResult` 타입과 좌표 규칙이 ADR로 고정 | [ ] |
-| 17 | P2-2 추출 + 좌표 일치 | `feat/compare-extract` | pdfium 박스와 pdf.js 박스 교차 테스트 통과(CropBox 오프셋, 회전 페이지 포함) | [ ] |
+| 17 | P2-2 추출 + 좌표 일치 | `feat/compare-extract` | pdfium 박스 Rust golden 테스트 통과 + pdf.js 화면 박스 위치 E2E 통과(CropBox 오프셋, 회전 페이지 포함) | [ ] |
 | 18 | P2-3 정규화·토큰화 | `feat/compare-tokenize` | 한글 픽스처 토큰화 golden 통과 | [ ] |
 | 19 | P2-4 정렬과 diff | `feat/compare-diff` | 삽입·삭제·치환·문단 이동 golden 통과 | [ ] |
 | 20 | P2-5 페이지 짝짓기 | `feat/compare-page-pairs` | 페이지 삽입·삭제 픽스처에서 짝이 맞음 | [ ] |

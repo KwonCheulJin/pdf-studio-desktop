@@ -27,7 +27,7 @@
 ### 비용 (감수하는 부분)
 - 기존 TS 서비스와 테스트를 Rust로 재작성해야 한다.
 - pdfium 바이너리를 플랫폼별로 번들하고 서명해야 한다. **가장 먼저 검증한다(P1-0).**
-- 표시(pdf.js)와 처리(pdfium) 엔진이 다르다. 좌표계 일치를 테스트로 보장한다(§6.2).
+- 표시(pdf.js)와 처리(pdfium) 엔진이 다르다. 좌표계 일치를 Rust golden 테스트와 E2E로 보장한다(§6.2).
 
 ---
 
@@ -55,7 +55,7 @@
 ### 1.3 레포 작업 규칙 (CLAUDE.md 유지)
 - 계획 → 확인 → 실행 → 보고
 - YAGNI/KISS, 매직 값 금지(Rust도 `const`/enum으로)
-- TDD 대상: `shared/lib`, `**/model`, **`crates/pdf-core` 전체**
+- 테스트: Rust는 `crates/pdf-core`의 핵심 동작만(§6.3), 프론트는 새 단위 테스트 없이 Playwright E2E만(§10.2)
 - **커밋에 AI co-author 라인을 넣지 않는다.**
 - **설치·생성은 키트로 한다.** Tauri 스캐폴드, 플러그인, 권한(capability), 아이콘, 서명 키는 Tauri CLI(`tauri init`, `tauri add`, `tauri permission add`, `tauri capability new`, `tauri icon`, `tauri signer generate`)로 만들고, 생성된 결과를 최소한으로만 고친다. 의존성은 `pnpm add`와 `cargo add`로 넣는다(`package.json`, `Cargo.toml`, `lib.rs` 플러그인 등록, capability JSON을 손으로 쓰지 않는다). 직접 작성은 키트가 없는 경우(`fetch-pdfium.mjs`, 앱 고유 커맨드와 `pdf-core` 로직, Electron 제거)로 한정한다.
 
@@ -159,7 +159,7 @@ Phase 5  고도화
 - **완료 기준:** Mac과 Windows에서 클론 직후 `pnpm i && pnpm validate`가 통과한다.
 
 ### P0-2 플랫폼 어댑터 도입과 계약 분리 (M)
-- **먼저 특성 테스트(T2):** 스토어를 옮기기 전에 지금 동작을 고정하는 테스트를 쓴다. 대상: `merge-store`의 파일 추가·삽입 위치, `movePageInMergeOrder`(파일 간 이동 포함), `insertFileAtPosition`, 그룹 접기/펼치기, 페이지 삭제, `selection-store`의 FILE/PAGE 전환. 리팩터링 중 이 테스트는 그대로 통과해야 한다(B10·B11에서 의도적으로 바꾸는 동작은 그 단계에서 테스트를 갱신).
+- **특성 테스트(T2):** 스토어를 옮기기 전에 지금 동작을 고정한 기존 Vitest(`merge-store`의 파일 추가·삽입 위치, `movePageInMergeOrder`(파일 간 이동 포함), `insertFileAtPosition`, 그룹 접기/펼치기, 페이지 삭제, `selection-store`의 FILE/PAGE 전환)를 유지한다. 리팩터링 중 이 테스트는 그대로 통과해야 한다(B10·B11에서 의도적으로 바꾸는 동작은 그 단계에서 기대값을 갱신). 스토어에 새 단위 테스트는 더하지 않고, 같은 동작을 E2E 시나리오가 확인하게 되면 해당 특성 테스트를 지운다.
 - 손으로 쓴 `src/shared/contracts`는 만들지 않는다. 계약 타입은 P1-3에서 만든 `tauri-specta` 생성물을 쓴다. renderer는 `@/main/*`을 import하지 않는다.
 - `src/renderer/shared/platform/`: **경로 기반의 굵은 단위(coarse-grained) API**로 정의한다. 처리 주체(Rust)가 바뀌어도 같은 시그니처를 유지하기 위해서다.
   ```ts
@@ -179,16 +179,16 @@ Phase 5  고도화
   }
   ```
   - 구현체는 `tauri-platform.ts`와 `mock-platform.ts`(테스트, Playwright) 둘이다. Electron용 임시 어댑터는 만들지 않는다.
-  - 어댑터 단위 테스트는 `@tauri-apps/api/mocks`의 `mockIPC`로 쓴다.
+  - 어댑터에는 단위 테스트를 따로 두지 않는다. 계약 타입(`tauri-specta` 생성물)과 typecheck로 형태를 맞추고, 동작은 `mock-platform` 기반 E2E로 확인한다.
   - 앱 부팅 시 하나를 주입한다(`app/providers`).
 - FSD를 정리한다. `shared/hooks`의 업무 훅을 `features/*/model`로, `shared/model/merge-store`는 `entities/merge-plan` + `features/pdf-merge/model`로 나눈다.
 - 진행은 둘로 나눈다. FSD 재배치·스타일 이동(Step 2-a)은 Tauri와 무관하므로 Step 10과 병렬로 먼저 하고, 어댑터·계약 연결(Step 2-b)은 P1-3(Step 11) 뒤에 한다.
-- **완료 기준:** `window.api` 참조 0, `@tauri-apps/api` import는 `shared/platform/tauri-platform.ts`에만, `shared`가 상위 레이어나 `@/main`을 import하지 않음, `mockIPC` 테스트 통과.
+- **완료 기준:** `window.api` 참조 0, `@tauri-apps/api` import는 `shared/platform/tauri-platform.ts`에만, `shared`가 상위 레이어나 `@/main`을 import하지 않음, 기존 특성 테스트 통과, typecheck 통과.
 
 ### P0-3 비파괴 회전 (S, B1)
 - 회전은 `PdfPage.rotation`(스토어)으로만 관리하고, `MergeRequest.sources[].pages[].rotation`에 담아 병합 시 적용한다.
 - 병합은 Rust(`merge_pdfs`, P1-2~3)가 요청의 페이지별 rotation을 적용한다. 프론트에서 원본을 덮어쓰는 편집·회전 호출(`pdf.edit:apply`, `pdf.page:rotate`에 해당)을 없애고, 회전은 스토어 상태로만 들고 있다가 `MergeRequest`에 담는다.
-- **완료 기준:** 어떤 조작을 해도 원본 파일의 mtime과 해시가 변하지 않는다(테스트로 보장).
+- **완료 기준:** 어떤 조작을 해도 원본 파일의 mtime과 해시가 변하지 않는다(E2E로 확인).
 
 ### P0-4 pdf.js 로더 단일화와 렌더 캐시 (M, P1)
 - `shared/lib/pdfjs/`
@@ -219,7 +219,7 @@ Phase 5  고도화
   - 접힌 문서 카드의 쪽 범위와 상태바 페이지 수는 삭제되지 않은 페이지만 센다. 삭제된 페이지가 있으면 카드에 "n쪽 삭제됨" 배지.
   - 플로팅 바: 선택에 삭제된 페이지가 섞이면 "복원" 버튼을 함께 보인다.
   - 파일 단위 삭제(카드의 파일 삭제)는 지금처럼 영구 삭제로 둔다.
-  - 완료 기준: 삭제 → 복원 후 병합 결과가 삭제 전과 같다(스토어 테스트).
+  - 완료 기준: 삭제 → 복원 후 병합 결과가 삭제 전과 같다(기존 특성 테스트 유지 + E2E 시나리오).
 - **B11 선택:** 카드 본문 클릭 = 단일 선택, ⌘/Ctrl+클릭 = 추가·해제, Shift+클릭 = 범위(`selectRange`). 어떤 경로로든 삭제되면 선택 목록에서도 뺀다.
 - **B12 오류 표시(시안 8):** 실패는 모두 사용자에게 보인다. 짧은 실패(파일 하나 읽기 실패, 다운로드 실패)는 토스트, 병합 실패는 진행 오버레이 자리에 원인 + 멈춘 단계 + 오류 코드 + "다시 시도 / 이 파일 빼기 / 닫기". 오류 코드 → 한국어 문구 표는 `shared/config/error-messages.ts` 한 곳에 둔다.
 - **A1 나머지:** 단축키(Delete 삭제, ⌘/Ctrl+A 전체 선택, Esc 선택 해제), hover 버튼을 `:focus-within`에서도 보이기, 아이콘 버튼마다 `aria-label`, 진행 오버레이 `role="status"`, 전체 선택을 진짜 `<button>` 또는 `<label>`+체크박스로.
@@ -273,7 +273,7 @@ Phase 5  고도화
   - `merge.rs`: 요청을 검증(빈 소스, 페이지 인덱스 범위)한 뒤 새 문서에 소스 페이지를 import하고 페이지별 회전을 **절대값으로 설정**(더하지 않음, B13)해 저장한다. **원자적 쓰기**(임시 파일에 쓴 뒤 rename)를 하고, Windows 공유 위반 시 재시도한다(기존 retry-write 로직 이식, `cfg(windows)`).
   - `tiff.rs`: `tiff` 크레이트로 멀티페이지를 디코드하고, 페이지마다 이미지 객체로 PDF 페이지를 만든다. 결과는 앱 캐시 디렉터리에 고유 이름으로 저장하고 `{ pdf_path, page_count, display_name }`을 돌려준다(B3, B15).
 - **CCITT G4(스캔 문서에 흔한 압축)** 를 `tiff` 크레이트가 디코드하지 못하면, 압축을 풀지 않고 원본 스트립 데이터를 `CCITTFaxDecode` 이미지로 PDF에 그대로 넣는 경로를 둔다. 스파이크 때 확인한다.
-- 테스트: 기존 `src/main/services/__tests__`의 케이스(병합 6, 편집 11 중 해당분, TIFF 4, 메타데이터 5)를 Rust로 이식한다. **회전**, **멀티페이지 TIFF**, **CCITT G4**, **북마크가 있는 원본 병합** 케이스를 추가한다.
+- 테스트: 기존 `src/main/services/__tests__`의 케이스(병합 6, 편집 11 중 해당분, TIFF 4, 메타데이터 5) 중 핵심 동작만 Rust로 이식한다(상수·getter·중복 확인은 이식하지 않는다). **회전**, **멀티페이지 TIFF**, **CCITT G4**, **북마크가 있는 원본 병합** 케이스를 추가한다.
 - **완료 기준:** `cargo test -p pdf-core`가 3개 OS CI에서 통과한다.
 
 ### P1-3 Tauri 커맨드와 작업 큐 (M, B4/S1)
@@ -308,7 +308,7 @@ Phase 5  고도화
   - `onDragDropEvent`의 `position`은 **PhysicalPosition**이므로 `/ window.devicePixelRatio`로 CSS 좌표로 바꾼다.
   - `document.elementFromPoint`로 드롭 대상(슬롯, 그리드 위치)을 판정한다.
   - enter/over/leave로 드롭 오버레이 UI를 갱신한다.
-- `@tauri-apps/api/mocks`의 `mockIPC`로 어댑터 단위 테스트를 작성한다.
+- 어댑터 동작은 `mock-platform` 기반 E2E로 확인한다(어댑터 전용 단위 테스트는 두지 않는다).
 
 ### P1-5 보안, 테마, 창 (S, B7/S1)
 - CSP를 `tauri.conf.json > app.security.csp`로 옮긴다.
@@ -387,7 +387,7 @@ pub struct CompareResult {
 ### 6.2 파이프라인
 1. **추출 (P2-2, M)**
    - pdfium 페이지 텍스트에서 글자별 `{ char, bounds, font_size, font_name }`을 얻는다. 박스는 tight bounds를 기본으로 한다.
-   - **좌표계 일치 검증(중요):** pdfium 좌표와 pdf.js 화면 좌표가 CropBox/MediaBox 원점 오프셋, `/Rotate` 페이지, `UserUnit`에서 일치하는지 golden 테스트로 고정한다. 필요하면 `page_sizes`에 원점 오프셋을 포함해 프론트에서 보정한다.
+   - **좌표계 일치 검증(중요):** pdfium 좌표와 pdf.js 화면 좌표가 CropBox/MediaBox 원점 오프셋, `/Rotate` 페이지, `UserUnit`에서 일치하는지 pdfium 박스는 Rust golden 테스트로 고정하고, 화면 박스와의 일치는 E2E로 확인한다. 필요하면 `page_sizes`에 원점 오프셋을 포함해 프론트에서 보정한다.
    - 텍스트가 없는 페이지(스캔본)는 `NoTextLayer`로 알린다. OCR은 범위 밖이다.
 2. **정규화와 토큰화 (P2-3, M)**
    - Unicode 정규화(NFC/NFKC 옵션, `unicode-normalization`), 공백과 줄바꿈 정리, 하이픈 줄바꿈 결합, 대소문자 무시 옵션
@@ -424,7 +424,9 @@ pub struct CompareResult {
 ### 6.3 테스트 전략
 - **픽스처:** 작은 PDF를 레포에 커밋하고(`crates/pdf-core/tests/fixtures/`), 생성 스크립트도 함께 둔다. 원본과 변형(단어 삽입/삭제/치환, 문단 이동, 페이지 삽입/삭제, 회전 페이지, CropBox 오프셋)을 만들고 기대 결과 JSON(golden)과 비교한다.
 - **한글:** OFL 폰트(예: Noto Sans KR 서브셋)를 임베드한 픽스처로 CID 폰트 경로를 검증한다.
-- **좌표 일치:** 같은 픽스처를 pdf.js(vitest)에서 렌더한 박스와 pdfium 박스를 비교하는 교차 테스트를 둔다.
+- **좌표 일치:** pdfium 박스는 Rust golden 테스트로 고정한다. pdf.js 화면 박스와의 일치는 E2E로 확인한다(같은 픽스처를 띄워 하이라이트 박스 위치를 확인, CropBox 오프셋·회전 페이지 포함).
+- **쓰지 않는 테스트:** 상수 값 확인, 단순 getter, 자명한 enum↔문자열 매핑, 라이브러리 자체 동작, 중복 확인. 「이 테스트를 실패시킬 production 변경」을 한 줄로 말할 수 없으면 쓰지 않는다.
+- **프론트:** 새 단위 테스트(Vitest)를 쓰지 않는다. 검증은 Playwright E2E로 한다(§10.2).
 - **성능 회귀:** 500페이지 합성 문서의 처리 시간과 메모리를 기록한다(`cargo test --release`, CI에서는 완화된 기준).
 
 ---
@@ -522,15 +524,15 @@ A의 변경 상자와 B의 대응 상자를 거터를 가로지르는 곡선으�
 - A만/B만 보기, 사용자 토글 `연결선 표시` 끔(하이라이트와 별개), 행이 가상화 창 밖, 한쪽이 자리표시자, 자격 있는 변경 없음.
 
 **구현 위치(FSD)와 테스트**
-- 묶기·끝점·path 계산은 순수 함수로 `entities/comparison/model/connector-stems.ts`, `connectors.ts`에 둔다(TDD 대상). 그리는 컴포넌트는 `widgets/compare-viewer/ui/connector-layer.tsx`.
-- 비교 PDF 내보내기(P2-8)에서도 같은 선을 그리므로 Rust에도 같은 묶기 규칙이 필요하다. **두 구현을 같은 golden JSON 픽스처로 테스트**해 화면과 내보내기 결과를 맞춘다. 내보내기는 한 장에 묶음이 40개를 넘으면 연결선을 생략한다.
+- 묶기·끝점·path 계산은 순수 함수로 `entities/comparison/model/connector-stems.ts`, `connectors.ts`에 둔다(새 단위 테스트는 쓰지 않는다). 그리는 컴포넌트는 `widgets/compare-viewer/ui/connector-layer.tsx`.
+- 비교 PDF 내보내기(P2-8)에서도 같은 선을 그리므로 Rust에도 같은 묶기 규칙이 필요하다. 묶기 규칙의 정본 검증은 Rust golden JSON 픽스처 테스트로 하고, 화면 쪽은 E2E에서 SVG 연결선 끝점이 같은 golden 기대값과 맞는지 확인해 화면과 내보내기 결과를 맞춘다. 내보내기는 한 장에 묶음이 40개를 넘으면 연결선을 생략한다.
 - 끝점은 화면 띠의 보정값(최소 높이 등)이 아니라 pt 중앙을 쓴다. 짧은 변경에서 최대 2px 어긋날 수 있지만 화면과 내보내기가 같아진다.
 
 **알려진 한계**
 - 페이지 짝짓기(P2-5)가 틀리면 대응 상자가 다른 행에 놓여 연결선이 거의 안 보인다. 고칠 곳은 묶기 규칙이 아니라 페이지 짝짓기다.
 
 **완료 기준**
-- golden 픽스처(여러 줄 변경, 인접 변경 3개, 20pt 경계 양쪽, 순서가 뒤바뀐 변경, 가로 페이지)에서 TS와 Rust의 묶음 결과가 같다.
+- golden 픽스처(여러 줄 변경, 인접 변경 3개, 20pt 경계 양쪽, 순서가 뒤바뀐 변경, 가로 페이지)에서 Rust 묶음 결과가 golden과 같고, 화면의 SVG 연결선 끝점이 같은 golden 기대값과 맞는다(E2E).
 - 확대·축소와 창 크기 변경 후에도 끝점이 상자 중앙에 붙어 있다. 스크롤 중 연결선이 사라졌다가 멈추면 다시 나타난다.
 
 ### 완료 기준
@@ -608,7 +610,7 @@ pnpm tauri dev                           # P1-1 이후
 - **파일 잠금:** Windows 공유 위반 재시도는 Rust에서 `cfg(windows)`로만 수행한다.
 - **pdfium 라이브러리 경로:** 개발(`PDFIUM_LIB_PATH`), 테스트, 번들(`Frameworks`/resources)마다 다르다. 결정 로직을 `pdf-core` 한 곳에 둔다.
 - **단축키:** `⌘`/`Ctrl`을 추상화한다(`isMac ? metaKey : ctrlKey`).
-- **E2E:** `tauri-driver`(WebDriver)는 **macOS를 지원하지 않는다.** Mac 로컬 E2E는 Vite dev + `mock-platform`(또는 `mockIPC`) + Playwright로 하고, 처리 로직은 `cargo test`로 검증한다.
+- **E2E:** `tauri-driver`(WebDriver)는 **macOS를 지원하지 않는다.** 프론트 검증은 Playwright E2E만 쓴다: Vite dev + `mock-platform` + WebKit 엔진 헤드리스(창이 뜨지 않고 Mac WKWebView와 엔진을 맞춘다). 처리 로직은 핵심 동작만 `cargo test`로 검증한다.
 
 ### 10.3 Claude Code 세션 시작 프롬프트 예시
 > `docs/plans/2026-10-step-guide.md`의 **Step N**을 진행해줘. 거기 적힌 문서 섹션을 읽고, 시작 전에 작업 계획을 먼저 보여 주고 확인을 받아. 완료 기준을 직접 검증한 뒤 보고해.
@@ -639,7 +641,7 @@ pnpm tauri dev                           # P1-1 이후
 | 리스크 | 영향 | 대응 |
 |---|---|---|
 | pdfium 번들·서명 실패(특히 Mac) | 전체 일정 지연 | **P1-0을 게이트로** 두고 가장 먼저 검증 |
-| pdfium과 pdf.js 좌표 불일치(CropBox, 회전) | 하이라이트 위치 어긋남 | §6.3 교차 테스트, `page_sizes`에 원점 오프셋 포함 |
+| pdfium과 pdf.js 좌표 불일치(CropBox, 회전) | 하이라이트 위치 어긋남 | §6.3 Rust golden 테스트 + E2E 박스 위치 확인, `page_sizes`에 원점 오프셋 포함 |
 | `tiff` 크레이트의 압축 방식 미지원(CCITT G4 등) | 일부 TIFF 변환 실패 | 원본 스트림 그대로 넣는 경로, 미지원 시 명확한 에러 |
 | pdfium 직렬화로 인한 처리 대기 | 병합과 비교를 동시에 하면 대기 | 작업 큐 + 진행률 표시. 측정 후 필요하면 Phase 5 병렬화 |
 | ToUnicode가 깨진 PDF, 스캔 PDF | 비교 품질 저하 | `LowTextConfidence`/`NoTextLayer` 안내. 그래픽 diff는 Phase 5 |

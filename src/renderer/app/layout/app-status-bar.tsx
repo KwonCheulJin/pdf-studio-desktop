@@ -1,3 +1,4 @@
+import { ThirdPartyNoticesButton } from "@/renderer/features/third-party-notices";
 import {
   MERGE_STATUS,
   useMergeFiles,
@@ -36,6 +37,7 @@ export function AppStatusBar() {
         <span>상태: {statusText}</span>
         <span className="text-muted-foreground/50">|</span>
         <span>v{__APP_VERSION__}</span>
+        <ThirdPartyNoticesButton />
       </div>
     </footer>
   );

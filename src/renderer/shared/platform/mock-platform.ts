@@ -39,6 +39,8 @@ export interface MockPlatformOptions {
   files?: MockPdfFile[];
   /** 있으면 `temp` 출력 병합이 이 경로에 쓴다. 없으면 작업 ID로 이름을 만든다. */
   mergeOutput?: MockMergeOutput;
+  /** `readThirdPartyNotices`가 돌려줄 고지 원문. 없으면 번들에 파일이 없을 때처럼 실패한다. */
+  thirdPartyNotices?: string;
 }
 
 export interface MockPlatform extends DesktopPlatform {
@@ -54,7 +56,8 @@ export interface MockPlatform extends DesktopPlatform {
 const MOCK_ERROR_CODE = {
   NOT_FOUND: "NOT_FOUND",
   PATH_NOT_ALLOWED: "PATH_NOT_ALLOWED",
-  UNSUPPORTED_FILE_TYPE: "UNSUPPORTED_FILE_TYPE"
+  UNSUPPORTED_FILE_TYPE: "UNSUPPORTED_FILE_TYPE",
+  RESOURCE_UNAVAILABLE: "RESOURCE_UNAVAILABLE"
 } as const satisfies Record<string, ErrorCode>;
 
 const MOCK_DIRECTORY = {
@@ -63,6 +66,9 @@ const MOCK_DIRECTORY = {
 } as const;
 
 const PERCENT_COMPLETE = 100;
+
+/** Rust `notices::THIRD_PARTY_NOTICES_FILE`(실패 메시지용) */
+const THIRD_PARTY_NOTICES_FILE = "THIRD_PARTY_NOTICES.md";
 
 const EXTENSION_SEPARATOR = ".";
 const PDF_EXTENSION = "pdf";
@@ -107,7 +113,8 @@ function missingFile(path: string): AppError {
  */
 export function createMockPlatform({
   files = [],
-  mergeOutput
+  mergeOutput,
+  thirdPartyNotices
 }: MockPlatformOptions = {}): MockPlatform {
   const filesByPath = new Map(files.map((file) => [file.path, file]));
   const convertedFiles = new Map(
@@ -270,6 +277,17 @@ export function createMockPlatform({
     getSetting: async (key) => settings.get(key),
     setSetting: async ({ key, value }) => {
       settings.set(key, value);
+    },
+    // Rust처럼 번들 리소스를 못 읽으면 경로 없이 `RESOURCE_UNAVAILABLE`이다.
+    readThirdPartyNotices: async () => {
+      if (thirdPartyNotices === undefined) {
+        throw new PlatformError({
+          code: MOCK_ERROR_CODE.RESOURCE_UNAVAILABLE,
+          message: THIRD_PARTY_NOTICES_FILE,
+          path: null
+        });
+      }
+      return thirdPartyNotices;
     },
     simulateFileDrop: (event) => {
       if (event.type === FILE_DROP_EVENT_TYPE.DROP) {

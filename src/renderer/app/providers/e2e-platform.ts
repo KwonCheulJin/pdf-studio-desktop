@@ -55,6 +55,8 @@ export interface E2eMockSeed {
   mergeScripts?: E2eMergeScript[];
   /** 있으면 `temp` 출력 병합 결과가 이 경로·파일 이름이 된다. */
   mergeOutput?: MockMergeOutput;
+  /** 있으면 `readThirdPartyNotices`가 이 원문을 돌려준다. 없으면 리소스 없음 오류다. */
+  thirdPartyNotices?: string;
 }
 
 /** 작업 취소를 Rust처럼 알리는 코드 */
@@ -320,7 +322,8 @@ export function createE2ePlatform(): DesktopPlatform {
   window.__E2E_PDF_CACHE_STATS__ = getPdfCacheStats;
   const mockPlatform = createMockPlatform({
     files: seed.files.map(toMockFile),
-    mergeOutput: seed.mergeOutput
+    mergeOutput: seed.mergeOutput,
+    thirdPartyNotices: seed.thirdPartyNotices
   });
   window.__E2E_FILE_DROP__ = mockPlatform.simulateFileDrop;
   const seededPlatform = injectFailures({

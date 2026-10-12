@@ -4,6 +4,7 @@
 mod diff;
 mod extract;
 mod model;
+mod pages;
 mod tokenize;
 
 pub use diff::{DIFF_TIME_LIMIT, TokenDiff, diff_tokens};
@@ -12,6 +13,7 @@ pub use model::{
     Change, ChangeKind, ChangeSide, CompareResult, NoTextReason, Notice, PagePair, PageSize,
     PageSizes, PageSources, Side, TextBox, TextSource,
 };
+pub use pages::pair_pages;
 pub use tokenize::{
     LOW_TEXT_CONFIDENCE_RATIO, NormalizeOptions, Token, UnicodeForm, has_low_text_confidence,
     tokenize,

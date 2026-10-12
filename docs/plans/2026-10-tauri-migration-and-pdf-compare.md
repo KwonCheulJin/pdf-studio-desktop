@@ -517,10 +517,10 @@ A의 변경 상자와 B의 대응 상자를 거터를 가로지르는 곡선으�
 - 각 잡에서 `scripts/fetch-pdfium.mjs`를 실행한다(버전 고정, 캐시).
 - `Swatinem/rust-cache`, pnpm 캐시, `NODE_AUTH_TOKEN`(GitHub Packages)을 유지한다.
 - PR에서는 `pnpm validate` + `cargo fmt --check` + `cargo clippy -D warnings` + `cargo test`를 실행한다.
-- Windows 설치 파일은 **NSIS**(`bundle.targets`에 `nsis`) 하나로 한다. 사용자 단위 설치라 관리자 권한이 필요 없다. 지금 `release.yml`의 `*.exe` 패턴이 아무것과도 맞지 않는 문제도 이걸로 해소된다.
+- Windows 설치 파일은 **NSIS**(`bundle.targets`에 `nsis`) 하나로 한다. 사용자 단위 설치라 관리자 권한이 필요 없다.
 
 ### P4-2 릴리스 흐름 정리 (T1)
-- **`auto-version.yml`을 제거한다.** `pnpm release:*` → 태그 푸시 → `release.yml`이 tauri-action으로 Draft Release를 만들고 아티팩트를 업로드한다.
+- 기존 Electron용 워크플로(`build.yml`, `release.yml`, `auto-version.yml`)는 Step 1에서 모두 제거했다. 여기서 새로 만든다: `pnpm release:*` → 태그 푸시 → `release.yml`이 tauri-action으로 Draft Release를 만들고 아티팩트를 업로드한다.
 
 ### P4-3 서명
 | 옵션 | 비용 | 사용자 경험 |

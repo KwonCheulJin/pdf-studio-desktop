@@ -1,0 +1,36 @@
+# Tauri·Rust 규칙
+
+언제 읽는가: `src-tauri`나 `crates/`를 고칠 때, Tauri 플러그인·권한·설정을 건드릴 때, pdfium을 다룰 때.
+
+## Tauri 규칙
+
+- **설치·생성은 키트로 한다.** Tauri CLI(`tauri init`, `tauri add`, `tauri permission add`, `tauri capability new`, `tauri icon`, `tauri signer generate`)와 `pnpm add`/`cargo add`를 쓰고, 생성물은 최소한으로만 고친다. `Cargo.toml`·`package.json` 의존성, `lib.rs` 플러그인 등록, capability JSON을 손으로 쓰지 않는다.
+- **최소 권한:** capability는 `main` 창 하나에만 연결하고 쓰는 권한만 둔다. `fs` 플러그인은 쓰지 않는다. 파일 접근은 검증하는 커스텀 커맨드로만 한다.
+- **경로 검증:** 커맨드는 받은 경로를 `canonicalize`한 뒤 확장자 화이트리스트·허용 루트(사용자가 고른 경로, 앱 임시·캐시 디렉터리)·크기 상한을 확인한다.
+- **사용자 원본 파일은 절대 수정하지 않는다.** 쓰기는 임시 파일에 쓴 뒤 rename하는 원자적 쓰기로 한다.
+- **커맨드는 얇게:** `async fn` + 무거운 작업은 pdfium 전용 작업 스레드(또는 `spawn_blocking`)로 넘긴다. UI 스레드를 막지 않는다.
+- **에러:** 커맨드는 `Result<T, AppError>`를 돌려준다. `AppError`는 `thiserror` + `Serialize`로 `{ code, message }`를 만든다. 화면 문구는 프론트가 `code`로 찾고, `message`는 로그용이다. 커맨드 안에서 `unwrap`/`expect`/`panic!` 금지
+- **IPC 전송:** 진행률 스트림은 `tauri::ipc::Channel`, 바이너리는 `tauri::ipc::Response`. `Vec<u8>`을 그대로 돌려주지 않는다(JSON 숫자 배열이 된다). 진행 이벤트는 1% 단위 이상으로만 보낸다.
+- **취소:** 오래 걸리는 작업은 작업 ID와 `Arc<AtomicBool>` 취소 토큰을 갖고, 취소되면 임시 파일을 지운다.
+- **상태:** 공유 상태는 `app.manage()` + `State<'_, T>`로만. 전역 `static mut` 금지
+- **CSP:** `tauri.conf.json > app.security.csp`로 관리하고 외부 스크립트를 로드하지 않는다. `withGlobalTauri`를 켜지 않는다.
+- **경로·플랫폼:** TS는 `@tauri-apps/api/path`, Rust는 `PathBuf`만. 문자열로 `/`·`\`를 다루지 않는다. 단축키는 `isMac ? metaKey : ctrlKey`
+- **버전:** `tauri.conf.json`의 `version`은 `../package.json`을 가리킨다(단일 소스). <!-- docs-path-check: ignore -->
+- **pdfium:** 라이브러리 경로 결정은 `pdf-core` 한 곳에서. 개발·테스트는 `PDFIUM_LIB_PATH` 환경변수를 우선한다.
+
+## pdfium 준비와 Rust 테스트
+
+- `pnpm fetch:pdfium`이 버전을 고정한 pdfium을 받아 SHA-256을 검증하고 `src-tauri/pdfium/<target-triple>/`에 둔다(`scripts/fetch-pdfium.mjs`).
+- `PDFIUM_LIB_PATH`는 폴더가 아니라 **라이브러리 파일 경로**다(`crates/pdf-core/src/engine.rs`). 비어 있으면 번들 폴더의 플랫폼별 파일(`libpdfium.dylib`/`pdfium.dll`/`libpdfium.so`)을 쓴다.
+- macOS arm64 예: `PDFIUM_LIB_PATH=$PWD/src-tauri/pdfium/aarch64-apple-darwin/libpdfium.dylib cargo test -p pdf-core`
+- `src-tauri/pdfium/` 안의 파일은 읽지 않는다(컨텍스트 낭비).
+
+## Rust 규칙
+
+- `cargo fmt`, `cargo clippy -D warnings` 통과가 기본이다.
+- 라이브러리 에러는 `thiserror`로 정의한 enum. `unwrap`/`expect`는 테스트와 "불가능함을 증명한 곳"에만, 이유를 주석으로 남긴다.
+- 매직 값 금지 → `const`와 enum. 상한·가중치(`MAX_INPUT_FILE_BYTES` 등)는 `pdf-core` 상수로 둔다.
+- 공개 API(`pub`)는 최소로 하고 나머지는 `pub(crate)`.
+- 명명: 함수·변수 `snake_case`, 타입·트레이트 `PascalCase`, 상수 `UPPER_SNAKE_CASE`. 축약 금지는 TS와 같다.
+- 의존성은 계획서 §1.2 라이선스 화이트리스트(MIT/BSD/Apache-2.0/ISC/Zlib) 안에서만 고른다. GPL/AGPL 금지
+- `#[allow(...)]` 남용 금지

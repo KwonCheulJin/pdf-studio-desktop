@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 pdfium-render = { version = "0.9.4", default-features = false, features = ["thread_safe", "pdfium_7881"] }
 thiserror = "2.0.21"
+tiff = "0.11.3"

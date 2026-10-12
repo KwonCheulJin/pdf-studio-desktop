@@ -67,17 +67,18 @@
 
 | 현재 채널 | 현재 동작 | Tauri 이후 |
 |---|---|---|
-| `pdf.merge:start` (+progress, complete) | main 스레드에서 pdf-lib 병합 | **`merge_pdfs(request, channel)`** 커맨드. `request`는 `{ sources: {path, pages: {index, rotation}[]}[], output_path }`. 진행률은 `tauri::ipc::Channel`(페이지 단위). `complete` 이벤트는 제거한다. |
+| `pdf.merge:start` (+progress, complete) | main 스레드에서 pdf-lib 병합 | **`merge_pdfs(request, channel)`** 커맨드. `request`는 `{ job_id, sources: {path, pages: {index, rotation}[]}[], output }`이고 `output`은 `{ kind: temp } | { kind: userPath, path }`이다(`job_id`는 프론트가 만든다). 진행률은 `tauri::ipc::Channel`(페이지 단위). `complete` 이벤트는 제거한다. |
 | `pdf.edit:apply`, `pdf.page:rotate` | **원본 파일을 덮어씀** | **제거.** 회전은 스토어 상태로만 들고 있다가 병합 요청에 담는다(P0-3). |
-| `file.convert.tiff` | sharp → PNG → pdf-lib | **`convert_tiff(path) -> temp_pdf_path`**(`tiff`/`image` + pdfium). 결과는 앱 캐시 디렉터리에 고유 이름으로 저장한다. |
+| `file.convert.tiff` | sharp → PNG → pdf-lib | **`convert_tiff(path) -> { pdf_path, page_count, display_name }`**(`tiff`/`image` + pdfium). 결과 PDF는 앱 캐시 디렉터리에 고유 이름으로 저장하고, 화면에 보일 이름은 `display_name`(원본 TIFF 이름)으로 따로 돌려준다(결함 B15). |
 | `file.meta.get-pdf-info` | pdf-lib 전체 파싱 | **`get_pdf_info(path)`**(pdfium: 페이지 수, 페이지별 크기·회전) |
 | `file.read:pdf` | 파일 전체를 구조화 복제로 전달 | **`read_pdf(path) -> tauri::ipc::Response`**(raw bytes). **표시용(pdf.js)으로만 사용한다.** |
-| `dialog.show-open/save` | Electron dialog | `@tauri-apps/plugin-dialog` |
-| `file.save.copy` | `fse.copy` | 필요 없음. 병합 결과를 사용자가 고른 경로로 바로 쓰거나, 미리보기용 임시 파일을 `copy_file`(검증 포함)로 복사한다. |
-| `file.delete` | **임의 경로 `rm -rf`** | **제거.** 앱 임시 디렉터리 정리용 `cleanup_temp`만 둔다. |
+| `dialog.show-open/save` | Electron dialog | **Rust가 다이얼로그를 여는 커맨드 `pick_files`·`pick_save_path`**(`plugin-dialog`는 Rust 쪽에서 호출). 결과 경로를 허용 경로 목록(`State`)에 기록한다(D13). |
+| `file.save.copy` | `fse.copy` | 필요 없음. 병합 출력은 요청의 `output`으로 지정한다: `{ kind: temp }`(미리보기용 앱 임시 파일) 또는 `{ kind: userPath, path }`(사용자가 고른 경로로 바로 쓰기). 임시 결과를 나중에 사용자 경로로 복사할 때만 `copy_file`(검증 포함)을 쓴다. |
+| `file.delete` | **임의 경로 `rm -rf`** | **제거.** 앱 임시 디렉터리 정리용 `cleanup_temp`와, 미리보기 결과 하나만 지우는 `discard_temp(path)`(앱 임시 폴더 하위만)를 둔다. |
 | `app.log` | console | `@tauri-apps/plugin-log` |
 | `theme:changed` | nativeTheme | `matchMedia` + 수동 설정 영속화(`plugin-store`) |
-| `getFilePath(File)` | `webUtils` | **`getCurrentWebview().onDragDropEvent`**(paths, position) |
+| `getFilePath(File)` | `webUtils` | **`getCurrentWebview().onDragDropEvent`**(paths, position). 드롭 경로도 Rust가 `WindowEvent::DragDrop`(또는 `onDragDropEvent`)에서 받은 경로를 허용 경로 목록에 기록한다(D13). |
+| (신규) 파일 추가 | 렌더러 3곳에 중복(`use-add-files`, `load-dropped-files`, `use-dropped-files`) | **`open_files(paths) -> 파일별 결과[]`**. 확장자 판별·TIFF 변환·정보 조회를 한 번에 하고, 파일별 성공/오류를 돌려준다(D14). |
 | (신규) 비교 | — | **`compare_pdfs(request, channel) -> CompareResult`**, `cancel_job(job_id)`, `export_compare_report(request)`(비교 PDF / 주석 PDF), `preview_compare_report(request, count)` |
 
 ### 2.2 버그와 부채: 이관하면서 고칠 것
@@ -99,6 +100,10 @@
 | B10 | 페이지 삭제는 소프트 삭제(`isDeleted`)인데 **복원할 화면이 없다.** 복원 컴포넌트(`page-thumbnail.tsx`)는 렌더되지 않고, `restorePage`는 `mergeOrder`에 되돌려 넣지 않는다. 상태바 전체 페이지 수에 삭제된 페이지가 섞인다. | P0-6 (복원 화면 연동) |
 | B11 | 선택 정합성: 카드 자체 버튼으로 지우면 선택 목록에 남는다. shift/⌘ 범위 선택이 없다(`selectRange` 미사용). 카드 본문 클릭으로 선택되지 않는다. | P0-6 |
 | B12 | 오류가 거의 보이지 않는다: `errorMessage` 미렌더, 선택 병합에 `catch` 없음, 다운로드 실패 미표시, `setError(null)`이 상태를 되돌리지 않음. 토스트는 파일 추가 실패 하나뿐. | P0-6 (화면) / P1-3 (코드 체계) |
+| B13 | 회전은 **절대값**이다. 스토어 `rotation`은 원본 `/Rotate`에서 시작해 사용자 회전을 누적한 최종값이다(`pdf-document.ts`, `merge-store.ts`). Rust 병합이 더하면 이중 회전된다. 원본 `/Rotate`에 -90, 450 같은 비정상 값이 있을 수 있다. | P1-2 (병합은 더하지 않고 그대로 설정, `info.rs`가 0/90/180/270으로 정규화) |
+| B14 | `build-merge-request.ts`의 `mergeOrder` 분기가 `isDeleted`를 거르지 않는다. B10으로 삭제 페이지를 `mergeOrder`에 남기면 삭제 페이지가 병합된다. | P0-6 (B10과 같은 커밋에서 수정) |
+| B15 | TIFF 표시 이름이 경로에서 나온다. B3로 캐시에 고유 이름을 저장하면 UUID가 화면에 보인다. | P1-2·P1-3 (`convert_tiff`/`open_files`가 `display_name` 반환) |
+| B16 | 정보 읽기에 실패하면 1쪽짜리 문서로 추가한다(`load-dropped-files.ts`, `use-dropped-files.ts`). 깨진 파일이 정상 문서처럼 목록에 들어간다. | P1-3 (`open_files`가 파일별 오류를 돌려줌) / P0-6 (토스트) |
 | A1 | 키보드·접근성: 단축키 없음, 재정렬 마우스 전용, hover 버튼이 Tab 포커스 때 보이지 않음, 회전·삭제 버튼에 접근 가능한 이름 없음, 진행 오버레이에 live region 없음, 전체 선택이 `role="button"` 안에 체크박스를 중첩 | P0-5 / P0-6 |
 | P3 | 파일을 추가하면 모든 페이지 썸네일을 즉시 생성하고, 문서 카드는 첫 페이지를 따로 또 렌더한다. | P0-4 |
 | C1 | 병합 취소가 없다. | P1-3 |
@@ -203,10 +208,11 @@ Phase 5  고도화
 
 ### P0-6 버그 수정과 정리 (M)
 - B2, B5, B8, B9, B10, B11, B12(화면), D1, D2, A1(나머지)을 처리한다.
-- `use-add-files`와 `load-dropped-files`를 `ingestPaths({ paths, insertAt })` 하나로 통합한다.
+- 경로 처리(확장자 판별, TIFF 변환, 정보 조회)는 Rust `open_files`(P1-3)가 맡는다(D14). `use-add-files`와 `load-dropped-files`의 중복 분기를 없애고, 프론트에는 삽입 위치(`insertAt`)와 업로드 표시만 남긴다.
 - **B9 병합 버튼:** 툴바 "병합"은 전체 병합으로 두고 툴팁을 "모든 파일을 하나의 PDF로 병합"으로 고친다. 선택 병합은 플로팅 바의 "병합하기"가 맡는다.
 - **B10 페이지 복원(화면 연동):**
   - 삭제해도 페이지를 `mergeOrder`에서 빼지 않고 `isDeleted`만 켠다. 병합 요청에서는 이미 삭제 페이지를 제외한다(`build-merge-request`).
+  - `build-merge-request`의 `mergeOrder` 분기에서 `isDeleted` 페이지 제외를 같은 커밋에서 추가한다(B14). 지금 이 분기는 삭제 페이지를 거르지 않는다.
   - 화면 시안: 캔버스 6번 "병합: 페이지 삭제·복원".
   - 펼친 그룹에서 삭제된 페이지는 **제자리에 흐리게**(점선 테두리) 남기고 "삭제됨" 배지와 "복원" 버튼을 보인다. 지금 렌더되지 않는 `page-thumbnail.tsx`의 복원 UI를 연결한다.
   - 접힌 문서 카드의 쪽 범위와 상태바 페이지 수는 삭제되지 않은 페이지만 센다. 삭제된 페이지가 있으면 카드에 "n쪽 삭제됨" 배지.
@@ -262,9 +268,9 @@ Phase 5  고도화
 - 모듈
   - `engine.rs`(Step 8): pdfium 라이브러리 경로 결정(`PDFIUM_LIB_PATH` 우선, 없으면 번들 폴더)과 프로세스 바인딩
   - `document.rs`: 문서 열기, 에러 타입(`thiserror`)
-  - `info.rs`: 페이지 수, 페이지별 크기(MediaBox/CropBox), 회전
-  - `merge.rs`: 새 문서에 소스 페이지를 import하고 페이지별 회전을 적용해 저장한다. **원자적 쓰기**(임시 파일에 쓴 뒤 rename)를 하고, Windows 공유 위반 시 재시도한다(기존 retry-write 로직 이식, `cfg(windows)`).
-  - `tiff.rs`: `tiff` 크레이트로 멀티페이지를 디코드하고, 페이지마다 이미지 객체로 PDF 페이지를 만든다. 결과는 앱 캐시 디렉터리에 고유 이름으로 저장한다(B3).
+  - `info.rs`: 페이지 수, 페이지별 크기(MediaBox/CropBox), 회전. 원본 `/Rotate`의 비정상 값(-90, 450 등)은 0/90/180/270으로 정규화한다(B13).
+  - `merge.rs`: 요청을 검증(빈 소스, 페이지 인덱스 범위)한 뒤 새 문서에 소스 페이지를 import하고 페이지별 회전을 **절대값으로 설정**(더하지 않음, B13)해 저장한다. **원자적 쓰기**(임시 파일에 쓴 뒤 rename)를 하고, Windows 공유 위반 시 재시도한다(기존 retry-write 로직 이식, `cfg(windows)`).
+  - `tiff.rs`: `tiff` 크레이트로 멀티페이지를 디코드하고, 페이지마다 이미지 객체로 PDF 페이지를 만든다. 결과는 앱 캐시 디렉터리에 고유 이름으로 저장하고 `{ pdf_path, page_count, display_name }`을 돌려준다(B3, B15).
 - **CCITT G4(스캔 문서에 흔한 압축)** 를 `tiff` 크레이트가 디코드하지 못하면, 압축을 풀지 않고 원본 스트립 데이터를 `CCITTFaxDecode` 이미지로 PDF에 그대로 넣는 경로를 둔다. 스파이크 때 확인한다.
 - 테스트: 기존 `src/main/services/__tests__`의 케이스(병합 6, 편집 11 중 해당분, TIFF 4, 메타데이터 5)를 Rust로 이식한다. **회전**, **멀티페이지 TIFF**, **CCITT G4**, **북마크가 있는 원본 병합** 케이스를 추가한다.
 - **완료 기준:** `cargo test -p pdf-core`가 3개 OS CI에서 통과한다.
@@ -272,12 +278,16 @@ Phase 5  고도화
 ### P1-3 Tauri 커맨드와 작업 큐 (M, B4/S1)
 | 커맨드 | 시그니처 | 비고 |
 |---|---|---|
-| `read_pdf` | `(path) -> tauri::ipc::Response` | **pdf.js 표시용.** 확장자 화이트리스트, `canonicalize`, 크기 상한. `Vec<u8>`을 그대로 반환하면 JSON 숫자 배열이 되어 매우 느리다. |
-| `get_pdf_info` | `(path) -> PdfInfo` | |
-| `convert_tiff` | `(path) -> String` | 임시 PDF 경로 |
-| `merge_pdfs` | `(request, Channel<Progress>) -> MergeResult` | 출력 경로는 사용자가 저장 다이얼로그에서 고른 경로이거나 앱 임시 경로만 허용 |
+| `pick_files` | `(options) -> string[]` | Rust가 열기 다이얼로그를 연다. 고른 경로를 허용 경로 목록에 기록한다(D13). |
+| `pick_save_path` | `(options) -> string \| null` | Rust가 저장 다이얼로그를 연다. 고른 경로를 허용 경로 목록에 기록한다(D13). |
+| `open_files` | `(paths) -> 파일별 결과[]` | 확장자 판별, TIFF 변환, 정보 조회를 한 번에 한다. 파일별 성공/오류를 돌려준다(B16, D14). 허용 경로 목록에 있는 경로만. |
+| `read_pdf` | `(path) -> tauri::ipc::Response` | **pdf.js 표시용.** 허용 경로 목록(D13)에 있는 경로만. 확장자 화이트리스트, `canonicalize`, 크기 상한. `Vec<u8>`을 그대로 반환하면 JSON 숫자 배열이 되어 매우 느리다. |
+| `get_pdf_info` | `(path) -> PdfInfo` | 허용 경로 목록(D13)에 있는 경로만 |
+| `convert_tiff` | `(path) -> { pdf_path, page_count, display_name }` | 허용 경로 목록(D13)에 있는 경로만. `pdf_path`는 캐시의 임시 PDF |
+| `merge_pdfs` | `(request, Channel<Progress>) -> MergeResult` | 출력 = `temp` \| `userPath`(사용자 경로는 `pick_save_path`로 받은 것만). 출력 경로가 입력 원본과 같으면(`canonicalize` 비교) 거부. 요청에 프론트가 만든 `job_id` 포함 |
 | `copy_file` | `(source, destination)` | 소스는 앱 임시 디렉터리 하위만 허용 |
 | `cleanup_temp` | `()` | 시작과 종료 시에도 자동 실행 |
+| `discard_temp` | `(path)` | 미리보기 결과 하나만 지운다. 앱 임시 폴더 하위만 허용 |
 | `cancel_job` | `(job_id)` | Phase 2부터 사용 |
 - 모든 처리 커맨드는 `async` + **pdfium 전용 작업 스레드**로 위임한다. UI 스레드는 막히지 않는다.
 - 진행률은 `tauri::ipc::Channel`로 보내고, 취소는 작업별 `Arc<AtomicBool>` 토큰으로 처리한다.
@@ -286,6 +296,7 @@ Phase 5  고도화
 - **병합 취소(C1):** `merge_pdfs`도 작업 ID와 취소 토큰을 갖는다. 진행 오버레이에 "취소" 버튼, 취소되면 임시 파일을 지운다. (`cancel_job`은 Phase 1부터 쓴다.)
 - **입력 상한(I1):** `pdf-core`의 상수로 둔다. 시작값: 파일 하나 `MAX_INPUT_FILE_BYTES` = 512MB, 병합 입력 `MAX_MERGE_FILES` = 200개, 비교 문서 `MAX_COMPARE_PAGES` = 2,000쪽(넘으면 `Truncated` 안내). 넘으면 `InputTooLarge` 에러로 거부하고 화면에 이유를 보인다. 측정 후 조정한다.
 - 타입은 `tauri-specta`로 TS 바인딩을 생성해 `src/shared/contracts`를 대체한다.
+- **Rust가 정본이다:** 회전값·오류 코드는 specta 생성 타입을 쓰고, 허용 확장자·입력 상한은 Rust에서 받아 온다(TS에 숫자·목록을 다시 적지 않는다).
 - 사용할 플러그인: `dialog`, `log`, `store`, `opener`, `window-state`. **`fs` 플러그인은 쓰지 않는다**(커스텀 커맨드에서 경로를 검증해 권한 표면을 최소화).
   - 플러그인은 하나씩 `pnpm tauri add <이름>`으로 넣는다. 이 명령이 Cargo 의존성, npm 패키지, `lib.rs`의 `.plugin(...)` 등록, 기본 권한을 함께 처리한다. 이 단계에서는 `dialog`, `log`, `opener`를 넣고, `store`와 `window-state`는 P1-5에서 넣는다.
   - `tauri-specta`는 `cargo add -p <src-tauri 패키지> tauri-specta specta`로 넣는다(버전과 기능 플래그는 tauri-specta README를 따른다).
@@ -619,6 +630,8 @@ pnpm tauri dev                           # P1-1 이후
 | D10 | 병합 화면은 지금 구조 유지, 모드 탭만 추가 | 병합 화면 재설계 | 익숙한 화면 유지, 변경 범위 최소화 |
 | D11 | 설치·생성은 Tauri CLI 키트와 `pnpm add`/`cargo add`로 (§1.3) | 설정 파일·등록 코드를 직접 작성 | 공식 생성물이 버전에 맞는 형식을 보장하고, 손으로 쓸 때 생기는 누락(권한, 플러그인 등록, 버전 불일치)을 막는다. |
 | D12 | Tauri 셸을 먼저(실행 순서 1 → 9 → 8 → 10 → 11 → 2 → 14 → 3 → 4 → 5 → 6 → 13 → 7 → 15) | Electron 위에서 Phase 0 정리 + 임시 `electron-platform.ts` | 버려질 임시 어댑터·계약 코드를 만들지 않는다. 대가로 Step 9~2 사이에는 파일 처리 기능이 동작하지 않는다. |
+| D13 | 허용 경로 목록: 파일 열기·저장 다이얼로그를 Rust 커맨드로 열고, 다이얼로그·드롭으로 받은 경로를 `State`에 기록해 파일 커맨드는 목록에 있는 경로(와 앱 임시 폴더)만 허용 | 프론트가 `plugin-dialog`를 직접 열고 경로를 넘김 | Rust가 "사용자가 고른 경로"를 알 수단이 없으면 경로 검증이 형식만 남는다 |
+| D14 | 파일 추가 처리 = Rust `open_files` | TS `ingestPaths` 통합 | 같은 분기가 3벌 중복(B2의 원인)이고, 확장자 화이트리스트는 어차피 Rust가 검사한다 |
 
 ## 12. 리스크
 

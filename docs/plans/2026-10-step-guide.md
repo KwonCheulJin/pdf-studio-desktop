@@ -103,7 +103,8 @@ pnpm i && pnpm start                                           # 현재 Electron
 - 실행 순서: 11번째 (앞: Step 5, 뒤: Step 13)
 - 브랜치: `fix/p0-cleanup`
 - 읽을 곳: 계획서 §2.2 버그 표, §4 P0-6 (B2, B5, B8~B12, A1, D1, D2)
-- 커밋 단위: 버그마다 하나. B10(페이지 복원)은 스토어 변경 + 화면 연결이라 따로 리뷰한다.
+- 커밋 단위: 버그마다 하나. B10(페이지 복원)은 스토어 변경 + 화면 연결이라 따로 리뷰한다. B10 커밋에 `build-merge-request`의 `mergeOrder` 분기에서 `isDeleted` 페이지 제외를 함께 넣는다(B14).
+- 파일 추가 경로 처리는 Rust `open_files`(Step 11)가 맡는다(D14). 프론트에는 삽입 위치와 업로드 표시만 남기고, `ingestPaths`로 TS에서 다시 통합하지 않는다.
 - 화면 시안: 6 "병합: 페이지 삭제·복원", 8 "병합: 실패"(오류 오버레이와 토스트)
 - 완료 기준
   - 빈 화면 TIFF 드롭 후 병합 성공, Windows 경로로 기본 저장 경로 계산 테스트 통과
@@ -157,7 +158,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 - 브랜치: `feat/pdf-core-basic`
 - 읽을 곳: 계획서 §5 P1-2
 - 순서: `document.rs` → `info.rs` → `merge.rs` → `tiff.rs`. 모듈마다 테스트 먼저 이식하고 구현한다.
-- 완료 기준: `cargo test -p pdf-core` 통과(회전, 멀티페이지 TIFF, CCITT G4, 북마크 원본 병합 케이스 포함)
+- 완료 기준: `cargo test -p pdf-core` 통과(회전, 멀티페이지 TIFF, CCITT G4, 북마크 원본 병합 케이스 포함). 회전 절대값 설정·정규화(-90, 450 → 0/90/180/270), 병합 요청 검증(빈 소스, 페이지 인덱스 범위), TIFF `display_name` 테스트 포함
 - [ ] Step 10
 
 ### Step 11. Tauri 커맨드와 작업 큐 (M)
@@ -166,7 +167,8 @@ pnpm i && pnpm start                                           # 현재 Electron
 - 읽을 곳: 계획서 §5 P1-3
 - 화면 시안: 7 "병합: 진행·취소", 8 "병합: 실패"
 - 할 일(키트): `pnpm tauri add dialog`, `pnpm tauri add log`, `pnpm tauri add opener`. `tauri-specta`는 `cargo add`로 넣는다.
-- 완료 기준: 큰 PDF 병합 중에도 UI가 멈추지 않음, 전체 %와 작업별 %(파일 읽기·페이지 합치기·저장) 표시, **병합 취소 후 임시 파일 없음**, 상한(512MB·200개)을 넘는 입력은 이유와 함께 거부, 앱 임시 폴더 밖 경로는 커맨드가 거부
+- 할 일(직접 작성): `pick_files`·`pick_save_path`(Rust가 다이얼로그를 열고 결과 경로를 허용 경로 목록에 기록, D13), `open_files`(D14), `discard_temp`, `merge_pdfs`의 출력 `temp | userPath`와 `job_id`
+- 완료 기준: 큰 PDF 병합 중에도 UI가 멈추지 않음, 전체 %와 작업별 %(파일 읽기·페이지 합치기·저장) 표시, **병합 취소 후 임시 파일 없음**, 상한(512MB·200개)을 넘는 입력은 이유와 함께 거부, 앱 임시 폴더 밖 경로는 커맨드가 거부, 허용 경로 목록에 없는 경로는 거부, 출력 경로가 입력 원본과 같으면 거부, `open_files`가 파일별 성공/오류를 돌려줌, `discard_temp`는 앱 임시 폴더 밖 경로를 거부
 - [ ] Step 11
 
 ### Step 12. Tauri 어댑터와 드롭 (M)

@@ -186,3 +186,44 @@ fn file_over_size_limit_is_rejected_before_parsing() {
         other => panic!("expected InputTooLarge, got {other:?}"),
     }
 }
+
+/// 여러 스레드가 동시에 문서를 열어도 열기 실패 이유가 섞이지 않는다. pdfium의 마지막 오류는
+/// 프로세스 전역 값이라, 열기와 오류 읽기 사이에 다른 스레드의 열기가 끼면 암호 문서가 `InvalidPdf`로
+/// 잘못 분류된다.
+#[test]
+fn concurrent_open_failures_keep_their_own_reason() {
+    const THREADS: usize = 8;
+    const ROUNDS: usize = 500;
+    let (password, broken) = (fixture("password-protected.pdf"), fixture("not-a-pdf.pdf"));
+
+    let misclassified: Vec<String> = std::thread::scope(|scope| {
+        let workers: Vec<_> = (0..THREADS)
+            .map(|thread| {
+                let (password, broken) = (&password, &broken);
+                scope.spawn(move || {
+                    (0..ROUNDS)
+                        .filter_map(|_| {
+                            let error = if thread % 2 == 0 {
+                                read_pdf_info(engine(), password).unwrap_err()
+                            } else {
+                                read_pdf_info(engine(), broken).unwrap_err()
+                            };
+                            let expected = if thread % 2 == 0 {
+                                "PASSWORD_PROTECTED"
+                            } else {
+                                "INVALID_PDF"
+                            };
+                            (error.code() != expected).then(|| format!("{error:?}"))
+                        })
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect();
+        workers
+            .into_iter()
+            .flat_map(|worker| worker.join().expect("worker thread"))
+            .collect()
+    });
+
+    assert!(misclassified.is_empty(), "{misclassified:#?}");
+}

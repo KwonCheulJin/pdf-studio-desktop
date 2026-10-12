@@ -14,7 +14,7 @@ use std::time::SystemTime;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use super::{OCR_MODEL_VERSION, OCR_RENDER_DPI, OcrLine};
+use super::{OCR_MODEL_VERSION, OCR_RENDER_DPI, OcrLine, Quad};
 use crate::output::write_atomically;
 
 /// 캐시 폴더 용량 상한. 넘으면 마지막으로 쓰거나 읽은 지 오래된 파일부터 지운다.
@@ -36,6 +36,26 @@ pub(crate) struct OcrPage {
     pub width: u32,
     pub height: u32,
     pub lines: Vec<OcrLine>,
+}
+
+impl OcrPage {
+    /// 이미지 크기가 0보다 크고 줄·글자의 좌표와 신뢰도가 모두 유한하다.
+    fn is_valid(&self) -> bool {
+        let finite_quad = |quad: &Quad| {
+            quad.corners
+                .iter()
+                .all(|(x, y)| x.is_finite() && y.is_finite())
+        };
+        self.width > 0
+            && self.height > 0
+            && self.lines.iter().all(|line| {
+                finite_quad(&line.quad)
+                    && line.confidence.is_finite()
+                    && line.chars.iter().all(|ocr_char| {
+                        finite_quad(&ocr_char.quad) && ocr_char.confidence.is_finite()
+                    })
+            })
+    }
 }
 
 /// 파일 내용의 SHA-256
@@ -74,12 +94,15 @@ impl OcrCache {
         }
     }
 
-    /// 저장한 결과. 없거나 읽을 수 없으면(다른 판·깨진 파일) `None`이다. 찾으면 파일 시각을
+    /// 저장한 결과. 없거나 읽을 수 없으면(다른 판·깨진 파일) `None`이다. 이미지 크기가 0이거나 좌표·
+    /// 신뢰도가 유한하지 않은 값도 깨진 파일로 본다(좌표 되돌리기가 크기로 나눈다). 찾으면 파일 시각을
     /// 지금으로 바꿔 오래된 것부터 지울 때 뒤로 미룬다.
     pub(crate) fn get(&self, file: FileDigest, page: u32) -> Option<OcrPage> {
         let path = self.entry_path(file, page);
         let bytes = fs::read(&path).ok()?;
-        let page = serde_json::from_slice(&bytes).ok()?;
+        let page = serde_json::from_slice::<OcrPage>(&bytes)
+            .ok()
+            .filter(OcrPage::is_valid)?;
         // 시각 갱신은 지우는 순서에만 쓰므로 실패해도 결과는 그대로 쓴다.
         let _ = File::options()
             .write(true)
@@ -160,6 +183,30 @@ mod tests {
     use std::time::Duration;
 
     use super::*;
+
+    /// 이미지 크기가 0인 값은 깨진 파일로 보고 없는 것처럼 다룬다(다시 OCR한다). 크기로 나누는 좌표
+    /// 되돌리기가 무한대 상자를 만들기 때문이다.
+    #[test]
+    fn entry_with_zero_image_size_is_treated_as_missing() {
+        let dir = std::env::temp_dir().join(format!(
+            "pdf-core-ocr-cache-zero-size-{}",
+            std::process::id()
+        ));
+        let cache = OcrCache::new(dir.clone());
+        let digest = FileDigest([7; 32]);
+        let page = |width| OcrPage {
+            width,
+            height: 10,
+            lines: Vec::new(),
+        };
+        cache.put(digest, 0, &page(10));
+        cache.put(digest, 1, &page(0));
+
+        let (sized, zero_sized) = (cache.get(digest, 0), cache.get(digest, 1));
+        fs::remove_dir_all(&dir).expect("remove cache dir");
+        assert_eq!(sized, Some(page(10)));
+        assert_eq!(zero_sized, None);
+    }
 
     /// 상한을 넘으면 시각이 가장 오래된 캐시 파일부터 지우고, 상한 안이 되면 멈춘다. 캐시 파일이
     /// 아닌 것(쓰는 중인 임시 파일)은 세지도 지우지도 않는다.

@@ -2,11 +2,26 @@
 
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, PoisonError};
 
 use pdfium_render::prelude::{PdfDocument, Pdfium, PdfiumError, PdfiumInternalError};
 
 /// 입력 PDF 한 개의 최대 크기 (512 MiB)
 pub const MAX_INPUT_FILE_BYTES: u64 = 512 * 1024 * 1024;
+
+/// pdfium 문서 열기를 한 번에 하나씩 하게 하는 잠금. pdfium-render(`thread_safe`)는 pdfium 함수마다
+/// 잠금을 따로 잡아서, 열기(`FPDF_LoadCustomDocument` 등)와 실패 이유 읽기(`FPDF_GetLastError`) 사이에
+/// 다른 스레드의 열기가 끼어들 수 있다. pdfium의 마지막 오류는 스레드마다 따로 있지 않아 끼어든 열기의
+/// 실패가 이유를 덮는다(macOS에서 암호 문서가 `InvalidPdf`로 분류되는 것을 재현했다). pdfium은
+/// 프로세스에 하나이므로 잠금도 하나다.
+static LOAD_LOCK: Mutex<()> = Mutex::new(());
+
+/// pdfium 문서 열기(`load`)를 [`LOAD_LOCK`] 안에서 한다. 문서를 여는 모든 곳이 이 함수를 거친다.
+pub(crate) fn load_exclusively<T>(load: impl FnOnce() -> T) -> T {
+    // 잠금은 데이터를 지키지 않으므로 다른 스레드의 패닉으로 오염돼도 그대로 쓴다.
+    let _guard = LOAD_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
+    load()
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum DocumentError {
@@ -64,8 +79,7 @@ fn open_document_with_limit<'a>(
     limit_bytes: u64,
 ) -> Result<PdfDocument<'a>, DocumentError> {
     ensure_within_limit(path, limit_bytes)?;
-    pdfium
-        .load_pdf_from_file(path, None)
+    load_exclusively(|| pdfium.load_pdf_from_file(path, None))
         .map_err(|source| classify_open_error(path, source))
 }
 

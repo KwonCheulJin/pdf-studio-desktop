@@ -16,6 +16,9 @@
 - diff-base.pdf·diff-edit.pdf·diff-move.pdf·diff-rewrap.pdf(Step 19): 같은 한글 글꼴로 쓴 가상
   계약서 원본과 변형 셋(단어 삽입·삭제·치환과 숫자 치환, 쪽 경계를 넘는 문단 이동, 줄바꿈 위치만
   다른 판).
+- pages-base.pdf·pages-insert.pdf·pages-delete.pdf·pages-edit.pdf·pages-push.pdf(Step 20): 빈 쪽이
+  낀 5쪽 가상 계약서 원본과 변형 넷(쪽 삽입과 다른 쪽 숫자 하나 수정, 쪽 삭제, 쪽 순서를 둔 채
+  내용 일부 수정, 앞에 넣은 문단 때문에 쪽 내용이 반 넘게 다음 쪽으로 밀린 판).
 
     python3 crates/pdf-core/tests/fixtures/generate_compare_fixtures.py
 
@@ -795,6 +798,110 @@ def diff_pdf(pages: list[list[str]]) -> bytes:
     return build_document(specs, font.objects, font.encode)
 
 
+# --- 페이지 짝짓기(Step 20) ----------------------------------------------------------
+
+# 원본 계약서(5쪽). 2쪽(0부터)은 빈 쪽이다. 변형은 쪽 단위로 이 문구를 다시 쓴다.
+PAGES_ARTICLES_1_2 = [
+    "제1조(목적) 이 계약은 가람물류 주식회사(이하 갑)가",
+    "누리소프트 주식회사(이하 을)에게 맡기는 물류 관리",
+    "시스템 구축 용역의 범위와 대가를 정함을 목적으로 한다.",
+    "제2조(정의) 산출물이란 을이 용역을 수행하며 만든",
+    "설계서, 소스 코드, 사용 설명서를 말하고, 검수란 갑이",
+    "산출물이 요구 사항에 맞는지 확인하는 일을 말한다.",
+]
+PAGES_ARTICLES_3_4 = [
+    "제3조(기간) 용역 기간은 2026년 11월 2일부터 2027년",
+    "4월 30일까지로 하며, 갑과 을이 서면으로 합의하면 늘린다.",
+    "제4조(대금) 갑은 을에게 용역 대금으로 금 48,000,000원을",
+    "세 번에 나누어 지급한다. 착수금은 계약 금액의 30%,",
+    "중도금은 40%, 잔금은 30%로 하고, 잔금은 검수를 마친",
+    "날부터 14일 안에 지급한다.",
+]
+PAGES_BLANK: list[str] = []
+PAGES_ARTICLES_5_6 = [
+    "제5조(비밀 유지) 을은 용역을 수행하며 알게 된 갑의 영업",
+    "정보와 고객 정보를 제3자에게 누설하지 아니한다.",
+    "이 의무는 계약이 끝난 뒤에도 3년간 유지된다.",
+    "제6조(해지) 어느 한쪽이 이 계약을 위반하고 상대방의",
+    "시정 요구를 받은 날부터 10일 안에 바로잡지 아니하면",
+    "상대방은 서면으로 통지하여 이 계약을 해지할 수 있다.",
+]
+PAGES_SIGNATURE = [
+    "제7조(관할) 이 계약에 관한 분쟁은 갑의 본점 소재지를",
+    "관할하는 지방법원을 제1심 법원으로 한다.",
+    "이 계약을 증명하기 위하여 계약서 2통을 만들어 1통씩 가진다.",
+    "2026년 10월 13일",
+    "갑 가람물류 주식회사 대표이사 김가람 (인)",
+    "을 누리소프트 주식회사 대표이사 이누리 (인)",
+]
+# 3쪽의 기간 숫자만 바꾼 판(3년간 → 5년간). 쪽 삽입·내용 수정 변형이 함께 쓴다.
+PAGES_ARTICLES_5_6_EDITED = [
+    *PAGES_ARTICLES_5_6[:2],
+    "이 의무는 계약이 끝난 뒤에도 5년간 유지된다.",
+    *PAGES_ARTICLES_5_6[3:],
+]
+PAGES_BASE = [
+    PAGES_ARTICLES_1_2,
+    PAGES_ARTICLES_3_4,
+    PAGES_BLANK,
+    PAGES_ARTICLES_5_6,
+    PAGES_SIGNATURE,
+]
+
+# 쪽 삽입: 1쪽 뒤(빈 쪽 앞)에 새 조항 한 쪽을 넣는다. 흔한 낱말(을은, 날부터, 안에)은 다른 쪽과 겹친다.
+# 3쪽의 숫자도 하나 바꿔 시간 제한 확인(통째로 낸 `Replace`)에 쓴다.
+PAGES_INSERTED = [
+    "제4조의2(검수) 을은 산출물을 넘긴 뒤 갑에게 검수를",
+    "요청하고, 갑은 요청을 받은 날부터 7일 안에 결과를",
+    "알려야 한다. 그 기간 안에 알리지 아니하면 검수에",
+    "합격한 것으로 보고, 하자가 나오면 을은 지체 없이 고쳐",
+    "다시 넘긴다.",
+]
+PAGES_INSERT = [
+    *PAGES_BASE[:2],
+    PAGES_INSERTED,
+    PAGES_BLANK,
+    PAGES_ARTICLES_5_6_EDITED,
+    PAGES_SIGNATURE,
+]
+
+# 쪽 삭제: 1쪽(제3조·제4조)을 뺀다. 빈 쪽은 남는다.
+PAGES_DELETE = PAGES_BASE[:1] + PAGES_BASE[2:]
+
+# 쪽 순서를 둔 채 내용 일부 수정: 낱말 삽입, 날짜·금액·기간 숫자 치환.
+PAGES_EDIT = [
+    [
+        *PAGES_ARTICLES_1_2[:2],
+        "시스템 구축과 유지 보수 용역의 범위와 대가를 정함을 목적으로 한다.",
+        *PAGES_ARTICLES_1_2[3:],
+    ],
+    [
+        "제3조(기간) 용역 기간은 2026년 11월 16일부터 2027년",
+        PAGES_ARTICLES_3_4[1],
+        "제4조(대금) 갑은 을에게 용역 대금으로 금 52,000,000원을",
+        *PAGES_ARTICLES_3_4[3:],
+    ],
+    PAGES_BLANK,
+    PAGES_ARTICLES_5_6_EDITED,
+    [*PAGES_SIGNATURE[:3], "2026년 10월 20일", *PAGES_SIGNATURE[4:]],
+]
+
+# 쪽 내용 밀림: 0쪽 앞에 전문 네 줄을 넣어 한 쪽에 여섯 줄씩 다시 앉힌다. 0쪽은 두 줄만 남고 네 줄이
+# 1쪽으로, 1쪽도 두 줄만 남고 네 줄이 새 2쪽으로 밀린다. 빈 쪽과 그 뒤 쪽은 그대로다.
+PAGES_PREAMBLE = [
+    "전문 두 당사자는 서로 믿고 협력하여 아래와 같이",
+    "약정하며, 이 문서에 적지 않은 사항은 따로 협의해",
+    "정하기로 하고 그 협의 결과는 부속 합의서에 담는다.",
+    "부속 합의서는 이 계약과 같은 효력을 가진다.",
+]
+PAGES_PUSH = [
+    PAGES_PREAMBLE + PAGES_ARTICLES_1_2[:2],
+    PAGES_ARTICLES_1_2[2:] + PAGES_ARTICLES_3_4[:2],
+    PAGES_ARTICLES_3_4[2:],
+    *PAGES_BASE[2:],
+]
+
+
 def main() -> None:
     fixtures = {
         "text-geometry.pdf": text_geometry_pdf(),
@@ -805,6 +912,11 @@ def main() -> None:
         "diff-edit.pdf": diff_pdf(DIFF_EDIT_PAGES),
         "diff-move.pdf": diff_pdf(DIFF_MOVE_PAGES),
         "diff-rewrap.pdf": diff_pdf(DIFF_REWRAP_PAGES),
+        "pages-base.pdf": diff_pdf(PAGES_BASE),
+        "pages-insert.pdf": diff_pdf(PAGES_INSERT),
+        "pages-delete.pdf": diff_pdf(PAGES_DELETE),
+        "pages-edit.pdf": diff_pdf(PAGES_EDIT),
+        "pages-push.pdf": diff_pdf(PAGES_PUSH),
     }
     for name, data in fixtures.items():
         (OUTPUT_DIR / name).write_bytes(data)

@@ -85,7 +85,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 ### Step 5. 내부 드래그 정렬을 @dnd-kit으로 (M)
 - 브랜치: `refactor/dnd-kit`
 - 읽을 곳: 계획서 §4 P0-5
-- 완료 기준: HTML5 DnD 이벤트(`onDragStart` 등) 의존 0, 파일·페이지 재정렬과 외부 파일 드롭이 그대로 동작, **키보드만으로 재정렬 가능**(Space 집기 → 방향키 → Space 놓기)
+- 완료 기준: HTML5 DnD 이벤트(`onDragStart` 등) 의존 0, 파일·페이지 재정렬과 외부 파일 드롭이 그대로 동작, **키보드만으로 재정렬 가능**(Space 집기 → 방향키 → Space 놓기), `.claude/quality-gate.json` test 명령의 `layout-calculator.test.ts` 제외 해제
 - [ ] Step 5
 
 ### Step 6. 버그 수정과 정리 (M)

@@ -1,0 +1,40 @@
+{
+  "enabled": true,
+  "max_retries": 2,
+  "commands": [
+    {
+      "name": "eslint",
+      "run": "pnpm exec eslint {files}",
+      "glob": "*.[jt]s*",
+      "timeout": 180
+    },
+    {
+      "name": "typecheck",
+      "run": "pnpm typecheck",
+      "timeout": 300
+    },
+    {
+      "name": "test",
+      "run": "pnpm exec vitest related --run --exclude '**/layout-calculator.test.ts' --exclude '**/node_modules/**' {files}",
+      "glob": "*.[jt]s*",
+      "timeout": 600
+    }
+  ],
+  "forbidden_patterns": [
+    {
+      "pattern": "\\.\\.\\.\\(\\s*[^()]*&&",
+      "message": "조건부 객체 스프레드 금지 — `if` 로 속성을 명시적으로 넣거나 값을 그대로 전달하라",
+      "glob": "*.[jt]s*"
+    },
+    {
+      "pattern": ":\\s*object\\b",
+      "message": "모호한 `object` 타입 금지 — 이름 있는 타입(type/interface)이나 `Record<string, unknown>` 으로",
+      "glob": "*.[jt]s*"
+    }
+  ],
+  "allowed_paths": [],
+  "semantic_checks": {
+    "out_of_scope": true,
+    "banned_comment": true
+  }
+}

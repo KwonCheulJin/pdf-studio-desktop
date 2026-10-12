@@ -1,9 +1,9 @@
 import { useShallow } from "zustand/react/shallow";
 import { MergedPreviewPage } from "@/renderer/pages/merged-preview";
 import { MergeWorkspace } from "@/renderer/widgets/merge-workspace";
+import { MergeProgressOverlay } from "@/renderer/features/pdf-merge";
 import {
   MERGE_VIEW,
-  MergeProgressOverlay,
   useMergeStore,
   useMergeView
 } from "@/renderer/entities/merge-plan";

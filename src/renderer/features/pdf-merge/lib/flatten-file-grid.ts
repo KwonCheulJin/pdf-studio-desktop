@@ -14,13 +14,15 @@ export type FlatCard =
       file: PdfDocument;
       fileIndex: number;
       flatIndex: number;
-      /** 이 그룹에 포함된 페이지 수 */
+      /** 이 그룹에 포함된 페이지 수 (삭제된 페이지 제외) */
       groupPageCount: number;
-      /** 그룹의 첫 페이지 ID (드롭 위치 계산용) */
+      /** 이 그룹에서 삭제된(복원 가능한) 페이지 수 */
+      deletedPageCount: number;
+      /** 그룹의 첫 페이지 ID (드롭 위치 계산용, 삭제된 페이지 포함) */
       firstPageId: string;
       /** 그룹 고유 ID (연속된 같은 파일 페이지 그룹) */
       groupId: string;
-      /** 그룹에 속한 페이지 ID 목록 (페이지 범위 표시용) */
+      /** 그룹에 속한 페이지 ID 목록 (페이지 범위 표시용, 삭제된 페이지 제외) */
       groupPageIds: string[];
     }
   | {
@@ -97,8 +99,8 @@ function groupMergeOrder(mergeOrder: MergeOrderItem[]): MergeOrderGroup[] {
  * - mergeOrder의 순서를 따름
  * - 연속된 같은 파일의 페이지는 그룹화
  * - 그룹별 접힘/펼침 상태에 따라:
- *   - 펼침: 각 페이지를 개별 카드로 표시
- *   - 접힘: 그룹 전체를 하나의 카드로 표시
+ *   - 펼침: 각 페이지를 개별 카드로 표시 (삭제된 페이지도 제자리에 표시해 복원할 수 있게 한다)
+ *   - 접힘: 그룹 전체를 하나의 카드로 표시 (쪽 수·범위는 삭제 안 된 페이지만)
  *
  * @param params.files PDF 문서 배열
  * @param params.mergeOrder 병합 순서 배열
@@ -110,11 +112,6 @@ export function flattenFileGrid({
   mergeOrder,
   collapsedGroups = new Set()
 }: FlattenFileGridParams): FlatCard[] {
-  // mergeOrder가 비어있으면 기존 파일 순서 사용
-  if (mergeOrder.length === 0) {
-    return flattenFileGridLegacy(files, collapsedGroups);
-  }
-
   // 파일 ID로 빠른 조회를 위한 맵
   const fileMap = new Map(files.map((f) => [f.id, f]));
 
@@ -133,10 +130,10 @@ export function flattenFileGrid({
 
     const fileIndex = fileIndexMap.get(group.fileId) ?? 0;
 
-    // 그룹에 해당하는 페이지들 찾기
+    // 그룹에 해당하는 페이지들 찾기 (삭제된 페이지 포함)
     const groupPages = group.pageIds
       .map((pageId) => file.pages.find((p) => p.id === pageId))
-      .filter((p): p is PdfPage => p !== undefined && !p.isDeleted);
+      .filter((p): p is PdfPage => p !== undefined);
 
     if (groupPages.length === 0) continue;
 
@@ -162,67 +159,20 @@ export function flattenFileGrid({
       });
     } else {
       // 접힘: 그룹 전체를 하나의 카드로
+      const activePages = groupPages.filter((p) => !p.isDeleted);
       result.push({
         type: FLAT_CARD_TYPE.FILE,
         file,
         fileIndex,
         flatIndex: flatIndex++,
-        groupPageCount: groupPages.length,
+        groupPageCount: activePages.length,
+        deletedPageCount: groupPages.length - activePages.length,
         firstPageId: groupPages[0].id,
         groupId: group.groupId,
-        groupPageIds: groupPages.map((p) => p.id)
+        groupPageIds: activePages.map((p) => p.id)
       });
     }
   }
 
   return result;
-}
-
-/**
- * 기존 방식: files 배열 순서대로 평면화 (mergeOrder 없을 때 사용)
- */
-function flattenFileGridLegacy(
-  files: PdfDocument[],
-  collapsedGroups: Set<string>
-): FlatCard[] {
-  let flatIndex = 0;
-
-  return files.flatMap((file, fileIndex): FlatCard[] => {
-    const visiblePages = file.pages.filter((page) => !page.isDeleted);
-
-    if (visiblePages.length === 0) return [];
-
-    // 파일 단위 그룹 ID (legacy 모드에서는 파일 ID 사용)
-    const groupId = `group_${file.id}`;
-    const isExpanded = !collapsedGroups.has(groupId);
-
-    if (isExpanded) {
-      // 펼침: 각 페이지가 개별 카드 (삭제된 페이지 제외)
-      return visiblePages.map((page, pageIndex) => ({
-        type: FLAT_CARD_TYPE.PAGE,
-        file,
-        page,
-        fileIndex,
-        pageIndex,
-        flatIndex: flatIndex++,
-        isFirstPage: pageIndex === 0,
-        isFirstOfGroup: pageIndex === 0,
-        groupId
-      }));
-    }
-
-    // 접힘: 파일 하나가 하나의 카드
-    return [
-      {
-        type: FLAT_CARD_TYPE.FILE,
-        file,
-        fileIndex,
-        flatIndex: flatIndex++,
-        groupPageCount: visiblePages.length,
-        firstPageId: visiblePages[0].id,
-        groupId,
-        groupPageIds: visiblePages.map((p) => p.id)
-      }
-    ];
-  });
 }

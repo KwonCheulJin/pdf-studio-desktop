@@ -6,7 +6,8 @@ import {
   RotateCw,
   RotateCcw,
   X,
-  Combine
+  Combine,
+  Undo2
 } from "lucide-react";
 import {
   useZoomStore,
@@ -22,7 +23,10 @@ interface FloatingActionBarProps {
   selectedCount: number;
   selectionType: SelectionType;
   hasFiles: boolean;
+  /** 선택에 삭제된 페이지가 섞이면 복원 버튼을 보인다 */
+  hasDeletedInSelection: boolean;
   onDelete: () => void;
+  onRestore: () => void;
   onRotateCw: () => void;
   onRotateCcw: () => void;
   onClearSelection: () => void;
@@ -33,7 +37,9 @@ export function FloatingActionBar({
   selectedCount,
   selectionType,
   hasFiles,
+  hasDeletedInSelection,
   onDelete,
+  onRestore,
   onRotateCw,
   onRotateCcw,
   onClearSelection,
@@ -85,6 +91,7 @@ export function FloatingActionBar({
                 size="icon"
                 className="h-8 w-8"
                 onClick={onRotateCcw}
+                aria-label="선택 항목 왼쪽으로 회전"
               >
                 <RotateCcw size={16} />
               </Button>
@@ -95,15 +102,34 @@ export function FloatingActionBar({
                 size="icon"
                 className="h-8 w-8"
                 onClick={onRotateCw}
+                aria-label="선택 항목 오른쪽으로 회전"
               >
                 <RotateCw size={16} />
               </Button>
             </Tooltip>
             <Tooltip content="삭제">
-              <Button variant="ghost" size="sm" onClick={onDelete}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onDelete}
+                aria-label="선택 항목 삭제"
+              >
                 <Trash2 size={16} />
               </Button>
             </Tooltip>
+            {hasDeletedInSelection && (
+              <Tooltip content="삭제된 페이지 복원">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onRestore}
+                  aria-label="선택 페이지 복원"
+                >
+                  <Undo2 size={16} />
+                  <span className="ml-1 text-xs">복원</span>
+                </Button>
+              </Tooltip>
+            )}
             {selectedCount >= 2 && (
               <Tooltip content="선택 파일 병합">
                 <Button

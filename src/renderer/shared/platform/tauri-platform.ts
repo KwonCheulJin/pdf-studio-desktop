@@ -1,5 +1,5 @@
 import { Channel, isTauri } from "@tauri-apps/api/core";
-import { documentDir, join } from "@tauri-apps/api/path";
+import { basename, documentDir, extname, join } from "@tauri-apps/api/path";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import {
   error as writeErrorLog,
@@ -33,6 +33,9 @@ type CommandResult<T> = CommandSuccess<T> | CommandFailure;
 
 type LogWriter = (message: string) => Promise<void>;
 
+/** 확장자 앞 구분자. `extname`은 구분자 없이 돌려준다. */
+const EXTENSION_SEPARATOR = ".";
+
 /** WebView2 사용자 에이전트에 들어 있는 OS 이름 */
 const WINDOWS_USER_AGENT_TOKEN = "Windows";
 
@@ -56,6 +59,28 @@ async function unwrap<T>(command: Promise<CommandResult<T>>): Promise<T> {
     throw toPlatformError(result.error);
   }
   return result.data;
+}
+
+/** 확장자가 없으면 `extname`이 실패하므로 `null` */
+async function extensionOf(path: string): Promise<string | null> {
+  try {
+    return await extname(path);
+  } catch {
+    return null;
+  }
+}
+
+async function fileStemOf(path: string): Promise<string> {
+  const extension = await extensionOf(path);
+  try {
+    return await basename(
+      path,
+      extension === null ? undefined : `${EXTENSION_SEPARATOR}${extension}`
+    );
+  } catch {
+    // 마지막 이름이 없는 경로(루트 등)는 경로 그대로 보인다.
+    return path;
+  }
 }
 
 /**
@@ -84,6 +109,7 @@ export function createTauriPlatform(): DesktopPlatform {
       return unwrap(commands.pickSavePath({ defaultPath }));
     },
     openFiles: (paths) => unwrap(commands.openFiles(paths)),
+    fileStem: fileStemOf,
     readPdf: async (path) =>
       new Uint8Array(await unwrap(commands.readPdf(path))),
     mergePdfs: ({ request, onProgress }) => {

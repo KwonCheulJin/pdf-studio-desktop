@@ -65,6 +65,7 @@ impl Drop for JobGuard<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::ErrorCode;
 
     const JOB_ID: &str = "merge-1";
 
@@ -77,7 +78,7 @@ mod tests {
         registry.cancel(JOB_ID);
         assert!(token.load(Ordering::Relaxed));
         let duplicate = registry.start(JOB_ID).err().expect("duplicate is rejected");
-        assert_eq!(duplicate.code(), "JOB_ALREADY_RUNNING");
+        assert_eq!(duplicate.code(), ErrorCode::JobAlreadyRunning);
 
         drop(job);
         let restarted = registry.start(JOB_ID).expect("finished job id is free");

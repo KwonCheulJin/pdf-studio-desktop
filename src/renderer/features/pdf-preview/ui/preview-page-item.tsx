@@ -1,4 +1,5 @@
 import { Loader2, FileText } from "lucide-react";
+import type { PageRotation } from "@/renderer/entities/merge-plan";
 import { useRenderedPage } from "@/renderer/shared/lib/pdfjs";
 import { PREVIEW_CONFIG } from "../config/preview";
 
@@ -8,6 +9,8 @@ interface PreviewPageItemProps {
   pageIndex: number;
   /** 0부터 센 원본 페이지 번호 */
   sourcePageIndex: number;
+  /** 스토어의 절대 회전. PDF `/Rotate` 대신 이 값으로 그린다. */
+  rotation: PageRotation;
   itemHeight: number;
 }
 
@@ -21,12 +24,14 @@ export function PreviewPageItem({
   filePath,
   pageIndex,
   sourcePageIndex,
+  rotation,
   itemHeight
 }: PreviewPageItemProps) {
   const { url, isLoading, hasError } = useRenderedPage({
     path: filePath,
     pageIndex: sourcePageIndex,
     scale: PREVIEW_CONFIG.SCALE,
+    rotation,
     isEnabled: true
   });
 

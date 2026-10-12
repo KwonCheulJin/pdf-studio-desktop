@@ -38,6 +38,6 @@
 
 - **S** 모듈 하나는 바뀌는 이유 하나. Tauri 커맨드는 입력 검증 + `pdf-core` 위임만, 컴포넌트는 표시만, 로직은 `model`/`lib`
 - **O** 새 플랫폼·새 내보내기 형식은 구현을 **추가**해서 늘린다(`DesktopPlatform` 구현체 추가). 기존 분기를 늘리지 않는다.
-- **L** `tauri`·`mock` 플랫폼 구현은 같은 계약과 같은 에러 의미(`{ code, message }`)를 지킨다. 테스트에서 바꿔 끼워도 동작이 같아야 한다.
+- **L** `tauri`·`mock` 플랫폼 구현은 같은 계약과 같은 에러 의미(`{ code, message, path }`, `code`는 바인딩의 `ErrorCode` union, `path`는 실패한 입력 파일일 때만)를 지킨다. 테스트에서 바꿔 끼워도 동작이 같아야 한다.
 - **I** 인터페이스와 props는 쓰는 쪽이 필요한 만큼만. 거대한 props 객체·만능 훅 금지
 - **D** 상위 정책은 추상에 의존한다. UI → `DesktopPlatform`(부팅 시 `app/providers`에서 주입), 커맨드 → `pdf-core` 공개 API

@@ -15,6 +15,7 @@ interface BuildMergeSourcesParams {
 /**
  * mergeOrder를 기반으로 병합 소스(`merge_pdfs` 요청의 `sources`) 생성
  * 연속된 같은 파일의 페이지들을 하나의 소스로 묶고, 페이지마다 스토어의 회전값을 담는다.
+ * 삭제된 페이지(`isDeleted`)는 어느 분기에서도 넣지 않는다.
  *
  * @example
  * mergeOrder: [2-1, 1-1, 1-2, 1-3, 2-2, 2-3, 3-1, 3-2, 3-3]
@@ -55,8 +56,9 @@ export function buildMergeSources({
     const file = fileMap.get(item.fileId);
     if (!file) return accumulator;
 
+    // 삭제된 페이지는 mergeOrder에 자리만 남아 있다(복원용). 병합에서는 뺀다.
     const page = pageMap.get(item.pageId);
-    if (!page) return accumulator;
+    if (!page || page.isDeleted) return accumulator;
 
     const mergePage = { index: page.sourcePageIndex, rotation: page.rotation };
     const last = accumulator[accumulator.length - 1];

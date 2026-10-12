@@ -91,11 +91,11 @@ describe("selection-store", () => {
       expect(useSelectionStore.getState().lastSelectedId).toBe("c");
     });
 
-    it("마지막 선택부터 대상까지 구간을 기존 선택에 더한다", () => {
+    it("기준점부터 대상까지 구간을 선택하고 기준점은 옮기지 않는다", () => {
       useSelectionStore.getState().select("b");
       useSelectionStore.getState().selectRange(allIds, "d");
       expect(selectedOf()).toEqual(["b", "c", "d"]);
-      expect(useSelectionStore.getState().lastSelectedId).toBe("d");
+      expect(useSelectionStore.getState().lastSelectedId).toBe("b");
     });
 
     it("대상이 마지막 선택보다 앞이어도 구간을 선택한다", () => {
@@ -104,14 +104,12 @@ describe("selection-store", () => {
       expect(selectedOf()).toEqual(["b", "c", "d"]);
     });
 
-    it("구간 밖의 기존 선택은 범위 선택 후에도 유지한다", () => {
-      useSelectionStore.getState().toggle("a");
-      useSelectionStore.getState().toggle("e");
+    it("구간 밖의 기존 선택은 범위 선택으로 지운다", () => {
       useSelectionStore.getState().select("a");
       useSelectionStore.getState().toggle("e");
       useSelectionStore.getState().toggle("c");
       useSelectionStore.getState().selectRange(allIds, "d");
-      expect(selectedOf()).toEqual(["a", "c", "d", "e"]);
+      expect(selectedOf()).toEqual(["c", "d"]);
     });
 
     it("목록에 없는 ID가 끼면 대상만 선택으로 대체한다", () => {

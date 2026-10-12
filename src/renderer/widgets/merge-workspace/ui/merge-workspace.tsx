@@ -1,7 +1,9 @@
 import { useState, useCallback } from "react";
 import { Download } from "lucide-react";
 import {
+  MERGE_STATUS,
   useMergeFiles,
+  useMergeStatus,
   type PdfDocument
 } from "@/renderer/entities/merge-plan";
 import {
@@ -12,7 +14,10 @@ import {
   useSelectionType,
   usePageRotation,
   useSelectionActions,
-  useSelectedMerge
+  useSelectedMerge,
+  useSelectAll,
+  useSelectionShortcuts,
+  useDeselectDeleted
 } from "@/renderer/features/pdf-merge";
 import {
   PreviewModal,
@@ -41,7 +46,8 @@ export function MergeWorkspace() {
   // FloatingActionBar에서 사용하는 훅
   const { handleRotateSelectedCw, handleRotateSelectedCcw } =
     usePageRotation(files);
-  const { handleDeleteSelected } = useSelectionActions(files);
+  const { handleDeleteSelected, hasDeletedInSelection, handleRestoreSelected } =
+    useSelectionActions(files);
 
   // 선택 파일 병합
   const [isMergePreviewOpen, setIsMergePreviewOpen] = useState(false);
@@ -54,13 +60,35 @@ export function MergeWorkspace() {
 
   const handleMergeSelected = useCallback(async () => {
     setIsMergePreviewOpen(true);
-    await startSelectedMerge();
+    const isMerged = await startSelectedMerge();
+    if (!isMerged) setIsMergePreviewOpen(false);
   }, [startSelectedMerge]);
 
   const handleCloseMergePreview = useCallback(() => {
     setIsMergePreviewOpen(false);
     clearSelectedMerge();
   }, [clearSelectedMerge]);
+
+  // 어떤 경로로든 지워진 파일·페이지는 선택에서 뺀다
+  useDeselectDeleted();
+
+  // 선택 단축키 (모달·병합 진행/실패 오버레이·카드 집기 중에는 끈다)
+  const [isReordering, setIsReordering] = useState(false);
+  const mergeStatus = useMergeStatus();
+  const isMergeOverlayOpen =
+    mergeStatus === MERGE_STATUS.MERGING || mergeStatus === MERGE_STATUS.ERROR;
+  const { selectAllItems } = useSelectAll();
+  useSelectionShortcuts({
+    isEnabled:
+      hasFiles &&
+      !isPreviewOpen &&
+      !isMergePreviewOpen &&
+      !isMergeOverlayOpen &&
+      !isReordering,
+    onDelete: handleDeleteSelected,
+    onSelectAll: selectAllItems,
+    onClearSelection: clearSelection
+  });
 
   // EmptyState용 파일 드롭 (파일이 없을 때만 사용)
   const { isDragOver: isEmptyDragOver } = useDroppedFiles({
@@ -111,6 +139,7 @@ export function MergeWorkspace() {
           files={files}
           onPreviewFile={handlePreviewFile}
           onPreviewPage={handlePreviewPage}
+          onReorderingChange={setIsReordering}
         />
       ) : (
         <div className="flex flex-1 items-center justify-center">
@@ -139,7 +168,9 @@ export function MergeWorkspace() {
         selectedCount={selectedCount}
         selectionType={selectionType}
         hasFiles={hasFiles}
+        hasDeletedInSelection={hasDeletedInSelection}
         onDelete={handleDeleteSelected}
+        onRestore={handleRestoreSelected}
         onRotateCw={handleRotateSelectedCw}
         onRotateCcw={handleRotateSelectedCcw}
         onClearSelection={clearSelection}

@@ -8,6 +8,7 @@ use pdf_core::PdfEngine;
 use crate::access::{PDF_EXTENSION, PathAccess};
 use crate::contract::{MergeOutput, MergeProgress, MergeRequest, MergeResult, count};
 use crate::error::CommandError;
+use crate::files::file_name_of;
 
 /// - 소스는 허용 경로 목록(또는 앱 폴더) 안의 PDF만 받는다.
 /// - 출력은 `temp`면 앱 임시 폴더의 새 이름, `userPath`면 저장 다이얼로그에서 고른 경로만 받는다.
@@ -51,8 +52,10 @@ pub(crate) fn merge(
     let result = pdf_core::merge_pdfs(engine, &core_request, cancel, |progress| {
         on_progress(progress.into());
     })?;
+    let file_name = file_name_of(&core_request.output_path);
     Ok(MergeResult {
         output_path: core_request.output_path,
+        file_name,
         page_count: count(result.page_count),
     })
 }
@@ -72,6 +75,7 @@ mod tests {
 
     use super::*;
     use crate::contract::{MergePage, MergeSource, MergeStage, Rotation};
+    use crate::error::{AppError, ErrorCode};
     use crate::test_support::{TestDir, engine, entries};
 
     const JOB_ID: &str = "job";
@@ -122,7 +126,7 @@ mod tests {
         )
         .unwrap_err();
 
-        assert_eq!(error.code(), "OUTPUT_IS_SOURCE");
+        assert_eq!(error.code(), ErrorCode::OutputIsSource);
         assert_eq!(fs::read(&source).expect("read source"), original_bytes);
     }
 
@@ -150,7 +154,7 @@ mod tests {
         )
         .unwrap_err();
 
-        assert_eq!(error.code(), "OUTPUT_IS_SOURCE");
+        assert_eq!(error.code(), ErrorCode::OutputIsSource);
         assert_eq!(fs::read(&opened).expect("read opened"), original_bytes);
     }
 
@@ -173,7 +177,7 @@ mod tests {
         )
         .unwrap_err();
 
-        assert_eq!(error.code(), "PATH_NOT_ALLOWED");
+        assert_eq!(error.code(), ErrorCode::PathNotAllowed);
         assert!(!output.exists());
     }
 
@@ -203,6 +207,31 @@ mod tests {
         assert!(result.output_path.is_file());
     }
 
+    /// 병합 실패 화면의 "이 파일 빼기"가 이 경로로 작업 공간의 파일을 찾는다.
+    #[test]
+    fn a_source_that_fails_to_open_is_named_in_the_error() {
+        let test_dir = TestDir::new("merge-broken-source");
+        let access = test_dir.access();
+        let good = test_dir.copy_fixture("one-page.pdf", "good.pdf");
+        let broken = test_dir.copy_fixture("not-a-pdf.pdf", "broken.pdf");
+        let broken = access.allow_opened(&broken).expect("pick broken");
+        access.allow_opened(&good).expect("pick good");
+
+        let error = AppError::from(
+            run(
+                &access,
+                &request(
+                    vec![whole_document(&good, 1), whole_document(&broken, 1)],
+                    MergeOutput::Temp,
+                ),
+            )
+            .unwrap_err(),
+        );
+
+        assert_eq!(error.code, ErrorCode::InvalidPdf);
+        assert_eq!(error.path, Some(broken));
+    }
+
     #[test]
     fn cancelled_merge_leaves_no_file_in_the_app_temp_folder() {
         let test_dir = TestDir::new("merge-cancel");
@@ -225,7 +254,7 @@ mod tests {
         )
         .unwrap_err();
 
-        assert_eq!(error.code(), "CANCELLED");
+        assert_eq!(error.code(), ErrorCode::Cancelled);
         assert!(entries(&access.directories().temp).is_empty());
     }
 }

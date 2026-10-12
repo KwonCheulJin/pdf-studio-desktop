@@ -4,7 +4,7 @@ import { SELECTION_TYPE, type SelectionType } from "../config/selection-type";
 interface SelectionStoreState {
   selectionType: SelectionType; // 현재 선택 모드 (파일 vs 페이지)
   selectedIds: Set<string>; // 파일 ID 또는 페이지 ID
-  lastSelectedId: string | null;
+  lastSelectedId: string | null; // 범위 선택(Shift) 기준점
 }
 
 interface SelectionStoreActions {
@@ -73,6 +73,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
       };
     }),
 
+  // 파일 목록 관례: 기준점(마지막 단일·토글 선택)부터 대상까지로 선택을 바꾸고 기준점은 그대로 둔다.
   selectRange: (allIds: string[], targetId: string) =>
     set((state) => {
       const { lastSelectedId } = state;
@@ -83,24 +84,20 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
         };
       }
 
-      const lastIndex = allIds.indexOf(lastSelectedId);
+      const anchorIndex = allIds.indexOf(lastSelectedId);
       const targetIndex = allIds.indexOf(targetId);
 
-      if (lastIndex === -1 || targetIndex === -1) {
+      if (anchorIndex === -1 || targetIndex === -1) {
         return {
           selectedIds: new Set([targetId]),
           lastSelectedId: targetId
         };
       }
 
-      const start = Math.min(lastIndex, targetIndex);
-      const end = Math.max(lastIndex, targetIndex);
-      const rangeIds = allIds.slice(start, end + 1);
+      const start = Math.min(anchorIndex, targetIndex);
+      const end = Math.max(anchorIndex, targetIndex);
 
-      return {
-        selectedIds: new Set([...state.selectedIds, ...rangeIds]),
-        lastSelectedId: targetId
-      };
+      return { selectedIds: new Set(allIds.slice(start, end + 1)) };
     }),
 
   clearSelection: () =>
@@ -160,9 +157,3 @@ export const useSelectionType = () =>
 
 export const useSelectedIds = () =>
   useSelectionStore((state) => state.selectedIds);
-
-export const useSelectedCount = () =>
-  useSelectionStore((state) => state.selectedIds.size);
-
-export const useIsSelected = (id: string) =>
-  useSelectionStore((state) => state.selectedIds.has(id));

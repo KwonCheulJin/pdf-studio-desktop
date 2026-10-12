@@ -27,6 +27,8 @@ interface DocumentCardProps {
   groupId: string;
   /** 그룹에 속한 페이지 ID 목록 (페이지 범위 표시용) */
   groupPageIds: string[];
+  /** 그룹에서 삭제된(복원 가능한) 페이지 수 */
+  deletedPageCount: number;
   /** 이미지 고정 크기 (정사각형) */
   imageSize?: number;
   // 스택 효과 표시 여부 (접힌 상태에서만)
@@ -40,12 +42,14 @@ interface DocumentCardProps {
  * Adobe Acrobat CombineGridItem 스타일
  * - 스택 효과: thumbnailBorderTop + thumbnailBorderLeft
  * - 퀵 액션: Expand, 삭제
- * - 푸터: 파일명 + 페이지 범위
+ * - 삭제된 페이지가 있으면 "n쪽 삭제됨" 배지 (펼쳐서 복원)
+ * - 푸터: 파일명 + 페이지 범위 (삭제 안 된 페이지만)
  */
 export function DocumentCard({
   document,
   groupId,
   groupPageIds,
+  deletedPageCount,
   imageSize,
   isStacked = true,
   onPreview
@@ -171,19 +175,23 @@ export function DocumentCard({
           <div
             className={cn(
               "absolute top-2 left-2 z-10 flex cursor-default items-center justify-center rounded-[4px] bg-black/60 p-2 transition-opacity",
-              isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+              isSelected
+                ? "opacity-100"
+                : "opacity-0 group-focus-within:opacity-100 group-hover:opacity-100"
             )}
+            onClick={(e) => e.stopPropagation()}
           >
             <Checkbox
               checked={isSelected}
               onCheckedChange={handleCheckboxChange}
               onClick={(e) => e.stopPropagation()}
+              aria-label={`${document.name} 선택`}
               className="size-5"
             />
           </div>
 
           {/* 퀵 액션 버튼 (우상단) */}
-          <div className="pointer-events-none absolute top-2 right-2 z-10 flex flex-col gap-1 rounded-md bg-black/60 p-1 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
+          <div className="pointer-events-none absolute top-2 right-2 z-10 flex flex-col gap-1 rounded-md bg-black/60 p-1 opacity-0 transition-opacity group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100">
             <Tooltip content="펼치기">
               <Button
                 variant="card-action"
@@ -238,16 +246,24 @@ export function DocumentCard({
               )}
             </div>
 
-            {/* 확대 버튼 (호버 시 표시) */}
+            {/* 확대 버튼 (호버·포커스 시 표시). 카드 본문 클릭은 선택이므로 가운데 버튼만 누른다 */}
             {thumbnailUrl && (
-              <button
-                type="button"
-                onClick={handlePreview}
-                className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-all group-hover:opacity-100 hover:bg-black/30"
-                aria-label="미리보기 확대"
-              >
-                <ZoomIn size={24} className="text-white" />
-              </button>
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
+                <button
+                  type="button"
+                  onClick={handlePreview}
+                  className="bg-foreground/60 text-background hover:bg-foreground/80 focus-visible:ring-ring pointer-events-auto rounded-full p-3 focus-visible:ring-2 focus-visible:outline-none"
+                  aria-label="미리보기 확대"
+                >
+                  <ZoomIn size={24} />
+                </button>
+              </div>
+            )}
+
+            {deletedPageCount > 0 && (
+              <span className="bg-destructive text-destructive-foreground pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded px-2 py-0.5 text-xs font-medium whitespace-nowrap">
+                {deletedPageCount}쪽 삭제됨
+              </span>
             )}
           </div>
         </div>

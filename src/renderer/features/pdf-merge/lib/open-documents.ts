@@ -11,7 +11,7 @@ interface OpenDocumentsParams {
   paths: string[];
 }
 
-interface OpenDocumentsResult {
+export interface OpenDocumentsResult {
   documents: PdfDocument[];
   failures: OpenedFileFailure[];
 }
@@ -28,16 +28,14 @@ export async function openDocuments({
   const documents = openedFiles.flatMap((openedFile) =>
     openedFile.status === "ok"
       ? [
-          {
+          createPdfDocument({
+            path: openedFile.pdfPath,
             // TIFF는 변환 결과가 캐시 폴더의 고유 이름이라 화면 이름은 displayName을 쓴다.
-            ...createPdfDocument(
-              openedFile.pdfPath,
-              openedFile.info.pageCount,
-              openedFile.info.title ?? undefined,
-              openedFile.info.pages.map((page) => page.rotation)
-            ),
-            name: openedFile.displayName
-          }
+            name: openedFile.displayName,
+            pageCount: openedFile.info.pageCount,
+            title: openedFile.info.title ?? undefined,
+            pageRotations: openedFile.info.pages.map((page) => page.rotation)
+          })
         ]
       : []
   );

@@ -10,13 +10,5 @@ export const APP_STATUS = {
 export type AppStatus = ValueOf<typeof APP_STATUS>;
 
 export const FILE_EXTENSIONS = {
-  PDF: ".pdf",
-  TIFF: ".tiff",
-  TIF: ".tif"
+  PDF: ".pdf"
 } as const;
-
-export const ACCEPTED_FILE_TYPES = [
-  FILE_EXTENSIONS.PDF,
-  FILE_EXTENSIONS.TIFF,
-  FILE_EXTENSIONS.TIF
-] as const;

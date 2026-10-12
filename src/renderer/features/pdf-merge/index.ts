@@ -1,9 +1,6 @@
-export { EmptyState, FileGrid } from "./ui";
-export {
-  useSelectionStore,
-  useSelectedCount,
-  useSelectionType
-} from "./model/selection-store";
+export { EmptyState, FileGrid, MergeProgressOverlay } from "./ui";
+export { useSelectionStore, useSelectionType } from "./model/selection-store";
+export { useSelectedCount } from "./model/use-selected-count";
 export { useZoomStore, useCardSize } from "./model/zoom-store";
 export { useAddFiles, useAddDroppedFiles } from "./model/use-add-files";
 export { useSelectAll } from "./model/use-select-all";
@@ -11,5 +8,8 @@ export { useMergeExecution } from "./model/use-merge-execution";
 export { useDownloadMergedFile } from "./model/use-download-merged-file";
 export { usePageRotation } from "./model/use-page-rotation";
 export { useSelectionActions } from "./model/use-selection-actions";
+export { useSelectionShortcuts } from "./model/use-selection-shortcuts";
+export { useDeselectDeleted } from "./model/use-deselect-deleted";
 export { useSelectedMerge } from "./model/use-selected-merge";
+export { discardMergedFile } from "./lib/discard-merged-file";
 export { SELECTION_TYPE, type SelectionType } from "./config/selection-type";

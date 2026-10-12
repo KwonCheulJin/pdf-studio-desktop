@@ -28,15 +28,25 @@ export interface PdfDocument {
   title?: string;
 }
 
+interface CreatePdfDocumentParams {
+  path: string;
+  /** 화면 이름. 경로에서 자르지 않고 플랫폼이 준 이름(`displayName`·`fileName`)을 쓴다. */
+  name: string;
+  pageCount: number;
+  title?: string;
+  /** 쪽별 원본 회전. 0·90·180·270이 아니면 0 */
+  pageRotations?: number[];
+}
+
 // 새 PdfDocument 생성 헬퍼
-export function createPdfDocument(
-  path: string,
-  pageCount: number,
-  title?: string,
-  pageRotations?: number[]
-): PdfDocument {
+export function createPdfDocument({
+  path,
+  name,
+  pageCount,
+  title,
+  pageRotations
+}: CreatePdfDocumentParams): PdfDocument {
   const documentId = crypto.randomUUID();
-  const name = path?.split(/[/\\]/).pop() ?? path ?? "Unknown";
   const pages: PdfPage[] = Array.from({ length: pageCount }, (_, index) => {
     const rawRotation = pageRotations?.[index] ?? 0;
     const rotation = (

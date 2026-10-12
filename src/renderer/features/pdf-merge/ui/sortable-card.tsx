@@ -12,6 +12,8 @@ interface SortableCardProps {
   position: GridPosition;
   cardWidth: number;
   cardHeight: number;
+  /** 카드 본문 클릭(선택). 카드 안 버튼·체크박스는 전파를 막는다. */
+  onClick: (event: React.MouseEvent<HTMLDivElement>) => void;
   children: React.ReactNode;
 }
 
@@ -28,6 +30,7 @@ export function SortableCard({
   position,
   cardWidth,
   cardHeight,
+  onClick,
   children
 }: SortableCardProps) {
   const {
@@ -45,8 +48,10 @@ export function SortableCard({
       {...attributes}
       {...listeners}
       aria-label={label}
+      onClick={onClick}
       className={cn(
-        "focus-visible:ring-primary absolute rounded-[4px] outline-none focus-visible:ring-2",
+        // group: 카드에 포커스가 있을 때(focus-within)도 카드 버튼을 보인다
+        "group focus-visible:ring-primary absolute rounded-[4px] outline-none select-none focus-visible:ring-2",
         isDragging
           ? "z-40 opacity-80"
           : "transition-[left,top] duration-200 ease-out"

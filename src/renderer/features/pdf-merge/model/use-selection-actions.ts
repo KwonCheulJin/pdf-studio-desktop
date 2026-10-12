@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import {
   useMergeStore,
   type PdfDocument
@@ -12,8 +12,10 @@ import { SELECTION_TYPE } from "../config/selection-type";
 
 interface UseSelectionActionsResult {
   handleDeleteSelected: () => void;
+  /** 선택에 삭제된 페이지가 섞여 있는지 (복원 버튼 표시용) */
+  hasDeletedInSelection: boolean;
+  handleRestoreSelected: () => void;
   handleDeletePage: (fileId: string, pageId: string) => void;
-  handleRestorePage: (fileId: string, pageId: string) => void;
 }
 
 /**
@@ -42,14 +44,6 @@ export function useSelectionActions(
     [deletePage, selectedIds, removeFromSelection]
   );
 
-  // 페이지 복원 핸들러
-  const handleRestorePage = useCallback(
-    (fileId: string, pageId: string) => {
-      restorePage(fileId, pageId);
-    },
-    [restorePage]
-  );
-
   // 선택된 항목 삭제 (파일 또는 페이지)
   const handleDeleteSelected = useCallback(() => {
     if (selectionType === SELECTION_TYPE.FILE) {
@@ -76,9 +70,28 @@ export function useSelectionActions(
     clearSelection
   ]);
 
+  // 선택에 섞인 삭제된 페이지
+  const selectedDeletedPages = useMemo(
+    () =>
+      files.flatMap((file) =>
+        file.pages
+          .filter((page) => page.isDeleted && selectedIds.has(page.id))
+          .map((page) => ({ fileId: file.id, pageId: page.id }))
+      ),
+    [files, selectedIds]
+  );
+
+  // 선택된 삭제 페이지를 모두 복원 (선택은 그대로 둔다)
+  const handleRestoreSelected = useCallback(() => {
+    for (const { fileId, pageId } of selectedDeletedPages) {
+      restorePage(fileId, pageId);
+    }
+  }, [selectedDeletedPages, restorePage]);
+
   return {
     handleDeleteSelected,
-    handleDeletePage,
-    handleRestorePage
+    hasDeletedInSelection: selectedDeletedPages.length > 0,
+    handleRestoreSelected,
+    handleDeletePage
   };
 }

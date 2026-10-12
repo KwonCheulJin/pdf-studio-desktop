@@ -99,7 +99,7 @@ pub(crate) fn discard_temp(access: &PathAccess, path: &Path) -> Result<(), Comma
     fs::remove_file(&file).map_err(|source| write_error(&file, source))
 }
 
-fn file_name_of(path: &Path) -> String {
+pub(crate) fn file_name_of(path: &Path) -> String {
     path.file_name()
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_default()
@@ -111,9 +111,10 @@ mod tests {
 
     use super::*;
     use crate::contract::OpenedFile;
+    use crate::error::ErrorCode;
     use crate::test_support::{TestDir, engine, entries};
 
-    fn error_code(opened: &OpenedFile) -> Option<&'static str> {
+    fn error_code(opened: &OpenedFile) -> Option<ErrorCode> {
         match opened {
             OpenedFile::Opened { .. } => None,
             OpenedFile::Failed { error, .. } => Some(error.code),
@@ -158,11 +159,11 @@ mod tests {
             codes,
             vec![
                 None,
-                Some("PATH_NOT_ALLOWED"),
+                Some(ErrorCode::PathNotAllowed),
                 None,
-                Some("UNSUPPORTED_FILE_TYPE"),
-                Some("INVALID_PDF"),
-                Some("INPUT_TOO_LARGE"),
+                Some(ErrorCode::UnsupportedFileType),
+                Some(ErrorCode::InvalidPdf),
+                Some(ErrorCode::InputTooLarge),
             ]
         );
         let sources: Vec<_> = results
@@ -215,8 +216,8 @@ mod tests {
         let outside = read_pdf(&access, &not_picked).unwrap_err();
         let too_large = read_pdf(&access, &oversized).unwrap_err();
 
-        assert_eq!(outside.code(), "PATH_NOT_ALLOWED");
-        assert_eq!(too_large.code(), "INPUT_TOO_LARGE");
+        assert_eq!(outside.code(), ErrorCode::PathNotAllowed);
+        assert_eq!(too_large.code(), ErrorCode::InputTooLarge);
     }
 
     #[test]
@@ -237,10 +238,10 @@ mod tests {
             .expect("pick destination");
 
         let outside = copy_file(&access, &original, &destination).unwrap_err();
-        assert_eq!(outside.code(), "PATH_NOT_ALLOWED");
+        assert_eq!(outside.code(), ErrorCode::PathNotAllowed);
         assert!(!destination.exists());
         let overwrite = copy_file(&access, &temp_result, &original).unwrap_err();
-        assert_eq!(overwrite.code(), "OUTPUT_IS_SOURCE");
+        assert_eq!(overwrite.code(), ErrorCode::OutputIsSource);
         assert_eq!(fs::read(&original).expect("read original"), original_bytes);
 
         copy_file(&access, &temp_result, &destination).expect("copy");
@@ -262,14 +263,19 @@ mod tests {
 
         for path in [&outside, &traversal, &temp, &other_preview] {
             let error = discard_temp(&access, path).unwrap_err();
-            assert_eq!(error.code(), "PATH_NOT_ALLOWED", "{}", path.display());
+            assert_eq!(
+                error.code(),
+                ErrorCode::PathNotAllowed,
+                "{}",
+                path.display()
+            );
         }
         #[cfg(unix)]
         {
             let link = temp.join("link.pdf");
             std::os::unix::fs::symlink(&outside, &link).expect("symlink");
             let error = discard_temp(&access, &link).unwrap_err();
-            assert_eq!(error.code(), "PATH_NOT_ALLOWED");
+            assert_eq!(error.code(), ErrorCode::PathNotAllowed);
             fs::remove_file(&link).expect("remove link");
         }
         assert!(outside.exists());

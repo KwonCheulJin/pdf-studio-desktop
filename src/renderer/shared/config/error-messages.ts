@@ -1,0 +1,49 @@
+import type { PlatformErrorCode } from "@/renderer/shared/platform";
+
+/** 표에 없는 코드에 보이는 문구 */
+export const UNKNOWN_ERROR_MESSAGE =
+  "알 수 없는 오류가 발생했습니다. 다시 시도해 주세요.";
+
+/**
+ * 오류 코드 → 화면 문구. 화면은 이 표만 쓰고, 플랫폼 `message`는 로그로만 남긴다.
+ * 코드는 Rust `ErrorCode`(바인딩)와 프론트 전용 `PLATFORM_ERROR_CODE`이고, 하나라도 빠지면 타입 오류다.
+ */
+const ERROR_MESSAGES: Record<PlatformErrorCode, string> = {
+  PATH_NOT_ALLOWED: "이 파일에 접근할 수 없습니다. 파일을 다시 추가해 주세요.",
+  UNSUPPORTED_FILE_TYPE:
+    "지원하지 않는 파일 형식입니다. PDF·TIF·TIFF만 열 수 있습니다.",
+  OUTPUT_IS_SOURCE:
+    "원본 파일에는 덮어쓸 수 없습니다. 다른 이름으로 저장해 주세요.",
+  JOB_ALREADY_RUNNING: "같은 작업이 이미 진행 중입니다.",
+  INVALID_DIALOG_PATH: "선택한 위치를 사용할 수 없습니다.",
+  ENGINE_UNAVAILABLE:
+    "PDF 처리 엔진을 불러오지 못했습니다. 앱을 다시 시작해 주세요.",
+  NOT_READY: "앱이 아직 준비되지 않았습니다. 잠시 후 다시 시도해 주세요.",
+  TASK_FAILED: "작업을 처리하지 못했습니다.",
+  NOT_FOUND: "파일을 찾을 수 없습니다. 옮겨졌거나 지워졌습니다.",
+  FILE_UNREADABLE: "파일을 읽을 수 없습니다.",
+  INPUT_TOO_LARGE: "파일이 너무 커서 열 수 없습니다.",
+  INVALID_PDF: "PDF 파일이 손상되었거나 형식이 올바르지 않습니다.",
+  PASSWORD_PROTECTED: "암호가 걸린 PDF는 열 수 없습니다.",
+  PDFIUM_FAILURE: "PDF를 처리하는 중 문제가 생겼습니다.",
+  OUTPUT_DIRECTORY_NOT_FOUND: "저장할 폴더를 찾을 수 없습니다.",
+  WRITE_FAILED: "파일을 저장하지 못했습니다. 저장 공간과 권한을 확인해 주세요.",
+  EMPTY_REQUEST: "병합할 페이지가 없습니다.",
+  TOO_MANY_FILES: "한 번에 병합할 수 있는 파일 수를 넘었습니다.",
+  EMPTY_SOURCE: "페이지가 없는 파일이 있습니다.",
+  INVALID_PAGE:
+    "파일에 없는 페이지가 들어 있습니다. 파일이 바뀌었을 수 있습니다.",
+  CANCELLED: "작업을 취소했습니다.",
+  INVALID_TIFF: "TIFF 파일이 손상되었거나 형식이 올바르지 않습니다.",
+  UNSUPPORTED_TIFF_COMPRESSION: "지원하지 않는 압축 방식의 TIFF 파일입니다.",
+  UNSUPPORTED_TIFF_FORMAT: "지원하지 않는 형식의 TIFF 파일입니다.",
+  IMAGE_TOO_LARGE: "이미지가 너무 커서 변환할 수 없습니다.",
+  IPC_FAILED: "앱 내부 통신에 실패했습니다. 다시 시도해 주세요."
+};
+
+/** 오류 코드의 화면 문구. IPC로 온 값이라 표에 없는 코드가 오면 일반 문구 */
+export function getErrorMessage(code: PlatformErrorCode): string {
+  return Object.prototype.hasOwnProperty.call(ERROR_MESSAGES, code)
+    ? ERROR_MESSAGES[code]
+    : UNKNOWN_ERROR_MESSAGE;
+}

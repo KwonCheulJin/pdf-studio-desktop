@@ -91,7 +91,7 @@ export type Unsubscribe = () => void;
 
 /**
  * 프론트가 의존하는 데스크톱 기능. 파일 경로를 넘기고 결과(JSON)를 받는다.
- * 실패하면 `PlatformError`(`{ code, message }`)를 던진다.
+ * 실패하면 `PlatformError`(`{ code, message, path }`)를 던진다.
  * `openFiles`는 파일별 실패를 결과에 담고, 요청 자체가 실패할 때만 던진다.
  */
 export interface DesktopPlatform {
@@ -101,6 +101,11 @@ export interface DesktopPlatform {
   pickSavePath(options: PickSavePathOptions): Promise<string | null>;
   /** 확장자 판별·TIFF 변환·정보 조회. 입력 순서대로 파일별 결과 */
   openFiles(paths: string[]): Promise<OpenedFile[]>;
+  /**
+   * 경로의 마지막 이름에서 확장자를 뺀 것(열기 전 자리표시·열기 실패 알림용).
+   * 렌더러는 경로 문자열을 자르지 않고 이 메서드를 쓴다. 이름이 없는 경로면 경로 그대로다.
+   */
+  fileStem(path: string): Promise<string>;
   /** pdf.js 표시 전용 PDF 바이트 */
   readPdf(path: string): Promise<Uint8Array>;
   mergePdfs(params: MergePdfsParams): Promise<MergeResult>;

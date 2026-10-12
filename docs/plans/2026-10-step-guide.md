@@ -29,6 +29,10 @@ pnpm i && pnpm start                                           # 현재 Electron
 
 ### 0-3. 진행 순서
 - **Step 1~15(마이그레이션)는 순서대로 하나씩 진행한다.** 병렬 작업은 Step 15 이후 Phase 2(Step 16~23)와 Phase 4 일부(Step 30~32, 34)에서만 한다.
+- **실행 순서는 Step 번호와 다르다(Tauri 셸 먼저):** 1 → 9 → 8 → 10 → 11 → 2 → 14 → 3 → 4 → 5 → 6 → 13 → 7 → 15 (Step 12는 Step 2에 흡수)
+  - 번호는 계획서·CLAUDE.md가 참조하므로 그대로 두고 순서만 바꿨다. 각 Step 제목 아래 "실행 순서" 줄에 앞뒤 Step을 적었다.
+  - 이유: Electron 위에서 Step 2~7을 하면 Electron IPC를 감싼 임시 어댑터와 손으로 쓴 계약 타입을 만들어야 하고, 곧 버려진다. 이를 만들지 않으려고 Tauri 셸을 먼저 세운다.
+  - 대가: Step 9부터 Step 2 전까지는 앱의 파일 처리 기능이 동작하지 않는다.
 
 ### 0-4. 단계마다 반복하는 흐름
 
@@ -44,11 +48,12 @@ pnpm i && pnpm start                                           # 현재 Electron
 
 ---
 
-## Phase 0: Electron 위에서 정리
+## Phase 0: 앱 구조 정리 (Tauri 위에서)
 
-> 이 구간은 Windows 회사 PC에서도 할 수 있다. Mac에서만 해야 하는 건 Step 8부터다.
+> Step 1만 Windows 회사 PC에서도 할 수 있다. Step 2~7은 Step 11 이후 Tauri 위에서 진행하므로 Mac에서 한다(Step 1 다음은 Step 9, 8, 10, 11이고 Step 2는 그 뒤다).
 
 ### Step 1. 개발 환경 정합 (S)
+- 실행 순서: 1번째 (뒤: Step 9)
 - 브랜치: `chore/dev-env`
 - 읽을 곳: 계획서 §4 P0-1
 - 할 일: Node 버전 하나로 통일, `engines`·`packageManager`, `.gitattributes`(eol=lf), `forceConsistentCasingInFileNames`, `.claude` 훅 절대경로 제거, GitHub Actions 워크플로 제거(Phase 4에서 Tauri 기준으로 새로 만든다)
@@ -56,26 +61,30 @@ pnpm i && pnpm start                                           # 현재 Electron
 - [x] Step 1
 
 ### Step 2. 플랫폼 어댑터, 계약 분리, FSD 정리, 스타일 폴더 이동 (M)
+- 실행 순서: 6번째 (앞: Step 11, 뒤: Step 14)
 - 브랜치: `refactor/platform-adapter-fsd`
 - 읽을 곳: 계획서 §4 P0-2, 토큰 문서 §3과 §4의 1단계
 - 할 일
-  0. **먼저 특성 테스트**(계획서 T2): `merge-store`·`selection-store`의 지금 동작을 테스트로 고정한다. 이 커밋을 가장 먼저 한다.
-  1. `src/shared/contracts/`로 DTO·상수 이동, renderer의 `@/main/*` import 제거
-  2. `shared/platform/`에 `DesktopPlatform` 인터페이스와 `electron-platform.ts`, `mock-platform.ts`
+  0. ~~먼저 특성 테스트~~(계획서 T2): `merge-store`·`selection-store`의 지금 동작을 테스트로 고정한다. **완료(PR #8, `src/renderer/shared/model/__tests__/`).**
+  1. 손으로 쓴 `src/shared/contracts`를 만들지 않는다. Step 11에서 만든 tauri-specta 생성물을 계약 타입으로 쓴다. renderer의 `@/main/*` import 제거
+  2. `shared/platform/`에 `DesktopPlatform` 인터페이스와 `tauri-platform.ts`, `mock-platform.ts`. **Electron용 임시 어댑터는 만들지 않는다.** 어댑터 단위 테스트(`mockIPC`)를 여기서 쓴다(구 Step 12)
   3. `shared/hooks`의 업무 훅 → `features/*/model`, `merge-store` → `entities/merge-plan` + `features/pdf-merge/model`
   4. `src/renderer/styles/` → `src/renderer/app/styles/`로 옮기고 `tokens.css`, `theme.css`, `base.css`로 나눈다. **값은 그대로 둔다.**
   5. `components.json` 경로 수정(`app/styles/index.css`, `components` 별칭)
-- 커밋을 다섯으로 나눈다: 특성 테스트 / 계약 / 어댑터 / FSD 이동 / 스타일 이동
-- 완료 기준: `window.api` 참조가 `electron-platform.ts` 한 곳, `shared`가 상위 레이어나 `@/main`을 import하지 않음, 스타일 이동 전후 화면이 같음(라이트·다크 스크린샷 비교)
+- 커밋을 넷으로 나눈다: 어댑터(+계약 연결, `mockIPC` 테스트) / FSD 이동 / 스타일 이동 / `components.json` (특성 테스트 커밋은 이미 끝남)
+- 완료 기준: `window.api` 참조 0, `@tauri-apps/api` import는 `shared/platform/tauri-platform.ts`에만, `shared`가 상위 레이어나 `@/main`을 import하지 않음, `mockIPC` 테스트 통과, 스타일 이동 전후 화면이 같음(라이트·다크 스크린샷 비교)
 - [ ] Step 2
 
 ### Step 3. 비파괴 회전 (S)
+- 실행 순서: 8번째 (앞: Step 14, 뒤: Step 4)
 - 브랜치: `fix/non-destructive-rotation`
 - 읽을 곳: 계획서 §4 P0-3 (버그 B1)
+- 할 일: 병합은 Rust(`merge_pdfs`, Step 10·11)가 요청의 페이지별 rotation을 적용한다. 프론트에서 원본을 덮어쓰는 편집·회전 호출(`pdf.edit:apply`, `pdf.page:rotate`에 해당하는 호출)을 없애고, 회전은 스토어 상태로만 들고 있다가 `MergeRequest`에 담는다.
 - 완료 기준: 어떤 조작 후에도 원본 파일의 mtime과 해시가 그대로라는 테스트 통과
 - [ ] Step 3
 
 ### Step 4. pdf.js 로더 단일화와 렌더 캐시 (M)
+- 실행 순서: 9번째 (앞: Step 3, 뒤: Step 5)
 - 브랜치: `perf/pdfjs-cache`
 - 읽을 곳: 계획서 §4 P0-4 (P1)
 - 주의: cMap과 standard fonts 자산 복사를 빼먹으면 한글 PDF가 깨진다.
@@ -83,12 +92,15 @@ pnpm i && pnpm start                                           # 현재 Electron
 - [ ] Step 4
 
 ### Step 5. 내부 드래그 정렬을 @dnd-kit으로 (M)
+- 실행 순서: 10번째 (앞: Step 4, 뒤: Step 6)
 - 브랜치: `refactor/dnd-kit`
-- 읽을 곳: 계획서 §4 P0-5
-- 완료 기준: HTML5 DnD 이벤트(`onDragStart` 등) 의존 0, 파일·페이지 재정렬과 외부 파일 드롭이 그대로 동작, **키보드만으로 재정렬 가능**(Space 집기 → 방향키 → Space 놓기), `.claude/quality-gate.json` test 명령의 `layout-calculator.test.ts` 제외 해제
+- 읽을 곳: 계획서 §4 P0-5, §5 P1-4
+- 할 일: 내부 정렬은 dnd-kit, 외부 파일 드롭은 `platform.onFileDrop`(Tauri `onDragDropEvent`)으로 구현한다. `position`(PhysicalPosition)은 `/ window.devicePixelRatio`로 CSS 좌표로 바꾸고, `document.elementFromPoint`로 드롭 대상을 판정한다.
+- 완료 기준: HTML5 DnD 이벤트(`onDragStart` 등) 의존 0, 파일·페이지 재정렬과 외부 파일 드롭이 동작(드롭 위치에 정확히 삽입, Retina에서 `devicePixelRatio` 보정 확인), **키보드만으로 재정렬 가능**(Space 집기 → 방향키 → Space 놓기), `.claude/quality-gate.json` test 명령의 `layout-calculator.test.ts` 제외 해제
 - [ ] Step 5
 
 ### Step 6. 버그 수정과 정리 (M)
+- 실행 순서: 11번째 (앞: Step 5, 뒤: Step 13)
 - 브랜치: `fix/p0-cleanup`
 - 읽을 곳: 계획서 §2.2 버그 표, §4 P0-6 (B2, B5, B8~B12, A1, D1, D2)
 - 커밋 단위: 버그마다 하나. B10(페이지 복원)은 스토어 변경 + 화면 연결이라 따로 리뷰한다.
@@ -102,6 +114,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 - [ ] Step 6
 
 ### Step 7. 디자인 토큰 v2 적용 (M)
+- 실행 순서: 13번째 (앞: Step 13, 뒤: Step 15)
 - 브랜치: `feat/design-tokens-v2`
 - 읽을 곳: 토큰 문서 §2, §3, §4의 2~4단계. 정본 값은 Claude Design 디자인 시스템 "PDF Studio"의 `tokens.json`
 - 왜 이 위치인가: Step 4~5가 썸네일·카드 컴포넌트를 크게 고친다. 그 뒤에 하드코딩 색을 걷어내야 같은 파일을 두 번 고치지 않는다.
@@ -121,22 +134,26 @@ pnpm i && pnpm start                                           # 현재 Electron
 ## Phase 1: Tauri 전환 (Track A) — 여기서부터 Mac
 
 ### Step 8. ★ pdfium 스파이크 (M) — 게이트
+- 실행 순서: 3번째 (앞: Step 9, 뒤: Step 10)
 - 브랜치: `spike/pdfium`
 - 읽을 곳: 계획서 §5 P1-0, §12 리스크 첫 줄
-- 할 일(키트): 빈 앱은 `pnpm create tauri-app`으로 만들고, pdfium은 `cargo add pdfium-render --features thread_safe`로 넣는다. 직접 작성하는 것은 `scripts/fetch-pdfium.mjs`와 렌더 확인 코드뿐이다.
-- **이 단계가 실패하면 Step 9 이후를 진행하지 않는다.** 실패하면 원인을 기록하고 계획서 §6.0의 엔진 선택을 다시 검토한다.
+- 할 일(키트): 버리는 빈 앱(`pnpm create tauri-app`)은 만들지 않는다. Step 9에서 만든 실제 `src-tauri`와 `crates/pdf-core` 안에서 스파이크하고, pdfium은 `cargo add -p pdf-core pdfium-render --features thread_safe`로 넣는다. 직접 작성하는 것은 `scripts/fetch-pdfium.mjs`와 렌더 확인 코드뿐이다.
+- **이 단계가 실패하면 Step 10 이후를 진행하지 않는다.** 실패하면 원인을 기록하고 계획서 §6.0의 엔진 선택을 다시 검토한다.
 - 완료 기준: ad-hoc 서명된 `.app`에서 PDF 1장 렌더, `codesign --verify --deep --strict` 통과, CI Windows 빌드에서 pdfium 로드
 - [ ] Step 8
 
 ### Step 9. Tauri 스캐폴드 + Cargo workspace (S)
+- 실행 순서: 2번째 (앞: Step 1, 뒤: Step 8)
 - 브랜치: `feat/tauri-scaffold`
 - 읽을 곳: 계획서 §5 P1-1, §11 D5
 - 시작 전 결정: **번들 ID `io.github.kwoncheuljin.pdfstudio` 확정**(나중에 바꾸면 데이터 경로가 바뀐다)
+- Electron Forge 설정(`forge.config.mts`, `vite.main.config.mts`, `vite.preload.config.mts`, `vite.renderer.config.mts`)은 Step 14까지 그대로 두고, Tauri용 `vite.config.ts`를 새로 만든다.
 - 할 일(키트): `pnpm add -D @tauri-apps/cli` → `pnpm add @tauri-apps/api` → `pnpm tauri init` → `cargo new --lib crates/pdf-core`. 루트 `Cargo.toml`의 `[workspace]`만 직접 쓴다.
-- 완료 기준: `pnpm tauri dev`로 빈 셸에 기존 renderer가 뜸, 버전이 `package.json` 하나에서 나옴
+- 완료 기준: `pnpm tauri dev`로 빈 셸에 기존 renderer가 뜸, 버전이 `package.json` 하나에서 나옴. 파일 처리 기능은 Step 11·2 전까지 동작하지 않아도 된다
 - [ ] Step 9
 
 ### Step 10. pdf-core 기본 처리 (L)
+- 실행 순서: 4번째 (앞: Step 8, 뒤: Step 11)
 - 브랜치: `feat/pdf-core-basic`
 - 읽을 곳: 계획서 §5 P1-2
 - 순서: `document.rs` → `info.rs` → `merge.rs` → `tiff.rs`. 모듈마다 테스트 먼저 이식하고 구현한다.
@@ -144,6 +161,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 - [ ] Step 10
 
 ### Step 11. Tauri 커맨드와 작업 큐 (M)
+- 실행 순서: 5번째 (앞: Step 10, 뒤: Step 2)
 - 브랜치: `feat/tauri-commands`
 - 읽을 곳: 계획서 §5 P1-3
 - 화면 시안: 7 "병합: 진행·취소", 8 "병합: 실패"
@@ -152,12 +170,13 @@ pnpm i && pnpm start                                           # 현재 Electron
 - [ ] Step 11
 
 ### Step 12. Tauri 어댑터와 드롭 (M)
-- 브랜치: `feat/tauri-platform`
-- 읽을 곳: 계획서 §5 P1-4
-- 완료 기준: `mockIPC` 단위 테스트 통과, 드롭 위치에 정확히 삽입(Retina에서 `devicePixelRatio` 보정 확인)
+- 실행 순서: 없음 (Step 2에 흡수)
+- 이 Step은 Step 2에 흡수됨. 어댑터(`tauri-platform.ts`)와 `mockIPC` 단위 테스트는 Step 2에서 한다. 외부 파일 드롭(`onDragDropEvent`, `devicePixelRatio` 보정, `elementFromPoint` 판정)은 Step 5에서 한다.
+- 체크박스는 Step 2와 함께 체크한다.
 - [ ] Step 12
 
 ### Step 13. 보안, 테마, 창 (S)
+- 실행 순서: 12번째 (앞: Step 6, 뒤: Step 7)
 - 브랜치: `feat/tauri-security-theme`
 - 읽을 곳: 계획서 §5 P1-5, 토큰 문서 §3(`app/providers/theme-provider.tsx`)
 - 할 일(키트): `pnpm tauri add store`, `pnpm tauri add window-state`. 권한은 `pnpm tauri permission add`/`permission rm`으로 조정하고 `pnpm tauri permission ls`로 확인한다. capability JSON은 손으로 쓰지 않는다.
@@ -165,13 +184,16 @@ pnpm i && pnpm start                                           # 현재 Electron
 - [ ] Step 13
 
 ### Step 14. Electron 제거와 문서 갱신 (S)
+- 실행 순서: 7번째 (앞: Step 2, 뒤: Step 3)
 - 브랜치: `chore/remove-electron`
 - 읽을 곳: 계획서 §5 P1-6
+- 순서: Step 2 직후에 한다. Step 2 이후 Electron은 동작하지 않으므로 바로 제거한다.
 - 함께 할 일: `docs/01-folder-structure.md`를 토큰 문서 §3의 FSD 배치에 맞춰 갱신
 - 완료 기준: `electron`, `pdf-lib`, `sharp`, `fs-extra`가 의존성에 없음, 계획서 §5의 "Phase 1 완료 기준" 체크리스트 전부 통과
 - [ ] Step 14
 
 ### Step 15. 아이콘과 로컬 빌드 (S)
+- 실행 순서: 14번째 (앞: Step 7)
 - 브랜치: `chore/tauri-icons-build`
 - 읽을 곳: 계획서 §5 P1-7
 - 할 일(키트): 1024px PNG 원본으로 `pnpm tauri icon` → `pnpm tauri build`
@@ -234,6 +256,6 @@ pnpm i && pnpm start                                           # 현재 Electron
 
 ## 막혔을 때
 
-- **Step 8 실패**: Step 9 이후를 멈추고, 실패 원인(로드, 번들 위치, 서명 중 어디인지)을 계획서 §12에 한 줄로 기록한다.
+- **Step 8 실패**: Step 10 이후를 멈추고, 실패 원인(로드, 번들 위치, 서명 중 어디인지)을 계획서 §12에 한 줄로 기록한다.
 - **화면이 이상해짐(Step 7)**: 커밋 2(값 교체)만 되돌리면 이전 값으로 돌아간다. 커밋을 셋으로 나누는 이유다.
 - **계획과 다르게 가야 할 때**: 코드를 먼저 바꾸지 말고 계획서나 토큰 문서를 먼저 고친 뒤 진행한다.

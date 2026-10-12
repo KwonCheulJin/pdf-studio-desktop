@@ -495,7 +495,7 @@ fn highlight_boxes(boxes: &[TextBox], marked: &[bool]) -> Vec<TextBox> {
 /// `next`가 `current`(같은 줄에서 합쳐 온 상자)에 이어지는 같은 줄 글자인가. 같은 쪽이고, 세로로
 /// 충분히 겹치고, 오른쪽으로 너무 멀지 않아야 한다. 사용자 공간에서 세로로 흐르는 글자(돌려
 /// 그린 글자)는 세로로 겹치지 않으므로 글자마다 상자가 따로 남는다.
-fn continues_line(current: &TextBox, next: &TextBox) -> bool {
+pub(super) fn continues_line(current: &TextBox, next: &TextBox) -> bool {
     let overlap = (current.y + current.h).min(next.y + next.h) - current.y.max(next.y);
     let gap = next.x - (current.x + current.w);
     current.page == next.page

@@ -4,6 +4,7 @@
 mod diff;
 mod extract;
 mod model;
+mod options;
 mod pages;
 mod tokenize;
 
@@ -12,6 +13,10 @@ pub use extract::{ExtractedChar, ExtractedPage, Glyph, OCR_MIN_TEXT_CHARS, extra
 pub use model::{
     Change, ChangeKind, ChangeSide, CompareResult, NoTextReason, Notice, PagePair, PageSize,
     PageSizes, PageSources, Side, TextBox, TextSource,
+};
+pub use options::{
+    CompareOptions, CompareOptionsError, HEADER_FOOTER_BAND_PT, LineExclusions, exclude_lines,
+    parse_page_range, select_pages,
 };
 pub use pages::pair_pages;
 pub use tokenize::{

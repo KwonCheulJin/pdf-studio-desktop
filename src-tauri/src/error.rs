@@ -22,6 +22,7 @@ pub(crate) enum ErrorCode {
     EngineUnavailable,
     NotReady,
     TaskFailed,
+    ResourceUnavailable,
     // pdf-core 문서 열기
     NotFound,
     FileUnreadable,
@@ -82,6 +83,8 @@ pub(crate) enum CommandError {
     NotReady { component: &'static str },
     #[error("background task failed: {detail}")]
     TaskFailed { detail: String },
+    #[error("bundled resource is unavailable: {name}: {detail}")]
+    ResourceUnavailable { name: &'static str, detail: String },
     #[error(transparent)]
     Document(#[from] DocumentError),
     #[error(transparent)]
@@ -105,6 +108,7 @@ impl CommandError {
             Self::EngineUnavailable => ErrorCode::EngineUnavailable,
             Self::NotReady { .. } => ErrorCode::NotReady,
             Self::TaskFailed { .. } => ErrorCode::TaskFailed,
+            Self::ResourceUnavailable { .. } => ErrorCode::ResourceUnavailable,
             Self::Document(error) => document_code(error),
             Self::Save(error) => save_code(error),
             Self::Merge(error) => merge_code(error),
@@ -127,6 +131,7 @@ impl CommandError {
             | Self::EngineUnavailable
             | Self::NotReady { .. }
             | Self::TaskFailed { .. }
+            | Self::ResourceUnavailable { .. }
             | Self::Save(_) => None,
         }
     }

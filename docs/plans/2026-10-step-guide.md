@@ -270,7 +270,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 | 31 | P4-2 릴리스 흐름 | 태그 푸시로 Draft Release(기존 워크플로는 Step 1에서 제거됨) | [ ] |
 | 32 | P4-3 서명 | ad-hoc 서명 `.app`과 `libpdfium.dylib`·ONNX Runtime dylib가 같은 identity, `codesign --verify --deep --strict` 통과 | [ ] |
 | 33 | P4-4 자동 업데이트(선택) | `pnpm tauri add updater`, 키는 `pnpm tauri signer generate`로 생성(개인 키는 시크릿에만), `latest.json` 생성, 업데이트 동작 | [ ] |
-| 34 | P4-5 라이선스와 고지 | `LICENSE`, `THIRD_PARTY_NOTICES.md` 번들, 허용 목록 밖 라이선스면 CI 실패, 앱 정보에서 고지 열림 | [ ] |
+| 34 | P4-5 라이선스와 고지 | `LICENSE`, `THIRD_PARTY_NOTICES.md` 번들, 허용 목록 밖 라이선스면 CI 실패, 앱 정보에서 고지 열림. 검사는 `pnpm licenses:check`이고, CI 연결은 Step 30 PR이 병합된 뒤 한다(`node scripts/fetch-pdfium.mjs --target aarch64-apple-darwin && pnpm licenses:check`) | [x] |
 
 ---
 

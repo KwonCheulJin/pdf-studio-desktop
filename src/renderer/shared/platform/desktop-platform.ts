@@ -133,4 +133,6 @@ export interface DesktopPlatform {
   getSetting(key: string): Promise<unknown>;
   /** 앱 설정 하나를 쓰고 재시작해도 남도록 저장한다. */
   setSetting(params: SetSettingParams): Promise<void>;
+  /** 앱과 함께 번들한 제3자 고지(`THIRD_PARTY_NOTICES.md` 마크다운 원문) */
+  readThirdPartyNotices(): Promise<string>;
 }

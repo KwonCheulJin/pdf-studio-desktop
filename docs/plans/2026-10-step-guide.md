@@ -27,7 +27,10 @@ pnpm i && pnpm start                                           # 현재 Electron
 ```
 - [ ] 앱이 Mac에서 뜬다
 
-### 0-3. 단계마다 반복하는 흐름
+### 0-3. 진행 순서
+- **Step 1~15(마이그레이션)는 순서대로 하나씩 진행한다.** 병렬 작업은 Step 15 이후 Phase 2(Step 16~23)와 Phase 4 일부(Step 30~32, 34)에서만 한다.
+
+### 0-4. 단계마다 반복하는 흐름
 
 > **키트 우선(계획서 §1.3, D11):** Tauri 설정·플러그인·권한·아이콘·서명 키는 Tauri CLI로, 의존성은 `pnpm add`/`cargo add`로 만든다. 각 Step의 "할 일(키트)"에 적힌 명령을 먼저 실행하고, 생성물은 최소한으로만 고친다.
 
@@ -179,7 +182,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 
 ## Phase 2: Rust 비교 엔진 (Track B)
 
-> Step 8만 끝나면 Phase 1과 나란히 진행할 수 있다. Tauri 없이 `cargo test`로만 개발한다.
+> Step 15(마이그레이션 완료) 이후 시작한다. Tauri 없이 `cargo test`로만 개발하며, Phase 4의 Step 30~32, 34와 나란히 진행할 수 있다(git worktree와 세션을 따로 둔다).
 
 | Step | 계획서 | 브랜치 | 완료 기준 | |
 |---|---|---|---|---|

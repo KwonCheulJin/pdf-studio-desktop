@@ -15,7 +15,7 @@
 | 처리 계층 | **Rust**(`crates/pdf-core`, pdfium-render 기반)가 병합, 회전 적용, 페이지 정보, TIFF 변환, **비교 엔진**(추출·diff·페이지 정렬·내보내기)을 맡는다. |
 | 표시 계층 | **pdf.js(웹뷰)** 가 썸네일, 미리보기, 비교 뷰어 렌더링을 맡는다. Rust가 돌려준 결과(PDF 좌표 박스)를 pdf.js 화면 위에 겹쳐 그린다. |
 | 데이터 흐름 | 프론트는 **파일 경로를 넘기고 결과(JSON)만 받는다.** PDF 바이트는 표시용 읽기(`read_pdf`)를 제외하면 IPC를 오가지 않는다. |
-| 진행 방식 | **Phase 0(Electron 위에서 가볍게 정리)** → **P1-0 pdfium 스파이크(Mac 우선)** → **Track A(Tauri 셸)** 와 **Track B(Rust 비교 엔진)** 병행 → Phase 3(비교 UI)에서 합류 |
+| 진행 방식 | **마이그레이션을 먼저 순서대로 끝낸다:** Phase 0(Electron 위에서 정리) → P1-0 pdfium 스파이크(게이트) → Phase 1(Tauri 셸 + 기본 처리). **그 뒤 병렬:** Track B(Rust 비교 엔진)와 Phase 4 일부 → Phase 3(비교 UI)에서 합류 |
 | 핵심 원칙 | 플랫폼 의존 코드는 `shared/platform` 어댑터 한 곳에만 둔다. `pdf-core`는 Tauri에 의존하지 않는 순수 라이브러리로 만들어 `cargo test`로 검증한다. 사용자 원본 파일은 **절대 수정하지 않는다.** |
 
 ### 처리 계층을 Rust로 두는 이유
@@ -121,17 +121,20 @@ Phase 0  Electron 위에서 가벼운 정리 (어댑터·계약·비파괴 회�
    │
 P1-0     pdfium 스파이크 — Mac에서 로드 → 렌더 → .app 번들/서명 검증  ★ 게이트
    │
-   ├── Track A: Phase 1  Tauri 셸 + pdf-core 기본 처리(병합/정보/TIFF) → 기능 동등성
+Phase 1  Tauri 셸 + pdf-core 기본 처리(병합/정보/TIFF) → 기능 동등성 (마이그레이션 완료)
    │
-   └── Track B: Phase 2  pdf-core/compare (cargo만으로 개발·테스트)
+   ├── Track B: Phase 2  pdf-core/compare (cargo만으로 개발·테스트)
+   │
+   └── Phase 4 일부  CI, 릴리스, 서명, 라이선스 (P4-1~P4-3, P4-5)
                        │
-Phase 3  비교 UI (A + B 합류)
-Phase 4  빌드, 배포, 서명 (CI 매트릭스)
+Phase 3  비교 UI (Phase 2 합류)
+Phase 4  P4-4 자동 업데이트(선택)
 Phase 5  고도화
 ```
 
 - Phase 0에서는 **처리 로직을 TS로 다시 다듬지 않는다**(곧 Rust로 대체되므로 YAGNI). 계약과 경계만 정리한다.
-- Track B는 Tauri 없이 `cargo test`만으로 진행할 수 있다. P1-0만 끝나면 Track A와 독립적이다.
+- **마이그레이션(Phase 0 → P1-0 → Phase 1)은 순서대로 진행하고, 그동안 병렬 작업을 두지 않는다.** 비교 기능이 올라갈 FSD 배치, 계약 타입(tauri-specta), `pdf-core` 문서 API가 이 구간에서 정해지므로, 그 전에 나란히 진행하면 다시 고치게 된다.
+- Track B는 Tauri 없이 `cargo test`만으로 진행할 수 있으므로, Phase 1이 끝나면 Phase 4 일부(P4-1~P4-3, P4-5)와 나란히 진행한다.
 
 규모 표기: S = 반나절~1일, M = 2~3일, L = 4일 이상
 
@@ -328,7 +331,7 @@ Phase 5  고도화
 
 ## 6. Phase 2 (Track B): Rust 비교 엔진 (`crates/pdf-core/src/compare/`)
 
-> Tauri와 무관하게 `cargo test`로 개발한다. P1-0(pdfium 로드)만 끝나면 시작할 수 있다.
+> Tauri와 무관하게 `cargo test`로 개발한다. Phase 1(마이그레이션)이 끝난 뒤 시작하고, `pdf-core`의 문서 열기 API(P1-2 `document.rs`)를 그대로 가져다 쓴다.
 
 ### 6.0 엔진 선택 기록
 

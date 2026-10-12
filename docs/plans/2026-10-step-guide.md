@@ -226,7 +226,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 
 | Step | 계획서 | 브랜치 | 완료 기준 | |
 |---|---|---|---|---|
-| 16 | P2-1 결과 모델 ADR | `docs/adr-compare-result` | `CompareResult` 타입과 좌표 규칙이 ADR로 고정. 페이지별 텍스트 출처(`page_sources`: 텍스트 레이어/OCR), OCR 신뢰도(`min_confidence`), "확인 필요"(`needs_review`) 필드 포함 | [ ] |
+| 16 | P2-1 결과 모델 ADR | `docs/adr-compare-result` | `CompareResult` 타입과 좌표 규칙이 ADR로 고정. 페이지별 텍스트 출처(`page_sources`: 텍스트 레이어/OCR), OCR 신뢰도(`min_confidence`), "확인 필요"(`needs_review`) 필드 포함 → [ADR 0001](../adr/0001-compare-result-model.md) | [x] |
 | 17 | P2-2 추출 + 좌표 일치 | `feat/compare-extract` | pdfium 박스 Rust golden 테스트 통과 + pdf.js 화면 박스 위치 E2E 통과(CropBox 오프셋, 회전 페이지 포함) | [ ] |
 | 17-a | ★ P2-2a OCR 스파이크 (게이트) | `spike/ocr` | 계획서 §6.4 합격 기준 표 전부 통과(한국어 CER, 숫자·금액·날짜 토큰 일치율, 숫자 조용한 오인식 0건, 쪽당 처리 시간, 번들 증가량), ad-hoc 서명 `.app`에서 ONNX Runtime 로드·추론, 확정한 모델 이름·버전·ONNX 출처·SHA-256과 측정값을 §6.4에 기록. Mac·Windows 결과 일치는 Step 30 CI에서 확인 | [ ] |
 | 18 | P2-3 정규화·토큰화 | `feat/compare-tokenize` | 한글 픽스처 토큰화 golden 통과 | [ ] |

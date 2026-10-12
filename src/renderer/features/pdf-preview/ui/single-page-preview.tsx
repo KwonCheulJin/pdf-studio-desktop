@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Loader2, FileText } from "lucide-react";
+import type { PdfDocument } from "@/renderer/entities/merge-plan";
 import { generateThumbnail } from "@/renderer/shared/lib/pdf-thumbnail";
-import { PREVIEW_CONFIG } from "@/renderer/shared/constants/preview";
-import type { PdfDocument } from "@/renderer/shared/model/pdf-document";
+import { PREVIEW_CONFIG } from "../config/preview";
 
 interface SinglePagePreviewProps {
   document: PdfDocument;

@@ -1,5 +1,5 @@
-import { VirtuosoPreviewList } from "@/renderer/features/pdf-preview/ui/virtuoso-preview-list";
-import { useMergedDocument } from "@/renderer/shared/model/merge-store";
+import { useMergedDocument } from "@/renderer/entities/merge-plan";
+import { VirtuosoPreviewList } from "@/renderer/features/pdf-preview";
 
 export function MergedPreviewPage() {
   const mergedDocument = useMergedDocument();

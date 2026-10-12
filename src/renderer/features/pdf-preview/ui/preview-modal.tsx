@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useFile } from "@/renderer/entities/merge-plan";
 import {
   Dialog,
   DialogContent,
@@ -6,13 +7,9 @@ import {
   DialogTitle,
   DialogFooter
 } from "@/renderer/shared/ui";
+import { PREVIEW_MODE, type PreviewTarget } from "../config/preview";
 import { VirtuosoPreviewList } from "./virtuoso-preview-list";
 import { SinglePagePreview } from "./single-page-preview";
-import {
-  PREVIEW_MODE,
-  type PreviewTarget
-} from "@/renderer/shared/constants/preview";
-import { useFile } from "@/renderer/shared/model/merge-store";
 
 interface PreviewModalProps {
   isOpen: boolean;

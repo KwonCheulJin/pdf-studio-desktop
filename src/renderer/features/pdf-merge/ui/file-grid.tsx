@@ -5,18 +5,13 @@ import React, {
   useState,
   useEffect
 } from "react";
-import { DocumentCard } from "@/renderer/entities/pdf-document";
-import { ExpandedPageCard } from "@/renderer/entities/pdf-page";
 import {
   useMergeStore,
   useMergeOrder,
-  useCollapsedGroups
-} from "@/renderer/shared/model/merge-store";
-import { useUnifiedDrag } from "@/renderer/shared/hooks/use-unified-drag";
-import { usePdfThumbnails } from "@/renderer/shared/hooks/use-pdf-thumbnails";
-import { useResponsiveGridLayout } from "@/renderer/shared/hooks/use-responsive-grid-layout";
-import { useFileDropZone } from "@/renderer/shared/hooks/use-file-drop-zone";
-import { useCardSize } from "@/renderer/shared/model/zoom-store";
+  useCollapsedGroups,
+  type PdfDocument
+} from "@/renderer/entities/merge-plan";
+import { useResponsiveGridLayout } from "@/renderer/shared/lib/use-responsive-grid-layout";
 import { getGroupColor } from "@/renderer/shared/constants/group-colors";
 import { GRID_CONFIG } from "@/renderer/shared/constants/grid-layout";
 import {
@@ -25,18 +20,20 @@ import {
   DropZoneIndicator,
   InsertionLine
 } from "@/renderer/shared/ui";
-import type { PdfDocument } from "@/renderer/shared/model/pdf-document";
-import {
-  flattenFileGrid,
-  type FlatCard
-} from "@/renderer/shared/lib/flatten-file-grid";
-import { FLAT_CARD_TYPE } from "@/renderer/shared/constants/flat-card";
 import {
   getDropZonePosition as calcDropZonePosition,
   getDropZoneWidth as calcDropZoneWidth,
   getInsertionLinePosition as calcInsertionLinePosition
 } from "@/renderer/shared/lib/layout-calculator";
-import { mergeUploadingFiles } from "@/renderer/shared/lib/merge-uploading-files";
+import { useUnifiedDrag } from "../model/use-unified-drag";
+import { usePdfThumbnails } from "../model/use-pdf-thumbnails";
+import { useFileDropZone } from "../model/use-file-drop-zone";
+import { useCardSize } from "../model/zoom-store";
+import { flattenFileGrid, type FlatCard } from "../lib/flatten-file-grid";
+import { mergeUploadingFiles } from "../lib/merge-uploading-files";
+import { FLAT_CARD_TYPE } from "../config/flat-card";
+import { DocumentCard } from "./document-card";
+import { ExpandedPageCard } from "./expanded-page-card";
 import { UploadingCard } from "./uploading-card";
 
 interface FileGridProps {

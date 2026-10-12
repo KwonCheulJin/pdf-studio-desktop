@@ -1,9 +1,9 @@
 import {
+  MERGE_STATUS,
   useMergeFiles,
   useTotalPages,
   useMergeStatus
-} from "@/renderer/shared/model/merge-store";
-import { MERGE_STATUS } from "@/renderer/shared/model/merge-state";
+} from "@/renderer/entities/merge-plan";
 import { APP_STATUS } from "@/renderer/shared/constants";
 
 export function AppStatusBar() {

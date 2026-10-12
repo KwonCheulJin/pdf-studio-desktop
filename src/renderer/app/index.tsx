@@ -4,7 +4,7 @@ import { Toaster } from "sonner";
 import { ErrorSnapshotBoundary } from "@kwoncheulJin/error-snapshot";
 import { AppShell } from "./layout/app-shell";
 import { getErrorSnapshot } from "../shared/lib/error-snapshot";
-import "../styles/index.css";
+import "./styles/index.css";
 
 // 테마 적용 함수
 function applyTheme(isDark: boolean): void {

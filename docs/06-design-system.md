@@ -108,11 +108,11 @@
 ```
 src/renderer/
 ├─ app/
-│  ├─ styles/                      # ← 지금의 src/renderer/styles/ 를 옮김
+│  ├─ styles/                      # 앱 전역 스타일(fonts, tokens, theme, base)
 │  │  ├─ index.css                 # 진입점: tailwind, tw-animate-css, fonts, tokens, theme, base 순서로 import
 │  │  ├─ fonts.css                 # @fontsource import (sans 400/500/600, mono 400/500)
 │  │  ├─ tokens.css                # :root(light), .dark 의 원시 변수. 디자인 시스템 tokens.json 과 1:1
-│  │  ├─ theme.css                 # @theme inline: --color-*, --radius-*, --shadow-*, --font-* 매핑
+│  │  ├─ theme.css                 # @custom-variant dark, @theme inline: --color-*, --radius-*, --shadow-*, --font-* 매핑
 │  │  └─ base.css                  # @layer base: body, 포커스 링, 선택 영역
 │  ├─ providers/
 │  │  └─ theme-provider.tsx        # system|light|dark 설정, .dark 클래스 토글 (P1-5)
@@ -124,10 +124,11 @@ src/renderer/
 │  └─ ui/                          # 토큰 클래스만 사용. 팔레트 클래스(bg-black/50 등) 금지
 │
 ├─ entities/
-│  ├─ pdf-page/ui/                 # bg-paper, rounded-paper, shadow-paper, bg-media-scrim
 │  └─ comparison/ui/               # (Phase 3) diff-* 토큰으로 하이라이트 박스
 │
-└─ features/pdf-merge/model/       # group-colors 는 shared/constants → shared/config/theme.ts 로
+└─ features/pdf-merge/
+   ├─ ui/                          # 문서·페이지 카드: bg-paper, rounded-paper, shadow-paper, bg-media-scrim
+   └─ model/                       # group-colors 는 shared/constants → shared/config/theme.ts 로
 ```
 
 규칙:

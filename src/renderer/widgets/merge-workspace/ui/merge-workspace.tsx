@@ -1,27 +1,27 @@
 import { useState, useCallback } from "react";
 import { Download } from "lucide-react";
 import {
+  useMergeFiles,
+  type PdfDocument
+} from "@/renderer/entities/merge-plan";
+import {
   EmptyState,
   FileGrid,
-  FloatingActionBar,
-  MergePreviewModal
-} from "@/renderer/features/pdf-merge";
-import { PreviewModal } from "@/renderer/features/pdf-preview";
-import { useMergeFiles } from "@/renderer/shared/model/merge-store";
-import {
   useSelectionStore,
   useSelectedCount,
-  useSelectionType
-} from "@/renderer/shared/model/selection-store";
-import type { PdfDocument } from "@/renderer/shared/model/pdf-document";
+  useSelectionType,
+  usePageRotation,
+  useSelectionActions,
+  useSelectedMerge
+} from "@/renderer/features/pdf-merge";
 import {
+  PreviewModal,
   PREVIEW_MODE,
   type PreviewTarget
-} from "@/renderer/shared/constants/preview";
-import { usePageRotation } from "@/renderer/shared/hooks/use-page-rotation";
-import { useSelectionActions } from "@/renderer/shared/hooks/use-selection-actions";
-import { useSelectedMerge } from "@/renderer/shared/hooks/use-selected-merge";
+} from "@/renderer/features/pdf-preview";
 import { useDroppedFiles } from "../model/use-dropped-files";
+import { FloatingActionBar } from "./floating-action-bar";
+import { MergePreviewModal } from "./merge-preview-modal";
 
 export function MergeWorkspace() {
   const files = useMergeFiles();

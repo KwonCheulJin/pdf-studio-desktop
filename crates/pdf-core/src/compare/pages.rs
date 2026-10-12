@@ -199,6 +199,7 @@ mod tests {
                     w: 1.0,
                     h: 1.0,
                 }],
+                confidence: None,
             })
             .collect()
     }

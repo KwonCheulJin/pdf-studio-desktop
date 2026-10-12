@@ -6,7 +6,8 @@
 //! - 공통 토큰 사이에서 바뀐 토큰 묶음 하나가 변경 하나다(양쪽에 토큰이 있으면 `Replace`).
 //!   띄어쓰기만 다른 묶음(양쪽 키를 공백 없이 이은 문자열이 같다)은 변경으로 내지 않는다. 단
 //!   한쪽에만 있는 토큰 경계가 숫자와 숫자 사이에 있으면(`1 000` ↔ `10 00`) 숫자를 다르게 읽히게
-//!   하므로 `Replace`로 낸다.
+//!   하므로 `Replace`로 내고, OCR 토큰이 걸리면 확인 필요 `Replace`로 낸다(ADR 0001 §5).
+//! - `needs_review`·`min_confidence`는 걸린 토큰의 OCR 신뢰도로 정한다(`review.rs`).
 //! - `Replace`의 상자는 키 글자 단위 2차 diff에서 실제로 다른 글자만 덮는다.
 //! - 시간 제한이 지나면 남은 정밀 diff(앵커 구간의 토큰 diff, `Replace`의 글자 diff)를 하지
 //!   않고 통째로 낸 뒤 `Truncated`로 알린다.
@@ -19,6 +20,7 @@ use sha2::{Digest, Sha256};
 use similar::{Algorithm, DiffTag, capture_diff_deadline, capture_diff_slices_deadline};
 
 use super::model::{Change, ChangeKind, ChangeSide, Notice, TextBox};
+use super::review::{has_ocr_token, min_confidence, needs_review};
 use super::tokenize::{Token, union};
 
 /// diff 시간 제한. 지나면 남은 정밀 diff를 하지 않고 통째로 낸 뒤 `Truncated`로 알린다.
@@ -46,7 +48,7 @@ const SAME_LINE_MAX_GAP: f32 = 1.0;
 /// 토큰 diff 결과
 #[derive(Debug, Clone, PartialEq)]
 pub struct TokenDiff {
-    /// diff 순서(ADR 0001 §4). `needs_review`는 아직 늘 `false`, `min_confidence`는 `None`이다.
+    /// diff 순서(ADR 0001 §4)
     pub changes: Vec<Change>,
     /// 시간 제한 때문에 통째로 낸 변경이 있으면 [`Notice::Truncated`]
     pub truncated: Option<Notice>,
@@ -112,7 +114,7 @@ pub fn diff_tokens(before: &[Token], after: &[Token], time_limit: Duration) -> T
             page_pair: (first_page(&before_side), first_page(&after_side)),
             before: before_side,
             after: after_side,
-            needs_review: false,
+            needs_review: needs_review(kind, before_tokens, after_tokens),
         });
     }
 
@@ -336,13 +338,20 @@ fn context_after(equal_positions: &[usize], end: usize) -> Range<usize> {
     start..(start + CHANGE_ID_CONTEXT_TOKENS).min(equal_positions.len())
 }
 
-/// 변경 종류. 띄어쓰기만 다른 묶음([`is_spacing_only`])은 변경이 아니다(`None`).
+/// 변경 종류. 띄어쓰기만 다른 묶음([`is_spacing_only`])은 변경이 아니다(`None`). OCR 토큰이
+/// 걸리면 OCR의 띄어쓰기 오류일 수 있으므로 `Replace`로 내고 확인 필요가 된다(ADR 0001 §5).
 fn change_kind(before: &[Token], after: &[Token]) -> Option<ChangeKind> {
     match (before.is_empty(), after.is_empty()) {
         (true, true) => None,
         (true, false) => Some(ChangeKind::Insert),
         (false, true) => Some(ChangeKind::Delete),
-        (false, false) if is_spacing_only(before, after) => None,
+        (false, false)
+            if is_spacing_only(before, after)
+                && !has_ocr_token(before)
+                && !has_ocr_token(after) =>
+        {
+            None
+        }
         (false, false) => Some(ChangeKind::Replace),
     }
 }
@@ -459,7 +468,7 @@ fn side(tokens: &[Token], boxes: &[TextBox], marked: &[bool]) -> Option<ChangeSi
     Some(ChangeSide {
         text,
         boxes: highlight_boxes(boxes, marked),
-        min_confidence: None,
+        min_confidence: min_confidence(tokens),
     })
 }
 
@@ -595,6 +604,7 @@ mod tests {
                     key: (*word).to_owned(),
                     text: (*word).to_owned(),
                     key_boxes,
+                    confidence: None,
                 }
             })
             .collect()
@@ -731,6 +741,7 @@ mod tests {
             key: "(주)한빛".to_owned(),
             text: "㈜한빛".to_owned(),
             key_boxes: vec![circled, circled, circled, glyph(0, 12.0), glyph(0, 22.0)],
+            confidence: None,
         }];
         let after = line(0, &["[주]한빛"]);
 

@@ -2,7 +2,7 @@
 //! 저장이 실패하면 임시 파일을 지우므로 출력 경로에는 완성된 파일만 나타난다.
 
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, BufWriter};
+use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 #[cfg(any(windows, test))]
@@ -109,6 +109,28 @@ pub fn copy_atomically(source: &Path, destination: &Path) -> Result<(), SaveErro
     let result = copy_contents(source, file)
         .and_then(|()| replace_file(&temp_path, destination))
         .map_err(write_error);
+    if result.is_err() {
+        // 정리는 최선 노력이다. 정리 실패보다 원래 에러가 원인에 가깝다.
+        let _ = fs::remove_file(&temp_path);
+    }
+    result
+}
+
+/// `bytes`를 `destination`과 같은 폴더의 새 임시 파일에 쓴 뒤 `destination`으로 rename한다(폴더는
+/// 있어야 한다). 같은 이름의 파일이 있으면 바꿔치기한다. 실패하면 임시 파일을 지운다.
+pub(crate) fn write_atomically(destination: &Path, bytes: &[u8]) -> io::Result<()> {
+    let directory = destination
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or(Path::new(CURRENT_DIRECTORY));
+    let (temp_path, mut file) = create_temp_file(directory)?;
+    let result = file
+        .write_all(bytes)
+        .and_then(|()| file.sync_all())
+        .and_then(|()| {
+            drop(file);
+            replace_file(&temp_path, destination)
+        });
     if result.is_err() {
         // 정리는 최선 노력이다. 정리 실패보다 원래 에러가 원인에 가깝다.
         let _ = fs::remove_file(&temp_path);

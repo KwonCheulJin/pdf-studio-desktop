@@ -74,6 +74,10 @@ pub struct Token {
     /// `key`의 글자마다 하나(같은 순서). 그 글자를 낸 원본 글자(클러스터)의 상자이고, 쪽은
     /// 상자의 `page`다. 하이픈으로 이은 토큰은 쪽이 바뀔 수 있다.
     pub key_boxes: Vec<TextBox>,
+    /// OCR 글자 신뢰도의 최솟값(0~1). OCR 글자가 하나라도 들면 OCR 토큰이고, 텍스트 레이어
+    /// 글자만이면 `None`이다(직렬화하지 않는다).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub confidence: Option<f32>,
 }
 
 /// 쪽들의 글자를 이어 토큰열로 만든다. 쪽은 받은 순서대로 잇고 쪽 사이는 줄바꿈으로 본다.
@@ -87,10 +91,10 @@ pub fn tokenize(pages: &[ExtractedPage], options: NormalizeOptions) -> Vec<Token
                     words.boundary(is_line_break(extracted.ch));
                 }
                 Some(glyph) if extracted.ch == PDFIUM_LINE_END_HYPHEN => {
-                    words.push(HYPHEN, glyph.bounds);
+                    words.push(HYPHEN, glyph.bounds, extracted.confidence);
                     words.boundary(true);
                 }
-                Some(glyph) => words.push(extracted.ch, glyph.bounds),
+                Some(glyph) => words.push(extracted.ch, glyph.bounds, extracted.confidence),
             }
         }
         words.boundary(true);
@@ -129,6 +133,7 @@ fn is_line_break(ch: char) -> bool {
 struct SourceChar {
     ch: char,
     bounds: TextBox,
+    confidence: Option<f32>,
 }
 
 struct Word {
@@ -144,8 +149,12 @@ struct Words {
 }
 
 impl Words {
-    fn push(&mut self, ch: char, bounds: TextBox) {
-        self.current.push(SourceChar { ch, bounds });
+    fn push(&mut self, ch: char, bounds: TextBox, confidence: Option<f32>) {
+        self.current.push(SourceChar {
+            ch,
+            bounds,
+            confidence,
+        });
     }
 
     /// 지금 단어를 끝낸다. 줄 끝 하이픈 단어 뒤면 이어 붙인다.
@@ -198,10 +207,16 @@ fn to_token(chars: &[SourceChar], options: NormalizeOptions) -> Token {
             key_boxes.push(source.bounds);
         }
     }
+    // 정규화는 원본 글자를 버리지 않으므로(모든 원본 글자가 한 클러스터에 든다) 원본 글자로 센다.
+    let confidence = chars
+        .iter()
+        .filter_map(|source| source.confidence)
+        .reduce(f32::min);
     Token {
         key,
         text,
         key_boxes,
+        confidence,
     }
 }
 
@@ -214,6 +229,7 @@ fn normalize(chars: &[SourceChar], form: UnicodeForm) -> Vec<SourceChar> {
             decomposed.push(SourceChar {
                 ch,
                 bounds: source.bounds,
+                confidence: source.confidence,
             });
         };
         match form {
@@ -230,7 +246,15 @@ fn normalize(chars: &[SourceChar], form: UnicodeForm) -> Vec<SourceChar> {
             union(covered, source.bounds)
         });
         let composed: String = cluster.iter().map(|source| source.ch).collect();
-        normalized.extend(composed.nfc().map(|ch| SourceChar { ch, bounds }));
+        let confidence = cluster
+            .iter()
+            .filter_map(|source| source.confidence)
+            .reduce(f32::min);
+        normalized.extend(composed.nfc().map(|ch| SourceChar {
+            ch,
+            bounds,
+            confidence,
+        }));
     }
     normalized
 }
@@ -282,6 +306,7 @@ mod tests {
                     },
                     font_size: GLYPH_HEIGHT,
                 }),
+                confidence: None,
             })
             .collect();
         ExtractedPage {

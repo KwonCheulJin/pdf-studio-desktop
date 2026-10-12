@@ -50,12 +50,14 @@ fn line(page: u32, x: f32, y: f32, text: &str, vertical: bool) -> Vec<ExtractedC
                     bounds: TextBox { page, x, y, w, h },
                     font_size: FONT_SIZE,
                 }),
+                confidence: None,
             }
         })
         .collect();
     chars.push(ExtractedChar {
         ch: '\n',
         glyph: None,
+        confidence: None,
     });
     chars
 }

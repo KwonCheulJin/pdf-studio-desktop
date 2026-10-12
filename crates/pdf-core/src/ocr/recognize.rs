@@ -21,6 +21,17 @@ const PIXEL_HALF: f32 = 127.5;
 /// CTC 빈칸(blank)의 클래스 번호
 const CTC_BLANK: usize = 0;
 const WHITE: Rgb<u8> = Rgb([255, 255, 255]);
+/// 이 값보다 어두운 픽셀(빨강 채널 회색 이미지)을 글자 잉크로 본다.
+const INK_MAX_LEVEL: u8 = 128;
+/// 이웃한 두 글자 사이에서 잉크 없는 세로줄이 줄 이미지 높이의 이 비율 이상 이어지면 단어 사이로
+/// 보고 공백을 넣는다. 한국어 인식 모델은 단어 사이 공백을 거의 내지 않는다(가상 계약서 스캔에서
+/// 정답 공백 169개 중 22개). 간격은 글자 사이(옆 여백)보다 공백(약 0.27em)이 뚜렷하게 넓다
+/// (ADR 0001 §11 측정).
+const WORD_GAP_MIN_RATIO: f32 = 0.30;
+/// 간격으로 넣은 공백의 신뢰도. 모델 출력이 아니지만 공백은 비교에서 단어 경계로만 쓰이고 신뢰도를
+/// 보지 않으므로 줄 신뢰도(최솟값)를 낮추지 않는 값으로 둔다.
+const GAP_SPACE_CONFIDENCE: f32 = 1.0;
+const SPACE: &str = " ";
 
 /// 상자 하나를 잘라 바로 세운 줄 이미지
 struct LineCrop {
@@ -233,23 +244,35 @@ fn build_line(
             (centers[index - 1] + centers[index]) / 2.0
         }
     };
-    let chars: Vec<OcrChar> = peaks
-        .iter()
-        .enumerate()
-        .map(|(index, peak)| {
-            let start = boundary(index) / length;
-            let end = boundary(index + 1) / length;
-            OcrChar {
-                text: characters[peak.class].clone(),
-                confidence: peak.confidence,
-                quad: if crop.rotated {
-                    crop.quad.sub_quad_vertical(start, end)
-                } else {
-                    crop.quad.sub_quad(start, end)
-                },
-            }
-        })
-        .collect();
+    let sub_quad = |start: f32, end: f32| {
+        if crop.rotated {
+            crop.quad.sub_quad_vertical(start, end)
+        } else {
+            crop.quad.sub_quad(start, end)
+        }
+    };
+    let word_gap = WORD_GAP_MIN_RATIO * ink_height(&crop.image);
+    let mut chars: Vec<OcrChar> = Vec::with_capacity(peaks.len());
+    for (index, peak) in peaks.iter().enumerate() {
+        let text = &characters[peak.class];
+        let follows_word = index > 0
+            && text.as_str() != SPACE
+            && chars.last().is_some_and(|previous| previous.text != SPACE)
+            && blank_run(&crop.image, centers[index - 1], centers[index]) >= word_gap;
+        if follows_word {
+            let at = boundary(index) / length;
+            chars.push(OcrChar {
+                text: SPACE.to_owned(),
+                confidence: GAP_SPACE_CONFIDENCE,
+                quad: sub_quad(at, at),
+            });
+        }
+        chars.push(OcrChar {
+            text: text.clone(),
+            confidence: peak.confidence,
+            quad: sub_quad(boundary(index) / length, boundary(index + 1) / length),
+        });
+    }
     let text: String = chars
         .iter()
         .map(|character| character.text.as_str())
@@ -267,6 +290,34 @@ fn build_line(
         quad: crop.quad,
         chars,
     })
+}
+
+/// 줄 이미지에서 잉크가 있는 가장 위 행부터 가장 아래 행까지의 높이(px). 글자 크기에 비례한다
+/// (검출 상자 높이는 넓히기·줄 내용에 따라 흔들린다).
+fn ink_height(image: &RgbImage) -> f32 {
+    let has_ink = |y: u32| (0..image.width()).any(|x| image.get_pixel(x, y).0[0] < INK_MAX_LEVEL);
+    let top = (0..image.height()).find(|&y| has_ink(y));
+    let bottom = (0..image.height()).rev().find(|&y| has_ink(y));
+    match (top, bottom) {
+        (Some(top), Some(bottom)) => (bottom - top + 1) as f32,
+        _ => image.height() as f32,
+    }
+}
+
+/// 줄 이미지의 가로 구간 `[from, to)`에서 잉크가 없는 세로줄이 가장 길게 이어진 길이(px)
+fn blank_run(image: &RgbImage, from: f32, to: f32) -> f32 {
+    let (start, end) = (
+        from.max(0.0) as u32,
+        (to.max(0.0) as u32).min(image.width()),
+    );
+    let mut longest = 0_u32;
+    let mut run = 0_u32;
+    for x in start..end {
+        let has_ink = (0..image.height()).any(|y| image.get_pixel(x, y).0[0] < INK_MAX_LEVEL);
+        run = if has_ink { 0 } else { run + 1 };
+        longest = longest.max(run);
+    }
+    longest as f32
 }
 
 #[cfg(test)]

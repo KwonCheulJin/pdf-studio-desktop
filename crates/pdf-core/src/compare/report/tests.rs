@@ -4,6 +4,7 @@
 //! 모델과 출력 쪽에서 pdfium이 다시 뽑은 글자 위치로 세운다(배치 계산을 다시 구현하지 않는다).
 
 use std::fs;
+use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::sync::atomic::AtomicBool;
@@ -66,15 +67,38 @@ fn fixture(name: &str) -> PathBuf {
 }
 
 /// 테스트마다 비어 있는 새 폴더. 입력 픽스처도 여기로 복사해 쓴다(거부 검사가 깨져도 커밋한 픽스처를
-/// 덮지 않게).
-fn scratch_dir(test_name: &str) -> PathBuf {
-    let directory = std::env::temp_dir().join(format!(
-        "pdf-core-report-{test_name}-{}",
-        std::process::id()
-    ));
-    let _ = fs::remove_dir_all(&directory);
-    fs::create_dir_all(&directory).expect("create scratch dir");
-    directory
+/// 덮지 않게). 테스트가 끝나면(실패해도) 지운다.
+struct TestDir {
+    path: PathBuf,
+}
+
+impl TestDir {
+    fn new(test_name: &str) -> Self {
+        let path = std::env::temp_dir().join(format!(
+            "pdf-core-report-{test_name}-{}",
+            std::process::id()
+        ));
+        if path.exists() {
+            fs::remove_dir_all(&path).expect("clear test dir");
+        }
+        fs::create_dir_all(&path).expect("create test dir");
+        Self { path }
+    }
+}
+
+impl Deref for TestDir {
+    type Target = Path;
+
+    fn deref(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl Drop for TestDir {
+    fn drop(&mut self) {
+        // 정리 실패는 테스트 결과와 무관하다(임시 폴더).
+        let _ = fs::remove_dir_all(&self.path);
+    }
 }
 
 fn copy_fixture(name: &str, directory: &Path) -> PathBuf {
@@ -195,7 +219,7 @@ fn union(first: PageBox, second: PageBox) -> PageBox {
 /// 장에 그린 상자 두 개(A·B)가 각각 출력 장에서 pdfium이 다시 뽑은 그 낱말 글자들을 덮는다.
 #[test]
 fn boxes_cover_the_same_glyphs_on_rotated_and_offset_pages() {
-    let directory = scratch_dir("geometry");
+    let directory = TestDir::new("geometry");
     let source = copy_fixture("text-geometry.pdf", &directory);
     let pages = extract_text_layer(engine(), &source).expect("extract");
     let tokens = tokenize(&pages, NormalizeOptions::default());
@@ -348,7 +372,7 @@ fn row_has_visible_box(result: &CompareResult, row: PagePair, hidden: &[ChangeKi
 /// 출력 장의 글자로 알아본다.
 #[test]
 fn sheets_follow_layout_and_changed_page_filters() {
-    let directory = scratch_dir("sheets");
+    let directory = TestDir::new("sheets");
     let before = copy_fixture("pages-base.pdf", &directory);
     let after = copy_fixture("pages-insert.pdf", &directory);
     let result = compare_files(&before, &after);
@@ -471,7 +495,7 @@ fn sheets_follow_layout_and_changed_page_filters() {
 /// 내용은 변경 전후 글자이고 원본 B는 바뀌지 않는다. 숨긴 종류는 달지 않는다.
 #[test]
 fn annotated_pdf_marks_after_copy_and_keeps_source() {
-    let directory = scratch_dir("annotated");
+    let directory = TestDir::new("annotated");
     let before = copy_fixture("diff-base.pdf", &directory);
     let after = copy_fixture("diff-edit.pdf", &directory);
     let mut result = compare_files(&before, &after);
@@ -619,7 +643,7 @@ fn annotated_pdf_marks_after_copy_and_keeps_source() {
 /// 출력 경로가 비교한 파일이면(`..`로 돌아간 경로 포함) 쓰지 않고 거부한다.
 #[test]
 fn refuses_to_overwrite_compared_files() {
-    let directory = scratch_dir("overwrite");
+    let directory = TestDir::new("overwrite");
     let before = copy_fixture("diff-base.pdf", &directory);
     let after = copy_fixture("diff-edit.pdf", &directory);
     let result = compare_files(&before, &after);
@@ -663,7 +687,7 @@ fn refuses_to_overwrite_compared_files() {
 /// 취소가 켜져 있으면 저장하지 않고 `Cancelled`를 돌려주며 출력·임시 파일이 남지 않는다.
 #[test]
 fn cancelled_export_leaves_no_files() {
-    let directory = scratch_dir("cancel");
+    let directory = TestDir::new("cancel");
     let before = copy_fixture("diff-base.pdf", &directory);
     let after = copy_fixture("diff-edit.pdf", &directory);
     let result = compare_files(&before, &after);
@@ -700,7 +724,7 @@ fn cancelled_export_leaves_no_files() {
 /// 그림에 색(회색이 아닌 화소)이 생긴다.
 #[test]
 fn preview_renders_first_sheets_as_png() {
-    let directory = scratch_dir("preview");
+    let directory = TestDir::new("preview");
     let before = copy_fixture("pages-base.pdf", &directory);
     let after = copy_fixture("pages-insert.pdf", &directory);
     let result = compare_files(&before, &after);

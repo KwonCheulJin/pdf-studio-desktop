@@ -5,6 +5,7 @@ mod error;
 mod files;
 mod jobs;
 mod merge;
+mod notices;
 mod pdf_engine;
 #[cfg(test)]
 mod test_support;

@@ -25,8 +25,13 @@ project-root/
 ├─ vitest.config.mts
 ├─ index.html
 ├─ docs/                       # 계획서(plans/), 규칙(rules/), 결정 기록(adr/)
+├─ LICENSE                     # MIT (앱 번들에도 넣는다)
+├─ THIRD_PARTY_NOTICES.md      # 제3자 고지 (pnpm licenses:generate 생성물, 앱 번들에 넣는다)
 ├─ scripts/
 │  ├─ fetch-pdfium.mjs         # 버전 고정 pdfium 받기 (src-tauri/pdfium/<target>/, gitignore)
+│  ├─ generate-notices.mjs     # THIRD_PARTY_NOTICES.md 생성 (pnpm licenses:generate)
+│  ├─ check-licenses.mjs       # 허용 목록 밖 라이선스·낡은 고지면 실패 (pnpm licenses:check)
+│  ├─ third-party/             # 의존성 수집, 허용 목록·예외(policy.mjs), 번들 자산 고정 목록
 │  └─ release.mjs
 │
 ├─ crates/pdf-core/            # 도메인: Tauri 의존 없음
@@ -49,6 +54,7 @@ project-root/
 │  │  ├─ files.rs, merge.rs    # 파일 열기, 병합 처리(경로 검증 후 pdf-core 위임)
 │  │  ├─ jobs.rs               # 작업 ID·취소 토큰
 │  │  ├─ pdf_engine.rs         # 번들 pdfium 바인딩, 엔진을 앱 상태로
+│  │  ├─ notices.rs            # 번들한 제3자 고지 읽기(리소스 폴더 고정 파일)
 │  │  └─ error.rs              # 커맨드 에러 → { code, message, path }
 │  ├─ capabilities/            # main 창 권한
 │  ├─ icons/
@@ -69,7 +75,8 @@ project-root/
    │  ├─ pdf-merge/            # 파일 추가·선택·회전·병합·다운로드
    │  ├─ pdf-preview/          # 미리보기 모달
    │  ├─ theme-toggle/         # 테마 system|light|dark 선택·저장
-   │  └─ error-reporting/      # 오류 보고 켜기·끄기, 첫 실행 안내
+   │  ├─ error-reporting/      # 오류 보고 켜기·끄기, 첫 실행 안내
+   │  └─ third-party-notices/  # 앱 정보: 상태 바에서 제3자 고지 대화상자 열기
    ├─ entities/                # 읽기·표시
    │  └─ merge-plan/           # 병합 대상 문서·페이지 상태(merge-store), 진행 오버레이
    └─ shared/                  # 도메인을 모른다

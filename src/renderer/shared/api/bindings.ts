@@ -26,6 +26,8 @@ export const commands = {
 	discardTemp: (path: string) => typedError<null, AppError>(__TAURI_INVOKE("discard_temp", { path })),
 	/**  이 실행의 병합 미리보기 결과를 모두 지운다. 다른 실행의 결과는 건드리지 않는다. */
 	cleanupTemp: () => typedError<null, AppError>(__TAURI_INVOKE("cleanup_temp")),
+	/**  앱과 함께 번들한 제3자 고지(마크다운 원문). 경로를 받지 않고 리소스 폴더의 고정 파일만 읽는다. */
+	readThirdPartyNotices: () => typedError<string, AppError>(__TAURI_INVOKE("read_third_party_notices")),
 };
 
 /* Constants */
@@ -51,7 +53,7 @@ export type AppError = {
  *  화면 문구를 고르는 오류 코드. 직렬화 값(`PATH_NOT_ALLOWED` 등)이 바인딩의 문자열 union이 되고,
  *  변형의 이름이 바뀌어도 값은 유지한다.
  */
-export type ErrorCode = "PATH_NOT_ALLOWED" | "UNSUPPORTED_FILE_TYPE" | "OUTPUT_IS_SOURCE" | "JOB_ALREADY_RUNNING" | "INVALID_DIALOG_PATH" | "ENGINE_UNAVAILABLE" | "NOT_READY" | "TASK_FAILED" | "NOT_FOUND" | "FILE_UNREADABLE" | "INPUT_TOO_LARGE" | "INVALID_PDF" | "PASSWORD_PROTECTED" | "PDFIUM_FAILURE" | "OUTPUT_DIRECTORY_NOT_FOUND" | "WRITE_FAILED" | "EMPTY_REQUEST" | "TOO_MANY_FILES" | "EMPTY_SOURCE" | "INVALID_PAGE" | "CANCELLED" | "INVALID_TIFF" | "UNSUPPORTED_TIFF_COMPRESSION" | "UNSUPPORTED_TIFF_FORMAT" | "IMAGE_TOO_LARGE";
+export type ErrorCode = "PATH_NOT_ALLOWED" | "UNSUPPORTED_FILE_TYPE" | "OUTPUT_IS_SOURCE" | "JOB_ALREADY_RUNNING" | "INVALID_DIALOG_PATH" | "ENGINE_UNAVAILABLE" | "NOT_READY" | "TASK_FAILED" | "RESOURCE_UNAVAILABLE" | "NOT_FOUND" | "FILE_UNREADABLE" | "INPUT_TOO_LARGE" | "INVALID_PDF" | "PASSWORD_PROTECTED" | "PDFIUM_FAILURE" | "OUTPUT_DIRECTORY_NOT_FOUND" | "WRITE_FAILED" | "EMPTY_REQUEST" | "TOO_MANY_FILES" | "EMPTY_SOURCE" | "INVALID_PAGE" | "CANCELLED" | "INVALID_TIFF" | "UNSUPPORTED_TIFF_COMPRESSION" | "UNSUPPORTED_TIFF_FORMAT" | "IMAGE_TOO_LARGE";
 
 /**  병합 결과를 쓸 곳 */
 export type MergeOutput = 

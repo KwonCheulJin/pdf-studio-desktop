@@ -45,4 +45,5 @@
 - 공개 API(`pub`)는 최소로 하고 나머지는 `pub(crate)`.
 - 명명: 함수·변수 `snake_case`, 타입·트레이트 `PascalCase`, 상수 `UPPER_SNAKE_CASE`. 축약 금지는 TS와 같다.
 - 의존성은 계획서 §1.2 라이선스 화이트리스트(MIT/BSD/Apache-2.0/ISC/Zlib) 안에서만 고른다. GPL/AGPL 금지
+- 의존성(Rust·npm)이나 번들 바이너리를 바꾸면 `pnpm licenses:generate`로 `THIRD_PARTY_NOTICES.md`를 다시 만들고 `pnpm licenses:check`를 통과시킨다. 둘 다 pdfium 원문을 `src-tauri/pdfium/aarch64-apple-darwin/`에서 읽으므로 다른 OS에서는 `node scripts/fetch-pdfium.mjs --target aarch64-apple-darwin`을 먼저 돌린다. 허용 목록 밖이 나오면 계획서 §1.2 예외 표와 `scripts/third-party/policy.mjs`를 근거와 함께 고친다
 - `#[allow(...)]` 남용 금지

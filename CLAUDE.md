@@ -45,6 +45,13 @@ cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
 ### 명시적 작업만 수행 (최우선)
 - 사용자 요청 외 작업 금지: 빌드 자동 실행, 기능 추가, 리팩토링, 커밋 금지
 - 흐름: **계획 → 사용자 확인 → 실행 → 보고**. 계획과 다르게 가야 하면 코드보다 계획서를 먼저 고친다.
+- 진행 가이드의 Step 작업은 아래 "Step 자율 진행" 규칙이 이 흐름보다 우선한다.
+
+### Step 자율 진행 (진행 가이드 `docs/plans/2026-10-step-guide.md`)
+- **골격 구간(Step 1~15, Tauri·FSD 마이그레이션 완료까지):** 계획 확인 없이 진행하고, 커밋·PR 생성·병합(`gh pr merge --merge --delete-branch`)까지 승인 없이 한다. 기존 lint·test 실패는 병합을 막지 않는다. 단, 이 Step에서 새로 생긴 lint·typecheck 오류와 새로 깨진 테스트는 고친 뒤 병합한다.
+- **Step 16 이후:** `pnpm validate`(+ `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`)가 **모두 통과할 때만** 승인 없이 커밋·PR·병합한다. 하나라도 실패하면 병합하지 않고 보고한다.
+- **멈추고 보고하는 경우:** Step 8 pdfium 스파이크 실패(게이트), 계획서와 다르게 가야 하는 설계 결정, 되돌리기 어려운 작업(번들 ID 변경, 사용자 데이터·원격 이력 삭제), 병합 충돌.
+- 한 Step = 브랜치 하나 = PR 하나. 끝나면 진행 가이드의 체크박스를 같은 PR에서 체크하고, 다음 Step은 최신 `main`에서 시작한다.
 
 ### YAGNI + KISS
 - 현재 필요한 것만 구현한다. 미래용 코드, 쓰지 않는 옵션·추상화 금지
@@ -140,7 +147,7 @@ type Status = ValueOf<typeof STATUS>;
 
 ## Git & 코드 품질
 
-- 자동 커밋 금지 — 반드시 사용자 검토 후 커밋. 단계마다 브랜치 하나, 진행 가이드의 커밋 단위를 따른다.
+- 자동 커밋 금지 — 반드시 사용자 검토 후 커밋. 예외: 진행 가이드 Step 작업은 "Step 자율 진행" 규칙을 따른다. 커밋 단위는 진행 가이드를 따른다.
 - `Co-Authored-By: Claude` 등 **AI 기여자 표시 절대 금지**
 - 공개(MIT) 레포다. 회사 코드·상수·문구·내부 정보를 코드·문서·커밋에 남기지 않는다(계획서 §1.1 클린룸).
 - 커밋 전 검증: `pnpm validate`(+ 전환 후 `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`)

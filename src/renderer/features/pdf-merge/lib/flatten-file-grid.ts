@@ -112,11 +112,6 @@ export function flattenFileGrid({
   mergeOrder,
   collapsedGroups = new Set()
 }: FlattenFileGridParams): FlatCard[] {
-  // mergeOrder가 비어있으면 기존 파일 순서 사용
-  if (mergeOrder.length === 0) {
-    return flattenFileGridLegacy(files, collapsedGroups);
-  }
-
   // 파일 ID로 빠른 조회를 위한 맵
   const fileMap = new Map(files.map((f) => [f.id, f]));
 
@@ -180,54 +175,4 @@ export function flattenFileGrid({
   }
 
   return result;
-}
-
-/**
- * 기존 방식: files 배열 순서대로 평면화 (mergeOrder 없을 때 사용)
- */
-function flattenFileGridLegacy(
-  files: PdfDocument[],
-  collapsedGroups: Set<string>
-): FlatCard[] {
-  let flatIndex = 0;
-
-  return files.flatMap((file, fileIndex): FlatCard[] => {
-    const visiblePages = file.pages.filter((page) => !page.isDeleted);
-
-    if (visiblePages.length === 0) return [];
-
-    // 파일 단위 그룹 ID (legacy 모드에서는 파일 ID 사용)
-    const groupId = `group_${file.id}`;
-    const isExpanded = !collapsedGroups.has(groupId);
-
-    if (isExpanded) {
-      // 펼침: 각 페이지가 개별 카드 (삭제된 페이지 제외)
-      return visiblePages.map((page, pageIndex) => ({
-        type: FLAT_CARD_TYPE.PAGE,
-        file,
-        page,
-        fileIndex,
-        pageIndex,
-        flatIndex: flatIndex++,
-        isFirstPage: pageIndex === 0,
-        isFirstOfGroup: pageIndex === 0,
-        groupId
-      }));
-    }
-
-    // 접힘: 파일 하나가 하나의 카드
-    return [
-      {
-        type: FLAT_CARD_TYPE.FILE,
-        file,
-        fileIndex,
-        flatIndex: flatIndex++,
-        groupPageCount: visiblePages.length,
-        deletedPageCount: file.pages.length - visiblePages.length,
-        firstPageId: visiblePages[0].id,
-        groupId,
-        groupPageIds: visiblePages.map((p) => p.id)
-      }
-    ];
-  });
 }

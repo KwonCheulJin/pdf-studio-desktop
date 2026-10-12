@@ -71,6 +71,12 @@ function extensionOf(path: string): string {
   return path.slice(path.lastIndexOf(EXTENSION_SEPARATOR) + 1).toLowerCase();
 }
 
+/** 이름의 마지막 확장자를 뺀다. 점으로 시작하는 이름(`.gitignore`)은 그대로다. */
+function stemOf(name: string): string {
+  const separatorIndex = name.lastIndexOf(EXTENSION_SEPARATOR);
+  return separatorIndex > 0 ? name.slice(0, separatorIndex) : name;
+}
+
 /** Rust `allow_dropped`처럼 열 수 있는 확장자만 기록한다. */
 function isOpenable(path: string): boolean {
   const extension = extensionOf(path);
@@ -200,6 +206,11 @@ export function createMockPlatform({
       return path;
     },
     openFiles: async (paths) => paths.map(openFile),
+    // 가짜 경로를 자르지 않고 시드의 표시 이름을 쓴다. 시드에 없는 경로는 그대로 돌려준다.
+    fileStem: async (path) => {
+      const file = filesByPath.get(path);
+      return file ? stemOf(file.displayName) : path;
+    },
     readPdf: async (path) => {
       ensureReadable(path);
       const bytes = (filesByPath.get(path) ?? convertedFiles.get(path))?.bytes;

@@ -125,7 +125,7 @@ pnpm i && pnpm start                                           # 현재 Electron
   - 클릭·⌘·Shift 선택, 삭제 후 선택 목록 정리, 단축키(Delete, ⌘A, Esc)
   - 일부러 실패시킨 파일 읽기·병합·다운로드가 모두 화면에 보임
   - 미사용 코드 제거 후 `pnpm validate` 통과(`selectRange`, `restorePage`는 남김)
-- [ ] Step 6
+- [x] Step 6
 
 ### Step 7. 디자인 토큰 v2 적용 (M)
 - 실행 순서: 13번째 (앞: Step 13, 뒤: Step 15)

@@ -50,7 +50,7 @@ function seedFile(displayName: string): E2eMockFile {
 const FILE_A = seedFile("alpha.pdf");
 const FILE_B = seedFile("bravo.pdf");
 const BROKEN_FILE = seedFile("broken.pdf");
-/** 파일 읽기 실패 토스트는 확장자를 뺀 이름을 보인다(`getFileBaseName`) */
+/** 파일 읽기 실패 토스트는 확장자를 뺀 이름을 보인다(플랫폼 `fileStem`) */
 const BROKEN_BASE_NAME = "broken";
 
 /** Rust 진행률 계산(가중치 20/70/10, 정수 내림)으로 손으로 셈한 값. 소스 2개·6쪽 */

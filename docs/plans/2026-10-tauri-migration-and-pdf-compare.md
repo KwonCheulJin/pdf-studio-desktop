@@ -117,8 +117,8 @@
 | W1 | 최소 창 크기가 없다(비교 화면은 약 1100px 필요). | P1-5 |
 | T2 | 상태 스토어(`merge-store`의 `mergeOrder`·페이지 이동·그룹)에 테스트가 0개인데 P0-2에서 이 스토어를 쪼갠다. | P0-2 선행 |
 | L1 | `package.json`은 MIT인데 `LICENSE` 파일이 없다. pdfium(BSD)·pdf.js(Apache)·글꼴(OFL)의 제3자 고지도 없다. | P4-5 |
-| D1 | `use-add-files` ≈ `load-dropped-files`, 세그먼트 그룹핑 중복, 캔버스 렌더 중복, `ValueOf`/`isTiffFile` 중복 | P0-6 |
-| D2 | 미사용 코드: `@dnd-kit`(P0-5에서 사용 예정), `zod`, `electron-squirrel-startup`, edit delete/reorder, `merge-state.ts`, 스토어 액션 `expandAll`/`collapseAll`/`reorderFiles`(실행 시 페이지 순서 유실)/`reorderPageWithinFile`/`movePage`/`resetZoom`/`reset`, `generatePreview`/`generatePageThumbnail`, `Card`/`Icon`, `useActivePages`, 미사용 AbortController 등. **`selectRange`(B11)와 `restorePage`(B10)는 살려서 쓴다.** | P0-6 / P1-6 |
+| D1 | `use-add-files` ≈ `load-dropped-files`, 세그먼트 그룹핑 중복, 캔버스 렌더 중복, `ValueOf`/`isTiffFile` 중복 | P0-6 (파일 열기는 `open_files` + `use-add-files` 한 곳, 세그먼트 그룹핑은 `flatten-file-grid`, 캔버스 렌더는 `shared/lib/pdfjs/render-page`, `ValueOf`는 `shared/types/common` 한 곳. TIFF 판별은 Rust가 하므로 프론트 `isTiffFile`은 없다) |
+| D2 | 미사용 코드: `@dnd-kit`(P0-5에서 사용 예정), `zod`, `electron-squirrel-startup`, edit delete/reorder, `merge-state.ts`, 스토어 액션 `expandAll`/`collapseAll`/`reorderFiles`(실행 시 페이지 순서 유실)/`reorderPageWithinFile`/`movePage`/`resetZoom`/`reset`, `generatePreview`/`generatePageThumbnail`, `Card`/`Icon`, `useActivePages`, 미사용 AbortController 등. **`selectRange`(B11)와 `restorePage`(B10)는 살려서 쓴다.** | P0-6 / P1-6 (모두 제거. `merge-state.ts`는 쓰는 상수 `MERGE_STATUS`·`MERGE_VIEW`만 남는다. 같이 쓰이지 않던 스토어 `insertFiles`·`setProgress`·`setError`·`progress`·`errorMessage`, `useTotalPages`·`useMergeProgress`·`useIsSelected`, `SELECTION_MODE`, `ACCEPTED_FILE_TYPES`, `flattenFileGrid`의 `mergeOrder` 없는 분기도 제거) |
 | F1 | `shared/hooks`, `shared/model`에 도메인 로직이 있다(FSD 위반). renderer가 `@/main/types`를 import한다. | P0-2 |
 | T1 | Node 버전 불일치(.tool-versions 25 / CI 22 / README 18). 버전이 이중 bump된다. README와 docs가 낡았다. `.claude` 훅이 Mac 절대경로다. | P0-1, P4 |
 | B17 | pdfium 페이지 가져오기는 북마크(`/Outlines`)를 복사하지 않아 병합 결과에서 원본 북마크가 사라진다. 현재 동작은 `tests/merge.rs`의 특성 테스트로 고정. | Phase 5 (고도화 후보) |
@@ -174,6 +174,7 @@ Phase 5  고도화
     pickFiles(): Promise<string[]>
     pickSavePath(options: { fileName: string }): Promise<string | null> // 처음 보일 폴더는 플랫폼이 정한다
     openFiles(paths: string[]): Promise<OpenedFile[]>                  // 확장자 판별·TIFF 변환·정보 조회, 파일별 결과(D14)
+    fileStem(path: string): Promise<string>                            // 확장자를 뺀 파일 이름(열기 전 자리표시·열기 실패 알림). 프론트는 경로 문자열을 자르지 않는다
     readPdf(path: string): Promise<Uint8Array>                         // pdf.js 표시 전용
     mergePdfs(params: { request: MergeRequest; onProgress?: (progress: MergeProgress) => void }): Promise<MergeResult>
     cancelJob(jobId: string): Promise<void>

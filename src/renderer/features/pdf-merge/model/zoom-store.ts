@@ -9,7 +9,6 @@ interface ZoomStoreActions {
   setCardSize: (size: number) => void;
   zoomIn: () => void;
   zoomOut: () => void;
-  resetZoom: () => void;
 }
 
 type ZoomStore = ZoomStoreState & ZoomStoreActions;
@@ -34,9 +33,7 @@ export const useZoomStore = create<ZoomStore>((set) => ({
   zoomOut: () =>
     set((state) => ({
       cardSize: clampCardSize(state.cardSize - ZOOM_CONFIG.STEP)
-    })),
-
-  resetZoom: () => set({ cardSize: ZOOM_CONFIG.DEFAULT_CARD_SIZE })
+    }))
 }));
 
 // Selector hooks

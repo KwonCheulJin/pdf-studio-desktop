@@ -54,7 +54,7 @@ function seedThreeFiles(): void {
 
 describe("merge-store", () => {
   beforeEach(() => {
-    useMergeStore.getState().reset();
+    useMergeStore.getState().clearFiles();
   });
 
   describe("초기 상태", () => {
@@ -64,8 +64,6 @@ describe("merge-store", () => {
       expect(state.mergeOrder).toEqual([]);
       expect(state.collapsedGroups.size).toBe(0);
       expect(state.status).toBe(MERGE_STATUS.IDLE);
-      expect(state.progress).toBe(0);
-      expect(state.errorMessage).toBeNull();
       expect(state.view).toBe(MERGE_VIEW.WORKSPACE);
       expect(state.mergedDocument).toBeNull();
     });
@@ -130,46 +128,6 @@ describe("merge-store", () => {
     });
   });
 
-  describe("insertFiles", () => {
-    it("지정 인덱스 파일의 첫 페이지 앞에 새 파일을 삽입한다", () => {
-      seedThreeFiles();
-      useMergeStore.getState().insertFiles(1, [createTestDocument("X", 2)]);
-      expect(useMergeStore.getState().files.map((file) => file.id)).toEqual([
-        "A",
-        "X",
-        "B",
-        "C"
-      ]);
-      expect(orderOf()).toEqual(["A1", "A2", "X1", "X2", "B1", "B2", "C1"]);
-    });
-
-    it("인덱스 0이면 맨 앞에 삽입한다", () => {
-      seedThreeFiles();
-      useMergeStore.getState().insertFiles(0, [createTestDocument("X", 1)]);
-      expect(orderOf()).toEqual(["X1", "A1", "A2", "B1", "B2", "C1"]);
-    });
-
-    it("범위를 넘는 인덱스면 mergeOrder 끝에 삽입한다", () => {
-      seedThreeFiles();
-      useMergeStore.getState().insertFiles(99, [createTestDocument("X", 1)]);
-      expect(useMergeStore.getState().files.map((file) => file.id)).toEqual([
-        "A",
-        "B",
-        "C",
-        "X"
-      ]);
-      expect(orderOf()).toEqual(["A1", "A2", "B1", "B2", "C1", "X1"]);
-    });
-
-    it("삽입 파일은 collapsedGroups에 추가하지 않는다", () => {
-      seedThreeFiles();
-      useMergeStore.getState().insertFiles(1, [createTestDocument("X", 1)]);
-      expect(useMergeStore.getState().collapsedGroups.has("group_X1")).toBe(
-        false
-      );
-    });
-  });
-
   describe("removeFile", () => {
     it("파일과 해당 파일의 mergeOrder 아이템을 제거한다", () => {
       seedThreeFiles();
@@ -187,7 +145,6 @@ describe("merge-store", () => {
       seedThreeFiles();
       const store = useMergeStore.getState();
       store.setStatus(MERGE_STATUS.ERROR);
-      store.setProgress(50);
       store.setView(MERGE_VIEW.PREVIEW);
       store.clearFiles();
       const state = useMergeStore.getState();
@@ -195,30 +152,7 @@ describe("merge-store", () => {
       expect(state.mergeOrder).toEqual([]);
       expect(state.collapsedGroups.size).toBe(0);
       expect(state.status).toBe(MERGE_STATUS.IDLE);
-      expect(state.progress).toBe(0);
       expect(state.view).toBe(MERGE_VIEW.WORKSPACE);
-    });
-  });
-
-  describe("reorderFiles", () => {
-    it("파일 순서를 바꾸고 mergeOrder를 파일 순서대로 다시 만든다", () => {
-      seedThreeFiles();
-      useMergeStore.getState().reorderFiles(0, 2);
-      expect(useMergeStore.getState().files.map((file) => file.id)).toEqual([
-        "B",
-        "C",
-        "A"
-      ]);
-      expect(orderOf()).toEqual(["B1", "B2", "C1", "A1", "A2"]);
-    });
-
-    it("페이지 단위로 섞어 둔 mergeOrder는 파일 단위로 되돌아간다", () => {
-      seedThreeFiles();
-      useMergeStore
-        .getState()
-        .movePageInMergeOrder({ pageId: "B1", targetPageId: "A2" });
-      useMergeStore.getState().reorderFiles(0, 0);
-      expect(orderOf()).toEqual(["A1", "A2", "B1", "B2", "C1"]);
     });
   });
 
@@ -421,40 +355,6 @@ describe("merge-store", () => {
       useMergeStore.getState().expandGroup("group_NONE");
       expect(useMergeStore.getState().collapsedGroups).toBe(before);
     });
-
-    it("expandAll은 모든 그룹을 펼친다", () => {
-      seedThreeFiles();
-      useMergeStore.getState().expandAll();
-      expect(useMergeStore.getState().collapsedGroups.size).toBe(0);
-    });
-
-    it("collapseAll은 mergeOrder에서 연속된 같은 파일 구간마다 그룹을 접는다", () => {
-      seedThreeFiles();
-      useMergeStore.getState().expandAll();
-      useMergeStore
-        .getState()
-        .movePageInMergeOrder({ pageId: "B1", targetPageId: "A2" });
-      // 순서: A1 B1 A2 B2 C1 -> 연속 구간 5개 (A1, B1, A2, B2, C1)
-      useMergeStore.getState().collapseAll();
-      expect([...useMergeStore.getState().collapsedGroups].sort()).toEqual([
-        "group_A1",
-        "group_A2",
-        "group_B1",
-        "group_B2",
-        "group_C1"
-      ]);
-    });
-
-    it("collapseAll은 연속된 같은 파일 페이지를 하나의 그룹으로 묶는다", () => {
-      seedThreeFiles();
-      useMergeStore.getState().expandAll();
-      useMergeStore.getState().collapseAll();
-      expect([...useMergeStore.getState().collapsedGroups].sort()).toEqual([
-        "group_A1",
-        "group_B1",
-        "group_C1"
-      ]);
-    });
   });
 
   describe("deletePage", () => {
@@ -518,46 +418,6 @@ describe("merge-store", () => {
       seedThreeFiles();
       useMergeStore.getState().rotatePage("A", "A1", PAGE_ROTATION.DEG_180);
       expect(findPage("A", "A2")?.rotation).toBe(PAGE_ROTATION.DEG_0);
-    });
-  });
-
-  describe("movePage", () => {
-    it("다른 파일로 옮기면 files의 pages만 바뀌고 mergeOrder는 그대로다", () => {
-      seedThreeFiles();
-      useMergeStore.getState().movePage("A", "A1", "B", 1);
-      expect(pageIdsOf("A")).toEqual(["A2"]);
-      expect(pageIdsOf("B")).toEqual(["B1", "A1", "B2"]);
-      expect(orderOf()).toEqual(["A1", "A2", "B1", "B2", "C1"]);
-    });
-
-    it("같은 파일 안에서는 페이지 순서만 바꾼다", () => {
-      seedThreeFiles();
-      useMergeStore.getState().movePage("A", "A1", "A", 1);
-      expect(pageIdsOf("A")).toEqual(["A2", "A1"]);
-    });
-  });
-
-  describe("상태 액션", () => {
-    it("setError는 메시지가 있으면 상태를 ERROR로 바꾼다", () => {
-      useMergeStore.getState().setError("실패");
-      expect(useMergeStore.getState().errorMessage).toBe("실패");
-      expect(useMergeStore.getState().status).toBe(MERGE_STATUS.ERROR);
-    });
-
-    it("setError(null)은 메시지만 지우고 상태는 유지한다", () => {
-      useMergeStore.getState().setError("실패");
-      useMergeStore.getState().setError(null);
-      expect(useMergeStore.getState().errorMessage).toBeNull();
-      expect(useMergeStore.getState().status).toBe(MERGE_STATUS.ERROR);
-    });
-
-    it("reset은 초기 상태로 되돌린다", () => {
-      seedThreeFiles();
-      useMergeStore.getState().setProgress(70);
-      useMergeStore.getState().reset();
-      const state = useMergeStore.getState();
-      expect(state.files).toEqual([]);
-      expect(state.progress).toBe(0);
     });
   });
 });

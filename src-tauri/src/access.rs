@@ -12,6 +12,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use pdf_core::SaveError;
+
 use crate::error::{CommandError, read_error, write_error};
 
 pub(crate) const PDF_EXTENSION: &str = "pdf";
@@ -256,11 +258,12 @@ fn lock(set: &Mutex<HashSet<PathBuf>>) -> MutexGuard<'_, HashSet<PathBuf>> {
 
 /// 저장 경로는 아직 없을 수 있다. 있으면 canonical 경로(링크를 푼 실제 파일),
 /// 없으면 canonical 폴더 + 파일 이름이다.
+/// 실패는 출력 쪽 에러라 `AppError.path`(실패한 입력 파일)를 채우지 않는다.
 fn normalize_save_target(path: &Path) -> Result<PathBuf, CommandError> {
     if path.exists() {
         return path
             .canonicalize()
-            .map_err(|source| read_error(path, source));
+            .map_err(|source| write_error(path, source));
     }
     let not_allowed = || CommandError::PathNotAllowed {
         path: path.to_path_buf(),
@@ -270,9 +273,15 @@ fn normalize_save_target(path: &Path) -> Result<PathBuf, CommandError> {
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
         .ok_or_else(not_allowed)?;
-    let directory = parent
-        .canonicalize()
-        .map_err(|source| read_error(parent, source))?;
+    let directory = parent.canonicalize().map_err(|source| {
+        if source.kind() == io::ErrorKind::NotFound {
+            CommandError::Save(SaveError::DirectoryNotFound {
+                path: parent.to_path_buf(),
+            })
+        } else {
+            write_error(parent, source)
+        }
+    })?;
     Ok(directory.join(file_name))
 }
 
@@ -299,7 +308,7 @@ fn ensure_extension(path: &Path, extensions: &[&str]) -> Result<(), CommandError
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error::ErrorCode;
+    use crate::error::{AppError, ErrorCode};
     use crate::test_support::TestDir;
 
     #[test]
@@ -364,5 +373,21 @@ mod tests {
         );
         let canonical_text = text.canonicalize().expect("canonical");
         assert!(!access.is_opened(&canonical_text));
+    }
+
+    #[test]
+    fn missing_save_folder_is_not_reported_as_the_failed_input_file() {
+        let test_dir = TestDir::new("missing-save-folder");
+        let access = test_dir.access();
+        let folder = test_dir.user("exports");
+        fs::create_dir_all(&folder).expect("create save folder");
+        let target = folder.join("merged.pdf");
+        access.allow_save_target(&target).expect("pick save path");
+        fs::remove_dir(&folder).expect("remove save folder");
+
+        let error = AppError::from(access.save_target(&target).unwrap_err());
+
+        assert_eq!(error.code, ErrorCode::OutputDirectoryNotFound);
+        assert_eq!(error.path, None);
     }
 }

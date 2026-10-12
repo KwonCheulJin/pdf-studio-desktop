@@ -4,12 +4,9 @@ export {
   useMergeOrder,
   useCollapsedGroups,
   useMergeStatus,
-  useMergeProgress,
   useMergeView,
   useMergedDocument,
-  useTotalPages,
   useTotalActivePages,
-  useActivePages,
   useFile
 } from "./model/merge-store";
 export {

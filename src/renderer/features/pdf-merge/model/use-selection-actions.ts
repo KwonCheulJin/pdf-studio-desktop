@@ -16,7 +16,6 @@ interface UseSelectionActionsResult {
   hasDeletedInSelection: boolean;
   handleRestoreSelected: () => void;
   handleDeletePage: (fileId: string, pageId: string) => void;
-  handleRestorePage: (fileId: string, pageId: string) => void;
 }
 
 /**
@@ -43,14 +42,6 @@ export function useSelectionActions(
       }
     },
     [deletePage, selectedIds, removeFromSelection]
-  );
-
-  // 페이지 복원 핸들러
-  const handleRestorePage = useCallback(
-    (fileId: string, pageId: string) => {
-      restorePage(fileId, pageId);
-    },
-    [restorePage]
   );
 
   // 선택된 항목 삭제 (파일 또는 페이지)
@@ -101,7 +92,6 @@ export function useSelectionActions(
     handleDeleteSelected,
     hasDeletedInSelection: selectedDeletedPages.length > 0,
     handleRestoreSelected,
-    handleDeletePage,
-    handleRestorePage
+    handleDeletePage
   };
 }

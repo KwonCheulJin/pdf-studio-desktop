@@ -1,4 +1,3 @@
-import type { PdfDocument } from "./pdf-document";
 import type { ValueOf } from "@/renderer/shared/types/common";
 
 // Merge 상태 타입
@@ -17,18 +16,3 @@ export const MERGE_VIEW = {
 } as const;
 
 export type MergeView = ValueOf<typeof MERGE_VIEW>;
-
-export interface MergeState {
-  files: PdfDocument[];
-  totalPages: number;
-  status: MergeStatus;
-  progress: number; // 0-100
-  errorMessage?: string;
-}
-
-export const INITIAL_MERGE_STATE: MergeState = {
-  files: [],
-  totalPages: 0,
-  status: MERGE_STATUS.IDLE,
-  progress: 0
-};

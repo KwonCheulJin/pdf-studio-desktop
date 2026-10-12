@@ -9,7 +9,6 @@ import {
   PlatformError,
   toPlatformError
 } from "@/renderer/shared/platform";
-import { getFileBaseName } from "@/renderer/shared/lib/file-utils";
 import { getErrorSnapshot } from "@/renderer/shared/lib/error-snapshot";
 import { notifyFailure } from "../lib/notify-failure";
 import { openDocuments, type OpenDocumentsResult } from "../lib/open-documents";
@@ -40,7 +39,7 @@ function useOpenPaths(): OpenPaths {
       }
 
       for (const { sourcePath: filePath, error } of opened.failures) {
-        const fileName = getFileBaseName(filePath);
+        const fileName = await getPlatform().fileStem(filePath);
         const platformError = new PlatformError(error);
         notifyFailure({
           title: `"${fileName}" 파일을 열 수 없습니다.`,

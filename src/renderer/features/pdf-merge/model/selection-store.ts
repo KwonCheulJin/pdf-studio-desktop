@@ -157,6 +157,3 @@ export const useSelectionType = () =>
 
 export const useSelectedIds = () =>
   useSelectionStore((state) => state.selectedIds);
-
-export const useIsSelected = (id: string) =>
-  useSelectionStore((state) => state.selectedIds.has(id));

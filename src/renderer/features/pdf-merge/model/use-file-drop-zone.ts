@@ -6,7 +6,6 @@ import {
   type FileDropDropEvent,
   type FileDropEvent
 } from "@/renderer/shared/platform";
-import { getFileBaseName } from "@/renderer/shared/lib/file-utils";
 import type { GridPosition } from "@/renderer/shared/lib/layout-calculator";
 import type { FlatCard } from "../lib/flatten-file-grid";
 import { getInsertTargetPageId } from "../lib/card-move";
@@ -62,10 +61,14 @@ export function useFileDropZone({
     point
   }: FileDropDropEvent): Promise<void> => {
     const index = findDropIndex(point) ?? flatCards.length;
-    const placeholders = paths.map(
-      (path): UploadingFile => ({
+    const platform = getPlatform();
+    const names = await Promise.all(
+      paths.map((path) => platform.fileStem(path))
+    );
+    const placeholders = names.map(
+      (name): UploadingFile => ({
         id: crypto.randomUUID(),
-        name: getFileBaseName(path),
+        name,
         insertIndex: index
       })
     );

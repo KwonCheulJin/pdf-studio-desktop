@@ -1,6 +1,7 @@
 //! 커맨드 에러. 프론트에는 `{ code, message, path }`로 간다.
 //! 화면 문구는 프론트가 `code`로 고르고, `message`는 로그용이다.
 
+use std::fmt;
 use std::io;
 use std::path::{Path, PathBuf};
 
@@ -44,9 +45,16 @@ pub(crate) enum ErrorCode {
     ImageTooLarge,
 }
 
+impl fmt::Display for ErrorCode {
+    /// 직렬화 값(`INVALID_PDF` 등) 그대로 쓴다. 로그 앞머리가 프론트가 받는 코드와 같다.
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.serialize(formatter)
+    }
+}
+
 /// 커맨드가 프론트에 돌려주는 에러
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type, thiserror::Error)]
-#[error("{code:?}: {message}")]
+#[error("{code}: {message}")]
 pub(crate) struct AppError {
     pub(crate) code: ErrorCode,
     pub(crate) message: String,

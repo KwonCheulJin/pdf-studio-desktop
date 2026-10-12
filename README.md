@@ -16,7 +16,7 @@ Electron Forge + Vite로 만든 PDF 조작 데스크톱 앱입니다. PDF 병합
 
 ## 개발 시작
 
-사전 요구: Node 18+, pnpm.
+사전 요구: Node 24 LTS(`.tool-versions`), pnpm(`packageManager` 필드, `corepack enable`).
 
 ```bash
 pnpm install

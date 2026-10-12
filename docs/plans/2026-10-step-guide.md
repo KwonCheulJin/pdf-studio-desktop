@@ -47,7 +47,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 - 읽을 곳: 계획서 §4 P0-1
 - 할 일: Node 버전 하나로 통일, `engines`·`packageManager`, `.gitattributes`(eol=lf), `forceConsistentCasingInFileNames`, `.claude` 훅 절대경로 제거
 - 완료 기준: Mac과 Windows에서 클론 직후 `pnpm i && pnpm validate` 통과, 줄바꿈 차이로 수정 표시되는 파일 0개
-- [ ] Step 1
+- [x] Step 1
 
 ### Step 2. 플랫폼 어댑터, 계약 분리, FSD 정리, 스타일 폴더 이동 (M)
 - 브랜치: `refactor/platform-adapter-fsd`

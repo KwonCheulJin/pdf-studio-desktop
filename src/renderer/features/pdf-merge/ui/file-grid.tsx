@@ -26,7 +26,6 @@ import {
   getInsertionLinePosition as calcInsertionLinePosition
 } from "@/renderer/shared/lib/layout-calculator";
 import { useUnifiedDrag } from "../model/use-unified-drag";
-import { usePdfThumbnails } from "../model/use-pdf-thumbnails";
 import { useFileDropZone } from "../model/use-file-drop-zone";
 import { useCardSize } from "../model/zoom-store";
 import { flattenFileGrid, type FlatCard } from "../lib/flatten-file-grid";
@@ -40,19 +39,6 @@ interface FileGridProps {
   files: PdfDocument[];
   onPreviewFile: (document: PdfDocument, groupPageIds: string[]) => void;
   onPreviewPage: (fileId: string, pageIndex: number) => void;
-}
-
-/**
- * 파일의 썸네일을 생성하는 컴포넌트
- */
-function FileThumbnails({ file }: { file: PdfDocument }) {
-  usePdfThumbnails({
-    fileId: file.id,
-    filePath: file.path,
-    pageCount: file.pageCount,
-    enabled: true
-  });
-  return null;
 }
 
 export function FileGrid({
@@ -160,8 +146,6 @@ export function FileGrid({
     userCardSize
   });
 
-  // 모든 파일의 썸네일 생성 (펼침/접힘 상태 무관)
-
   // ReorderDropZone 위치 계산 함수 (gap + 카드 왼쪽 절반 영역)
   const getDropZonePosition = useCallback(
     (index: number) =>
@@ -258,11 +242,6 @@ export function FileGrid({
 
   return (
     <>
-      {/* 모든 파일의 썸네일 생성 */}
-      {files.map((file) => (
-        <FileThumbnails key={`thumbnails-${file.id}`} file={file} />
-      ))}
-
       {/* 절대 좌표 기반 그리드 컨테이너 */}
       <div
         ref={containerRef}
@@ -385,6 +364,7 @@ export function FileGrid({
               ) : (
                 <ExpandedPageCard
                   fileId={card.file.id}
+                  filePath={card.file.path}
                   page={card.page}
                   pageNumber={card.page.sourcePageIndex + 1}
                   flatIndex={card.flatIndex}

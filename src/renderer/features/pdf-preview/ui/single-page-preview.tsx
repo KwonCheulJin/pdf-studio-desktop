@@ -1,66 +1,37 @@
-import { useEffect, useState } from "react";
 import { Loader2, FileText } from "lucide-react";
-import type { PdfDocument } from "@/renderer/entities/merge-plan";
-import { generateThumbnail } from "@/renderer/shared/lib/pdf-thumbnail";
+import {
+  PAGE_ROTATION,
+  type PdfDocument
+} from "@/renderer/entities/merge-plan";
+import { useRenderedPage } from "@/renderer/shared/lib/pdfjs";
 import { PREVIEW_CONFIG } from "../config/preview";
 
 interface SinglePagePreviewProps {
   document: PdfDocument;
+  /** 0부터 센 원본 페이지 번호 */
   pageIndex: number;
 }
 
 /**
  * 단일 페이지 미리보기 컴포넌트
  * - 펼친 페이지 카드에서 클릭 시 표시
- * - 해당 페이지만 고해상도로 렌더링
- * - 회전은 PDF 파일에 직접 적용되므로 CSS 회전 불필요
+ * - 해당 페이지만 고해상도로 렌더링(PDF `/Rotate`는 적용하지 않는다)
  */
 export function SinglePagePreview({
   document,
   pageIndex
 }: SinglePagePreviewProps) {
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // 페이지 회전 상태 (rotation 변경 시 이미지 재생성 트리거용)
-  const page = document.pages[pageIndex];
-  const rotation = page?.rotation ?? 0;
-
-  useEffect(() => {
-    let isCancelled = false;
-
-    const loadPreview = async () => {
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        const result = await generateThumbnail({
-          filePath: document.path,
-          pageNumber: pageIndex + 1, // 1-based
-          scale: PREVIEW_CONFIG.SCALE
-        });
-
-        if (!isCancelled) {
-          setPreviewUrl(result.dataUrl);
-        }
-      } catch {
-        if (!isCancelled) {
-          setError("페이지를 불러올 수 없습니다.");
-        }
-      } finally {
-        if (!isCancelled) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    loadPreview();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [document.path, pageIndex, rotation]);
+  const {
+    url: previewUrl,
+    isLoading,
+    hasError
+  } = useRenderedPage({
+    path: document.path,
+    pageIndex,
+    scale: PREVIEW_CONFIG.SCALE,
+    rotation: PAGE_ROTATION.DEG_0,
+    isEnabled: true
+  });
 
   return (
     <div className="flex flex-col items-center pr-4">
@@ -75,10 +46,10 @@ export function SinglePagePreview({
         )}
 
         {/* 에러 상태 */}
-        {error && (
+        {hasError && (
           <div className="text-muted-foreground flex flex-col items-center gap-2">
             <FileText size={32} />
-            <span className="text-sm">{error}</span>
+            <span className="text-sm">페이지를 불러올 수 없습니다.</span>
           </div>
         )}
 

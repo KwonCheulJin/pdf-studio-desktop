@@ -31,8 +31,6 @@ export interface PreviewTarget {
 export const PREVIEW_CONFIG = {
   /** 미리보기용 렌더링 스케일 (고해상도) */
   SCALE: 1.5,
-  /** 최대 캐시 페이지 수 (LRU) */
-  MAX_CACHE_ENTRIES: 50,
   /** Virtuoso 오버스캔 (뷰포트 외 미리 렌더링할 픽셀) */
   OVERSCAN: 200
 } as const;

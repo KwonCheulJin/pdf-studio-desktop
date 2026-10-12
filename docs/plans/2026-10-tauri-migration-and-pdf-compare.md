@@ -198,15 +198,16 @@ Phase 5  고도화
 - **완료 기준:** 어떤 조작을 해도 원본 파일이 바뀌지 않는다. 원본 바이트·mtime 불변은 Rust 테스트(`crates/pdf-core/tests/merge.rs`, `src-tauri` 병합·복사 테스트)가 실제 파일로 확인하고, 프론트가 원본 경로에 쓰기를 요청하지 않음과 회전이 절대값(화면에 보인 최종 각도)으로 병합 요청에 담김은 E2E(`e2e/non-destructive-rotation.spec.ts`, mock 플랫폼 호출 기록)로 확인한다.
 
 ### P0-4 pdf.js 로더 단일화와 렌더 캐시 (M, P1)
-- `shared/lib/pdfjs/`
+- `shared/lib/pdfjs/`: pdf.js를 import하는 곳은 이 폴더 하나다.
   - Worker 설정
-  - `cMapUrl` + `cMapPacked`, `standardFontDataUrl`: `pdfjs-dist/cmaps`와 `standard_fonts`를 정적 자산으로 복사한다. **한글과 CID 폰트를 제대로 표시하는 데 필수다.**
-  - pdf.js 5.x에서 요구하는 wasm 자산 경로가 있으면 함께 설정한다.
-- `PdfDocumentCache`: 파일당 `PDFDocumentProxy` 하나를 두고 refcount와 `destroy()`로 관리한다.
-- 썸네일과 미리보기는 data URL 대신 **`ImageBitmap` 또는 `blob:` URL + LRU(개수/메모리 상한)** 로 바꾼다. 화면에 보이는 페이지만 렌더한다(virtuoso).
-- 캔버스 렌더 코드 3곳을 `renderPageToBitmap({ document, pageIndex, scale })` 하나로 통합한다. 비교 뷰어도 이 함수를 쓴다.
+  - `cMapUrl` + `cMapPacked`, `standardFontDataUrl`, `wasmUrl`, `iccUrl`: `pdfjs-dist`의 `cmaps`·`standard_fonts`·`wasm`·`iccs`를 `vite-plugin-static-copy`로 빌드 결과의 `pdfjs/` 아래에 복사한다(개발 서버는 `node_modules`에서 바로 내준다, 레포에 사본을 두지 않는다). 경로 상수는 `asset-paths.ts` 하나를 `vite.config.ts`와 런타임이 같이 쓴다. 자산 URL은 절대 URL로 넘긴다(Worker 안 fetch가 Worker 스크립트 위치 기준으로 풀리지 않게). **cMap은 한글과 CID 폰트를 제대로 표시하는 데 필수다.**
+  - CSP `img-src`에 `blob:`을 넣는다(렌더 결과를 `blob:` URL로 표시).
+- `PdfDocumentCache`: 경로당 `PDFDocumentProxy` 하나를 두고 refcount와 `destroy()`로 관리한다. 같은 경로 동시 요청은 같은 Promise를 나눠 쓴다. `retain`은 읽지 않고 참조만 잡고, 실제 읽기(`readPdf`)는 처음 그릴 때 한다. 작업 공간의 파일 목록이 경로마다 참조를 잡아 두어(`usePdfDocumentRetention`, 앱 셸) 펼치기·접기·미리보기·병합 결과 보기를 오가도 다시 읽지 않고, 파일을 빼면 놓아서 문서를 닫는다.
+- 캔버스 렌더 코드 3곳을 `renderPageToBitmap({ document, pageIndex, scale, rotation? })` 하나로 통합한다. 결과는 PNG `Blob`이고, 렌더 캐시가 `blob:` URL을 만들고 지운다(`rotation`을 생략하면 PDF `/Rotate`를 따른다). 비교 뷰어도 이 함수를 쓴다.
+- 렌더 캐시: 키는 경로·페이지·배율·회전. 화면이 쓰는 항목은 내보내지 않고, 쓰지 않는 항목은 합계가 64 MiB를 넘으면 오래 안 쓴 것부터 `URL.revokeObjectURL`한다. 문서를 닫으면 그 문서의 항목을 모두 지운다. 스토어에는 렌더 결과를 두지 않는다(경로·페이지 메타만).
+- 화면에 보이는 페이지만 렌더한다. 미리보기 목록은 virtuoso(보이는 아이템만 마운트), 작업 공간 카드 그리드는 `IntersectionObserver`(여백 200px)로 화면 근처 카드만 그린다. 그리드는 드롭 영역이 붙은 절대 좌표 레이아웃이라 virtuoso로 바꾸려면 레이아웃과 드래그를 다시 써야 하고, 드래그는 P0-5에서 다시 쓴다.
 - 파일 추가 시 전체 페이지 썸네일을 즉시 만드는 동작을 없앤다(P3). 문서 카드의 첫 페이지 썸네일도 같은 캐시를 쓴다(따로 렌더하지 않는다).
-- **완료 기준:** 같은 파일을 여러 번 읽지 않는다. 파일을 제거하면 메모리가 회수된다.
+- **완료 기준:** 같은 파일을 여러 번 읽지 않는다. 파일을 제거하면 메모리가 회수된다. cMap이 필요한 한글 PDF가 그려진다. E2E(`e2e/pdfjs-cache.spec.ts`, mock 플랫폼 `readPdf` 기록과 개발 서버 전용 캐시 조회)로 확인한다.
 
 ### P0-5 내부 드래그 정렬을 `@dnd-kit`으로 전환 (M)
 - **이유:** Tauri v2에서 OS 파일 드롭 경로를 받으려면 `dragDropEnabled: true`(기본값)여야 한다. 이 경우 **Windows WebView2에서 HTML5 DnD가 동작하지 않는다.** 현재 페이지·파일 재정렬은 HTML5 DnD 기반이므로 pointer 기반 dnd-kit(이미 설치됨)으로 바꾼다.

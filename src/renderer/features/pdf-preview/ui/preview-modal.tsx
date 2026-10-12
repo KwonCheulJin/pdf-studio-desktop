@@ -84,7 +84,7 @@ export function PreviewModal({ isOpen, onClose, target }: PreviewModalProps) {
         {/* 콘텐츠 */}
         <div className="min-h-0 flex-1 overflow-hidden px-6 py-4">
           {mode === PREVIEW_MODE.DOCUMENT ? (
-            <VirtuosoPreviewList document={document} isOpen={isOpen} />
+            <VirtuosoPreviewList document={document} />
           ) : (
             <SinglePagePreview
               document={document}

@@ -71,11 +71,6 @@ interface MergeStoreActions {
     targetFileId: string,
     targetIndex: number
   ) => void;
-  updatePageThumbnail: (
-    fileId: string,
-    pageId: string,
-    thumbnailUrl: string
-  ) => void;
 
   // 상태 액션
   setStatus: (status: MergeStatus) => void;
@@ -475,21 +470,6 @@ export const useMergeStore = create<MergeStore>((set) => ({
         })
       };
     }),
-
-  // 페이지 썸네일 업데이트
-  updatePageThumbnail: (fileId, pageId, thumbnailUrl) =>
-    set((state) => ({
-      files: state.files.map((file) =>
-        file.id === fileId
-          ? {
-              ...file,
-              pages: file.pages.map((page) =>
-                page.id === pageId ? { ...page, thumbnailUrl } : page
-              )
-            }
-          : file
-      )
-    })),
 
   setStatus: (status) => set({ status }),
 

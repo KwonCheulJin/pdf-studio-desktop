@@ -102,7 +102,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 - 읽을 곳: 계획서 §4 P0-4 (P1)
 - 주의: cMap과 standard fonts 자산 복사를 빼먹으면 한글 PDF가 깨진다.
 - 완료 기준: 같은 파일을 두 번 읽지 않음, 파일 제거 시 메모리 회수, 한글 PDF 썸네일 정상
-- [ ] Step 4
+- [x] Step 4
 
 ### Step 5. 내부 드래그 정렬을 @dnd-kit으로 (M)
 - 실행 순서: 10번째 (앞: Step 4, 뒤: Step 6)

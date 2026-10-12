@@ -21,12 +21,14 @@ import {
   useSelectionType
 } from "../model/selection-store";
 import { usePageRotateHandlers } from "../model/use-page-rotate-handlers";
+import { usePageThumbnail } from "../model/use-page-thumbnail";
 import type { DragStartParams } from "../model/use-unified-drag";
 import { SELECTION_TYPE } from "../config/selection-type";
 import { FLAT_CARD_TYPE } from "../config/flat-card";
 
 interface ExpandedPageCardProps {
   fileId: string;
+  filePath: string;
   page: PdfPage;
   pageNumber: number; // 원본 페이지 번호 (1-based)
   flatIndex: number; // flatCards 배열에서의 인덱스
@@ -55,6 +57,7 @@ interface ExpandedPageCardProps {
  */
 export function ExpandedPageCard({
   fileId,
+  filePath,
   page,
   pageNumber,
   flatIndex,
@@ -80,6 +83,10 @@ export function ExpandedPageCard({
   const { handleRotateCw, handleRotateCcw } = usePageRotateHandlers({
     fileId,
     page
+  });
+  const { ref: thumbnailRef, thumbnailUrl } = usePageThumbnail({
+    filePath,
+    pageIndex: page.sourcePageIndex
   });
 
   // 파일 선택 모드에서도 해당 파일의 페이지가 선택 표시되도록
@@ -244,14 +251,15 @@ export function ExpandedPageCard({
           {/* 썸네일 이미지 - 고정 크기 컨테이너 */}
           <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded">
             <div
+              ref={thumbnailRef}
               className="bg-muted flex items-center justify-center overflow-hidden rounded"
               style={
                 imageSize ? { width: imageSize, height: imageSize } : undefined
               }
             >
-              {page.thumbnailUrl ? (
+              {thumbnailUrl ? (
                 <img
-                  src={page.thumbnailUrl}
+                  src={thumbnailUrl}
                   alt={`${fileName} 페이지 ${pageNumber}`}
                   className="max-h-full max-w-full object-contain"
                   style={rotationStyle}

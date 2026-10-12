@@ -31,7 +31,7 @@ export function MergedPreviewPage() {
       </header>
 
       <div className="min-h-0 flex-1 overflow-hidden px-6">
-        <VirtuosoPreviewList document={mergedDocument} isOpen />
+        <VirtuosoPreviewList document={mergedDocument} />
       </div>
     </div>
   );

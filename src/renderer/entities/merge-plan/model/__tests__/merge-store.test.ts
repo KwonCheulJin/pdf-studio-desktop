@@ -537,15 +537,6 @@ describe("merge-store", () => {
     });
   });
 
-  describe("updatePageThumbnail", () => {
-    it("지정 페이지에 썸네일 URL을 기록한다", () => {
-      seedThreeFiles();
-      useMergeStore.getState().updatePageThumbnail("A", "A1", "data:thumb");
-      expect(findPage("A", "A1")?.thumbnailUrl).toBe("data:thumb");
-      expect(findPage("A", "A2")?.thumbnailUrl).toBeUndefined();
-    });
-  });
-
   describe("상태 액션", () => {
     it("setError는 메시지가 있으면 상태를 ERROR로 바꾼다", () => {
       useMergeStore.getState().setError("실패");

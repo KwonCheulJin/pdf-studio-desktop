@@ -19,8 +19,8 @@ use crate::engine::PdfEngine;
 
 pub use detect::OCR_DET_MAX_SIDE;
 
-/// OCR 렌더 해상도(dpi). 시작값이다. P2-2a 측정에서 400이 더 나았다(계획서 §6.4 제안).
-pub const OCR_RENDER_DPI: u32 = 300;
+/// OCR 렌더 해상도(dpi). P2-2a 측정으로 시작값 300에서 400으로 정했다(계획서 §6.4).
+pub const OCR_RENDER_DPI: u32 = 400;
 /// 번들·`OCR_MODEL_DIR` 안의 모델 파일 이름(`scripts/fetch-ocr.mjs`와 같다)
 const OCR_DET_MODEL_FILE: &str = "ch_PP-OCRv5_det_mobile.onnx";
 const OCR_REC_MODEL_FILE: &str = "korean_PP-OCRv5_rec_mobile.onnx";

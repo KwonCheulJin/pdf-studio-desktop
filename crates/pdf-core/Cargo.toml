@@ -8,8 +8,11 @@ image = { version = "0.25", default-features = false }
 imageproc = { version = "0.27.0", default-features = false }
 ort = { version = "=2.0.0-rc.13", default-features = false, features = ["std", "load-dynamic"] }
 pdfium-render = { version = "0.9.4", default-features = false, features = ["thread_safe", "pdfium_7881"] }
+serde = { version = "1.0.229", features = ["derive"] }
 thiserror = "2.0.21"
 tiff = "0.11.3"
+unicode-normalization = "0.1.25"
 
 [dev-dependencies]
-unicode-normalization = "0.1.25"
+serde_json = "1.0.154"
+unicode-properties = { version = "0.1.4", default-features = false, features = ["general-category"] }

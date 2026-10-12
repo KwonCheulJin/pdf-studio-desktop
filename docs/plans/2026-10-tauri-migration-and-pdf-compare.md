@@ -50,6 +50,7 @@
 | PDF 처리(Rust) | `pdfium-render` | MIT / Apache-2.0 |
 | PDF 엔진 바이너리 | pdfium (bblanchon/pdfium-binaries 배포본) | BSD-3 / Apache-2.0 |
 | 시퀀스 diff | `similar` | Apache-2.0 |
+| 유니코드 정규화 | `unicode-normalization` | MIT / Apache-2.0 |
 | TIFF 디코드 | `tiff`, `image` | MIT / Apache-2.0 |
 | 에러, 직렬화, 타입 생성 | `thiserror`, `serde`, `tauri-specta` | MIT / Apache-2.0 |
 | 표시 | `pdfjs-dist` | Apache-2.0 |
@@ -384,44 +385,58 @@ Phase 5  고도화
 - D는 회사 코드라 이번 범위에서 제외한다. 결과 계약(§6.1)을 안정적으로 유지해 두면, 승인이 나는 경우 비공개 빌드에서 엔진만 교체하는 것도 가능하다.
 
 ### 6.1 결과 모델 (P2-1, S): ADR로 고정
+
+> **정본은 [ADR 0001](../adr/0001-compare-result-model.md)이다.** 필드의 의미, 쪽 번호(0부터), `page_pair`, `Change.id` 계산(SHA-256), 정렬, `needs_review` 판정, `Notice` 데이터, 계약 JSON 모양은 그 문서를 따른다. 아래는 요약이고, 다르면 ADR이 맞다.
+
 ```rust
-// serde + specta 로 TS 타입 자동 생성
+// crates/pdf-core/src/compare/model.rs. 계약 타입(serde + specta)은 src-tauri/contract.rs에 같은 모양으로 둔다
 pub enum Side { Before, After }
-pub struct TextBox { pub page: u32, pub x: f32, pub y: f32, pub w: f32, pub h: f32 } // PDF pt, 좌하단 원점, /Rotate 적용 전
+pub struct TextBox { pub page: u32, pub x: f32, pub y: f32, pub w: f32, pub h: f32 } // PDF 사용자 공간 pt, 좌하단 원점, /Rotate 적용 전, CropBox 원점 포함
 pub enum ChangeKind { Insert, Delete, Replace }
 pub enum TextSource { TextLayer, Ocr }  // 페이지 글자를 어디서 얻었나
 pub struct ChangeSide {
     pub text: String,
-    pub boxes: Vec<TextBox>,
+    pub boxes: Vec<TextBox>,         // 비어 있지 않다
     pub min_confidence: Option<f32>, // OCR 토큰이 섞이면 그중 가장 낮은 신뢰도(0~1). 텍스트 레이어만이면 None
 }
+pub type PagePair = (Option<u32>, Option<u32>); // (A 쪽, B 쪽), 0부터. 짝이 없으면 None
 pub struct Change {
-    pub id: String,                  // 안정 키: hash(정규화 텍스트 + 문맥) — 재실행해도 동일
+    pub id: String,                  // 안정 키: SHA-256(정규화 토큰 + 앞뒤 공통 토큰 3개) — 재실행해도 동일
     pub kind: ChangeKind,
     pub before: Option<ChangeSide>,
     pub after: Option<ChangeSide>,
-    pub page_pair: (Option<u32>, Option<u32>),
-    pub needs_review: bool,          // OCR 신뢰도 기준 미만 토큰이 걸린 변경 = "확인 필요"(§6.4). 차이 개수와 따로 센다
+    pub page_pair: PagePair,         // 각 쪽 첫 상자의 쪽
+    pub needs_review: bool,          // OCR 신뢰도 기준 미만 토큰·OCR 띄어쓰기만/문장부호만 다른 치환 = "확인 필요"(§6.4). 차이 개수와 따로 센다
+}
+pub struct PageSize { pub view_box: PageBox, pub rotation: PageRotation } // view_box = CropBox ∩ MediaBox(pdf.js page.view)
+pub struct PageSizes { pub before: Vec<PageSize>, pub after: Vec<PageSize> }                         // 색인 = 쪽 번호
+pub struct PageSources { pub before: Vec<Option<TextSource>>, pub after: Vec<Option<TextSource>> } // 범위 밖 쪽은 None
+pub enum NoTextReason { OcrUnavailable, OcrFailed }
+pub enum Notice {
+    LowTextConfidence { side: Side, pages: Vec<u32> },
+    NoTextLayer { side: Side, reason: NoTextReason, pages: Vec<u32> }, // OCR도 못 한 쪽
+    Truncated { before_pages: Vec<u32>, after_pages: Vec<u32> },       // diff 시간 제한으로 통째 치환한 구간
 }
 pub struct CompareResult {
-    pub changes: Vec<Change>,
-    pub page_pairs: Vec<(Option<u32>, Option<u32>)>, // 삽입/삭제 페이지는 None
-    pub page_sizes: PageSizes,                       // 좌우 각 페이지의 크기·회전·CropBox 원점
-    pub page_sources: PageSources,                   // 좌우 각 페이지의 TextSource
-    pub notices: Vec<Notice>,                        // LowTextConfidence, NoTextLayer(OCR도 못 한 쪽), Truncated
+    pub changes: Vec<Change>,                 // diff 순서
+    pub page_pairs: Vec<PagePair>,            // 화면 행 순서. 삽입/삭제 페이지는 None
+    pub page_sizes: PageSizes,
+    pub page_sources: PageSources,
+    pub notices: Vec<Notice>,
 }
 ```
-좌표는 PDF 원본 좌표로 저장한다. 화면 변환은 pdf.js `viewport.convertToViewportRectangle`이 담당한다. 회전이나 확대가 바뀌어도 결과를 다시 계산할 필요가 없다. OCR로 얻은 글자 상자도 같은 좌표 규칙으로 바꿔 넣는다(§6.4).
+좌표는 PDF 원본 좌표(CropBox 원점이 이미 들어간 사용자 공간 좌표)로 저장한다. 화면 변환은 pdf.js `viewport.convertToViewportRectangle`이 담당하고, 프론트는 원점을 보정하지 않는다. 회전이나 확대가 바뀌어도 결과를 다시 계산할 필요가 없다. OCR로 얻은 글자 상자도 같은 좌표 규칙으로 바꿔 넣는다(§6.4).
 
 ### 6.2 파이프라인
 1. **추출 (P2-2, M)**
-   - pdfium 페이지 텍스트에서 글자별 `{ char, bounds, font_size, font_name }`을 얻는다. 박스는 tight bounds를 기본으로 한다.
-   - **좌표계 일치 검증(중요):** pdfium 좌표와 pdf.js 화면 좌표가 CropBox/MediaBox 원점 오프셋, `/Rotate` 페이지, `UserUnit`에서 일치하는지 pdfium 박스는 Rust golden 테스트로 고정하고, 화면 박스와의 일치는 E2E로 확인한다. 필요하면 `page_sizes`에 원점 오프셋을 포함해 프론트에서 보정한다.
+   - pdfium 페이지 텍스트에서 글자별 `{ char, bounds, font_size }`을 얻는다. 박스는 tight bounds를 기본으로 한다. `font_name`은 쓰는 곳(Phase 5 스타일 비교)이 생길 때 더한다. 화면 밖(`view_box`와 겹치지 않는) 글자 제외, `/Rotate`와 상관없는 글자 순서, pdfium이 만든 공백·줄바꿈 표시, `OCR_MIN_TEXT_CHARS` 값은 [ADR 0001](../adr/0001-compare-result-model.md) §8이 정본이다.
+   - **좌표계 일치 검증(중요):** pdfium 좌표와 pdf.js 화면 좌표가 CropBox/MediaBox 원점 오프셋, `/Rotate` 페이지, `UserUnit`에서 일치하는지 pdfium 박스는 Rust golden 테스트로 고정하고, 화면 박스와의 일치는 E2E로 확인한다. 원점 보정은 Rust가 박스에 이미 넣고 프론트는 보정하지 않는다([ADR 0001](../adr/0001-compare-result-model.md) §2). `page_sizes.view_box`가 pdf.js `page.view`와 같은지도 확인한다.
    - 텍스트 레이어가 없거나 글자 수가 `OCR_MIN_TEXT_CHARS` 미만인 페이지(스캔본)는 OCR 경로(P2-4a, §6.4)로 글자를 얻는다. OCR로도 글자를 얻지 못하면(모델 파일 없음, OCR 실패) `NoTextLayer`로 알린다.
 2. **정규화와 토큰화 (P2-3, M)**
    - Unicode 정규화(NFC/NFKC 옵션, `unicode-normalization`), 공백과 줄바꿈 정리, 하이픈 줄바꿈 결합, 대소문자 무시 옵션
    - 토큰 단위는 **단어**(공백 기준, 한글 포함)이고, 각 토큰은 구성 글자의 박스 목록을 가진다. replace 구간 내부는 **글자 단위 2차 diff**로 정밀 하이라이트한다.
    - 대체 문자(U+FFFD)나 PUA 비율이 높으면 `LowTextConfidence`로 표시한다(ToUnicode가 깨진 PDF).
+   - 토큰 경계, 하이픈 줄바꿈 결합 규칙, 정규화 뒤 글자별 상자 대응, `LOW_TEXT_CONFIDENCE_RATIO` 값은 [ADR 0001](../adr/0001-compare-result-model.md) §9가 정본이다.
 3. **정렬과 diff (P2-4, L)**
    - 문서 전체 토큰열끼리 비교해 페이지 경계를 넘는 이동이나 밀림에 대응한다.
    - 대용량 대응: ① 단락/줄 해시로 **유일 매칭 앵커**를 잡고(Patience) ② 앵커 사이 구간만 Myers diff를 돌린다(`similar`의 `Algorithm::Patience`/`Myers`, 시간 제한(deadline) 설정).
@@ -481,18 +496,20 @@ pub struct CompareResult {
 
 **파이프라인**
 1. **OCR 대상 판정:** 추출(P2-2)에서 페이지의 텍스트 레이어 글자 수가 `OCR_MIN_TEXT_CHARS` 미만이면 OCR 대상으로 표시한다. 스캐너가 넣은 숨은 글자층(검색 가능한 PDF)은 텍스트 레이어로 취급한다(품질이 낮으면 `LowTextConfidence`).
-2. **렌더:** pdfium으로 페이지를 고정 해상도 `OCR_RENDER_DPI`(시작값 300dpi)로 렌더한다. 렌더만 pdfium 작업 스레드에서 하고 추론은 별도 작업 스레드에서 한다. OCR이 pdfium 큐를 오래 잡아 병합을 막지 않게 하기 위해서다. 렌더 이미지는 메모리에만 두고 디스크에 쓰지 않는다.
+2. **렌더:** pdfium으로 페이지를 고정 해상도 `OCR_RENDER_DPI`(400dpi. 시작값 300에서 P2-2a 측정으로 올렸다)로 렌더한다. 렌더만 pdfium 작업 스레드에서 하고 추론은 별도 작업 스레드에서 한다. OCR이 pdfium 큐를 오래 잡아 병합을 막지 않게 하기 위해서다. 렌더 이미지는 메모리에만 두고 디스크에 쓰지 않는다.
 3. **기울기 보정(필요 시):** 기울기를 추정해 `OCR_DESKEW_MIN_DEGREES` 이상이면 바로 세우고, 보정 변환을 좌표 되돌리기용으로 기록한다. 방법은 스파이크에서 정한다. 보정 없이 합격 기준을 넘으면 넣지 않는다.
 4. **검출 → 인식:** 검출 모델로 줄 상자를 찾고, 인식 모델로 줄마다 글자와 신뢰도를 얻는다. 결과는 단어/글자별 `{ text, bounds, confidence }`다. 글자 위치는 인식 결과의 글자별 위치 정보로 줄 상자를 나눠 얻는다. 글자 단위가 안 되면 단어 단위 상자로 낮춘다(그 경우 하이라이트가 단어 단위가 된다). 어느 쪽인지 스파이크에서 확인한다.
 5. **좌표 되돌리기:** 렌더 픽셀 좌표를 텍스트 추출과 같은 좌표 규칙(§6.1: PDF pt, 좌하단 원점, `/Rotate` 적용 전)으로 바꾼다. 순서는 기울기 보정의 역변환 → `× 72 / OCR_RENDER_DPI`와 y 뒤집기(픽셀은 좌상단 원점) → 렌더에 적용된 `/Rotate` 되돌리기 → CropBox 원점 오프셋 더하기다.
 6. **이후 단계:** OCR 글자를 텍스트 레이어 글자와 같은 형태로 만들어 기존 정규화·토큰화(P2-3), diff(P2-4), 페이지 짝짓기(P2-5)에 그대로 넣는다. 페이지마다 출처(`TextSource`)를 `page_sources`에 기록한다. 한쪽은 텍스트 레이어, 다른 쪽은 스캔이어도 비교된다.
 
-**신뢰도와 "확인 필요"**
+**신뢰도와 "확인 필요"** (정본은 [ADR 0001](../adr/0001-compare-result-model.md) §5·§9)
 - 토큰 신뢰도는 토큰을 이루는 글자 신뢰도의 최솟값이다. 변경의 각 쪽에는 그중 가장 낮은 값을 `min_confidence`로 담는다.
-- 기준은 일반 토큰 `OCR_MIN_CONFIDENCE`(시작값 0.80), 숫자·금액·날짜 토큰 `OCR_MIN_CONFIDENCE_NUMERIC`(시작값 0.95)이다. 계약서에서 중요한 숫자는 더 엄격하게 본다. 숫자가 하나라도 든 토큰을 숫자 토큰으로 본다. 두 값은 스파이크에서 측정 후 확정한다.
+- 기준은 일반 토큰 `OCR_MIN_CONFIDENCE` 0.80, 숫자·금액·날짜 토큰 `OCR_MIN_CONFIDENCE_NUMERIC` 0.95다(P2-2a에서 시작값 그대로 확정). 계약서에서 중요한 숫자는 더 엄격하게 본다. 숫자가 하나라도 든 토큰을 숫자 토큰으로 본다.
 - 기준 미만 토큰이 걸린 변경은 `needs_review = true`다. 화면은 이를 차이 개수와 따로 "확인 필요"로 보인다. 오인식이 차이처럼 보이지 않게 하기 위해서다.
 - OCR 쪽이 섞인 변경 중 띄어쓰기만 다른 치환도 `needs_review`로 둔다. OCR은 띄어쓰기를 자주 틀린다.
-- 신뢰도가 높은데 틀린 글자(조용한 오인식)는 이 장치로 걸러지지 않는다. 그래서 스파이크 합격 기준에 숫자 토큰의 조용한 오인식 0건을 둔다.
+- OCR 쪽이 섞인 변경 중 **문장부호만(유니코드 일반 범주 P\*) 다른 치환**도 `needs_review`로 둔다(2026-10-13 사용자 결정). OCR은 문장 끝 마침표·쉼표를 높은 신뢰도로 빠뜨리거나 곧은/굽은 따옴표·괄호 모양을 바꿔 읽는다(P2-2a 측정). 빠진 글자에는 신뢰도가 없어 신뢰도 기준으로는 잡히지 않는다.
+- **OCR 쪽이 있는 비교는 NFKC로 정규화한다.** 어느 쪽이든 OCR 쪽이 하나라도 있으면 두 문서 모두 `NormalizeOptions.form = Nfkc`(P2-3)를 사용자 옵션과 상관없이 강제한다. OCR은 원문자 번호(①)·전각 문자를 일반 문자로 읽기 때문이다(P2-2a 로컬 측정에서 NFKC 없이 조용한 오인식 43건 → NFKC로 0건). 연결은 P2-4a에서 한다.
+- 신뢰도가 높은데 틀린 글자(조용한 오인식)는 이 장치로 걸러지지 않는다. 그래서 스파이크 합격 기준에 숫자 토큰의 조용한 오인식 0건을 둔다. 숫자 토큰의 일치·조용한 오인식은 토큰 끝 `.`·`,`를 뺀 부분으로 판정한다(위 문장부호 규칙으로 그 차이는 확인 필요가 되므로).
 
 **성능, 취소, 캐시**
 - OCR은 비교 작업 실행기(P2-7)의 `ocr` 단계다. OCR 대상 쪽이 없으면 그 단계는 즉시 100%다.
@@ -545,7 +562,43 @@ pdfium 스파이크(P1-0)처럼 연결 작업(P2-4a) 전에 끝까지 검증한�
 - 서명·로드 실패: ONNX Runtime 링크 방식(동적/정적)과 번들 위치를 다시 검토한다.
 - 대안으로도 통과하지 못하면 OCR 비교를 이번 버전에서 뺄지 사용자가 정한다. 그때까지 스캔 쪽은 `NoTextLayer`로 알린다.
 
-**P2-2a 스파이크 결과 (2026-10-13, Mac M3 Pro, 판정: 실패 — P2-4a 보류)**
+**P2-2a 스파이크 결과 (2026-10-13, Mac M3 Pro, 최종 판정: 게이트 통과)**
+
+- 1차 측정(아래 「1차 측정」 이하, 이전 판정 정의·`OCR_RENDER_DPI` 300): 실패.
+- 2차 판정(바로 아래, 2026-10-13 사용자 결정 반영): **게이트 통과**. P2-4a를 진행한다.
+
+**2차 판정: 사용자 결정(2026-10-13)에 따른 판정 정의 변경 후 재측정**
+
+기준 수치(CER·일치율·0건·시간·크기)는 그대로다. 바뀐 것은 1차 측정 뒤 사용자가 채택한 세 가지다. 판정 정의 변경은 기준 완화가 아니라 사용자 결정이고, 근거는 1차 측정이다: 실패한 숫자 토큰은 모두 끝 `.`·`,`가 빠진 경우였고(숫자 자체를 높은 신뢰도로 틀린 경우 0건), 비교에서 그 차이는 새 문장부호 규칙으로 「확인 필요」가 되어 차이로 보이지 않는다.
+1. 숫자 토큰은 토큰 끝 `.`·`,`를 뺀 부분으로 판정한다. OCR 쪽이 섞인 문장부호(P\*)만 다른 치환은 `needs_review`다(위 「신뢰도와 "확인 필요"」, ADR 0001 §5).
+2. `OCR_RENDER_DPI` = 400.
+3. OCR 쪽이 있는 비교는 NFKC. 측정도 정답·OCR 양쪽에 NFKC를 걸었다.
+
+측정: `cargo run --release -p pdf-core --example ocr_spike -- --fixtures <폴더>`. 커밋본과 노이즈 시드·기울기만 바꾼 2벌(레포 밖, 생성 스크립트에서 시드·각도만 바꿈), 세 벌 모두 300·200dpi 스캔. 쪽당 시간은 다른 worktree 빌드가 돌던 부하(load average 약 5) 상태 값이다.
+
+| 항목 | 기준 | 커밋본 | 시드 2 | 시드 3 | 판정 |
+|---|---|---|---|---|---|
+| CER 300dpi | ≤ 1.5% | 0.63% (20/3,165) | 0.85% | 0.70% | 통과 |
+| CER 200dpi | ≤ 3% | 0.85% (9/1,054) | 0.66% | 0.76% | 통과 |
+| 도장 겹친 줄 CER | ≤ 5% | 3.87% (6/155) | 3.87% | 3.87% | 통과 |
+| 숫자 토큰 완전 일치 300dpi | ≥ 99.5% | 100% (198/198) | 100% | 100% | 통과 |
+| 숫자 토큰 완전 일치 200dpi | ≥ 99% | 100% (66/66) | 100% | 100% | 통과 |
+| 숫자 토큰 조용한 오인식 | 0건 | 0 / 0 | 0 / 0 | 0 / 0 | 통과 |
+| 쪽당 처리 시간 | ≤ 2초 | 평균 0.89초·최대 1.16초 | 최대 1.20초 | 최대 1.22초 | 통과 |
+| 번들 증가량 | ≤ 60MB | macOS 57.5MB, Windows 34.2MB, Linux 42.7MB(1차와 같다) | | | 통과 |
+| 플랫폼 간 결과 | Mac·Windows 같음 | 미측정 | | | Step 30 CI로 미룸 |
+| 서명된 `.app`에서 로드 | codesign 통과 후 추론 | 1차 측정의 확인(아래). 그 뒤 바뀐 것은 렌더 해상도 상수뿐이라 로드·서명 경로는 같다 | | | 통과 |
+
+- 참고(이전 정의로 센 값): 시드 3의 200dpi는 토큰 전체 기준으로 98.48%(65/66)·조용한 오인식 1건이다(끝 마침표 누락). 새 정의에서는 끝 `.`을 빼고 보며, 비교에서는 확인 필요로 분류된다.
+- 일반 토큰(숫자 없음, 같은 판정 방법, 기준 0.80): 세 벌 모두 300dpi 99.74%(764/766, 틀린 2건은 신뢰도 0.80 미만), 200dpi 100%, 조용한 오인식 0건.
+- 신뢰도 기준 확정: `OCR_MIN_CONFIDENCE_NUMERIC` 0.95 — 틀린 숫자 토큰이 모두 0.95 미만이었다(로컬 실제 스캔 포함). 맞은 숫자 토큰의 약 13%(26~28/198)를 확인 필요로 보낸다. `OCR_MIN_CONFIDENCE` 0.80 — 픽스처의 일반 토큰 조용한 오인식 0건. 로컬 실제 스캔에서는 0.10%(21/20,792)가 남는다(아래). 두 값 모두 시작값 그대로 확정하고 P2-4a golden에서 다시 본다.
+
+로컬 스캔본 재측정(레포 밖, 집계만, NFKC·새 정의, 400dpi)
+- 가상 계약서 20쪽: CER 0.48%, 숫자 토큰 100%(550/550), 조용한 오인식 0건. 일반 토큰 99.04%, 조용한 오인식 7건, 문장부호만 다른 것 22건(확인 필요).
+- 실제 스캔본 96쪽(쪽 단위 정렬 근사): CER 0.27%, 숫자 토큰 99.21%(1,639/1,652), 조용한 오인식 0건. 틀린 13건은 모두 확인 필요로 걸러진다(신뢰도 0.80 미만 5, 0.80~0.95 4, 문장부호만 다름 4). 이 값은 합격 기준 측정 조건(가상 계약서 픽스처) 밖이지만 300dpi 기준 99.5%에는 못 미친다. 일반 토큰은 99.29%, 조용한 오인식 21건(0.10%: 한글 글자 오인식, 한글 아래아 `ㆍ`를 가운뎃점 `·`으로 읽음), 문장부호만 다른 것 120건(굽은 따옴표 `“”`→`"`, `「」`→`[]` 등, 확인 필요).
+- 쪽당 시간: 실제 스캔 평균 1.23초·최대 1.65초(부하 상태).
+
+**1차 측정 (이전 판정 정의, `OCR_RENDER_DPI` 300, 판정: 실패)**
 
 200dpi 숫자 토큰 기준 두 개(완전 일치율, 조용한 오인식 0건)를 넘지 못했다. 나머지 기준은 통과했다. 실패한 토큰은 모두 숫자가 든 토큰 끝의 문장부호(`.`·`,`)가 높은 신뢰도로 빠진 경우이고, 숫자 자체를 높은 신뢰도로 틀린 경우는 없었다. 어떻게 할지는 아래 「제안」을 보고 사용자가 정한다.
 
@@ -560,7 +613,7 @@ pdfium 스파이크(P1-0)처럼 연결 작업(P2-4a) 전에 끝까지 검증한�
 | ONNX Runtime | 1.28.3 공식 릴리스(MIT). macOS arm64 `onnxruntime-osx-arm64-1.28.3.tgz`, Windows x64 `…-win-x64-1.28.3.zip`, Linux x64 `…-linux-x64-1.28.3.tgz`. 아카이브·라이브러리 SHA-256은 `scripts/fetch-ocr.mjs`. macOS x64 릴리스는 없다 |
 | `ort` | `=2.0.0-rc.13`(ONNX Runtime 1.28 대상), `default-features = false`, 기능 `std`, `load-dynamic`만(`download-binaries`·`copy-dylibs`·`ndarray`·`tracing` 끔). `ort::init_from(<라이브러리 경로>)`로 붙인다 |
 | 이미지 처리 | `image` 0.25, `imageproc` 0.27(둘 다 기본 기능 끔, MIT/Apache-2.0). 새로 들어온 하위 크레이트도 모두 화이트리스트 안이다 |
-| 파이프라인 값 | `OCR_RENDER_DPI` 300(시작값 유지), 검출 입력 긴 변 `OCR_DET_MAX_SIDE` 2048, 이진화 0.3, 상자 점수 0.6, unclip 1.5, 인식 높이 48, 배치 8 |
+| 파이프라인 값 | `OCR_RENDER_DPI` 400(1차 측정은 300, 2차 판정에서 400으로 정함), 검출 입력 긴 변 `OCR_DET_MAX_SIDE` 2048, 이진화 0.3, 상자 점수 0.6, unclip 1.5, 인식 높이 48, 배치 8 |
 | 전처리 | 빨강 채널 회색화(붉은 도장을 거의 흰색으로). 기울기 보정은 넣지 않는다 — 최소 넓이 회전 사각형으로 줄을 잘라 ±2°에서 기준을 넘었다 |
 | 글자 상자 | 글자 단위로 간다. CTC 글자 구간 중심 사이의 가운데에서 줄 상자를 나눈다. 일치한 글자 4,161/4,180(99.55%)의 OCR 중심이 정답 글자 칸 ±1pt 안, 평균 가로 오차 1.03pt |
 
@@ -602,9 +655,9 @@ pdfium 스파이크(P1-0)처럼 연결 작업(P2-4a) 전에 끝까지 검증한�
 - 로컬 가상 계약서 스캔 10종 20쪽(다른 서체, 흑백 이진화본 포함): CER 0.73%, 숫자 토큰 100%(470/470), 조용한 오인식 0건.
 - 로컬 실제 스캔본 96쪽(쪽 단위 정렬이라 근사값): CER 0.88%, 숫자 토큰 93.98%(1,139/1,212), 조용한 오인식 43건. 43건 모두 원문자 번호(①~⑥)를 일반 숫자로 읽은 것이다. 양쪽에 NFKC 정규화를 걸면 CER 0.27%, 숫자 토큰 99.21%(1,639/1,652), 조용한 오인식 0건이고, 남은 오류(원화 기호 `￦`)는 신뢰도 0.95 미만이라 확인 필요로 걸러진다.
 
-신뢰도 시작값: 신뢰도 0.95 미만으로 틀린 숫자 토큰은 커밋본 0건, 시드 2의 도장 아래 1건(0.264)뿐이었다. `OCR_MIN_CONFIDENCE_NUMERIC`(0.95)는 맞은 숫자 토큰의 16%(32/198)를 확인 필요로 보낸다. 끝 문장부호 누락은 빠진 글자에 신뢰도가 없어 이 기준으로 잡히지 않는다. 게이트가 실패해 두 값은 확정하지 않고 시작값으로 둔다.
+신뢰도 시작값(1차 시점): 신뢰도 0.95 미만으로 틀린 숫자 토큰은 커밋본 0건, 시드 2의 도장 아래 1건(0.264)뿐이었다. `OCR_MIN_CONFIDENCE_NUMERIC`(0.95)는 맞은 숫자 토큰의 16%(32/198)를 확인 필요로 보낸다. 끝 문장부호 누락은 빠진 글자에 신뢰도가 없어 이 기준으로 잡히지 않는다. 1차 시점에는 게이트가 실패해 두 값을 확정하지 않았다(2차 판정에서 확정).
 
-제안(사용자 결정 필요, 기준 수치는 바꾸지 않았다)
+제안(1차 시점. 1~3은 2026-10-13 사용자가 모두 채택해 2차 판정에 반영했다)
 1. 숫자 토큰 판정 정의: 비교에서 OCR 쪽이 섞인 「문장부호만 다른 치환」을 띄어쓰기처럼 `needs_review`로 분류하고(P2-3/P2-4a), 스파이크 기준의 숫자 토큰은 끝 `.`·`,`를 뺀 핵심으로 본다. 이 정의로는 측정 6회 모두 조용한 오인식 0건, 일치율 300dpi 99.49~100%·200dpi 100%다.
 2. `OCR_RENDER_DPI`를 400으로 올린다(쪽당 +약 60ms, 도장 줄 CER이 시드에 상관없이 3.87%).
 3. OCR 쪽이 있는 비교는 P2-3 정규화에서 NFKC를 켠다(원문자 번호).
@@ -696,7 +749,7 @@ A의 변경 상자와 B의 대응 상자를 거터를 가로지르는 곡선으�
 - 20pt는 시작값이다. 픽스처로 조정하고 상수로 둔다.
 
 **좌표와 모양**
-- 끝점 y = 묶음 상자의 세로 중앙. `y_px = (pageHeightPt − (y0 + y1) / 2) × (96 / 72) × zoom` (페이지 좌하단 원점 기준. §6.1 좌표가 회전 적용 전이면 같은 viewport 변환을 먼저 거친다).
+- 끝점 y = 묶음 상자의 세로 중앙. 묶음 상자를 그 쪽 pdf.js viewport로 바꾼 화면 상자(`convertToViewportRectangle`)의 세로 중앙이다. `(pageHeightPt − y) × (96 / 72) × zoom` 같은 손 공식은 CropBox 원점이 0이고 회전 0, `UserUnit` 1일 때만 맞으므로 쓰지 않는다([ADR 0001](../adr/0001-compare-result-model.md) §2).
 - x 변환은 없다. SVG를 거터에 정확히 맞춰 두고(왼쪽 = A 페이지 오른쪽 끝, 너비 = 거터) x는 0과 W.
 - 거터 너비는 확대와 무관하게 고정: 세로 페이지 `CONNECTOR_GUTTER_PX`(120px), 한쪽이라도 가로 페이지면 72px. SVG 높이 = 두 페이지 중 큰 쪽.
 - 곡선: 3차 베지어 `(0, aY) → (W, bY)`, 제어점 `(0.5W, aY)`, `(0.5W, bY)`(양끝에서 수평으로 나가는 대칭 S). `|aY − bY| ≤ 3px`이면 직선.
@@ -834,6 +887,7 @@ pnpm tauri dev                           # P1-1 이후
 | D13 | 허용 경로 목록: 파일 열기·저장 다이얼로그를 Rust 커맨드로 열고, 다이얼로그·드롭으로 받은 경로를 `State`에 기록해 파일 커맨드는 목록에 있는 경로(와 앱 임시 폴더)만 허용 | 프론트가 `plugin-dialog`를 직접 열고 경로를 넘김 | Rust가 "사용자가 고른 경로"를 알 수단이 없으면 경로 검증이 형식만 남는다 |
 | D14 | 파일 추가 처리 = Rust `open_files` | TS `ingestPaths` 통합 | 같은 분기가 3벌 중복(B2의 원인)이고, 확장자 화이트리스트는 어차피 Rust가 검사한다 |
 | D15 | 스캔 계약서 OCR = PaddleOCR(PP-OCR) 한국어 모델 ONNX 변환본 + ONNX Runtime(`ort`) (§6.4) | macOS Vision + Windows.Media.Ocr, Tesseract, 클라우드 OCR | Mac·Windows가 같은 결과, 한국어 정확도, 라이선스 화이트리스트 안, 계약서가 기기 밖으로 나가지 않음 |
+| D16 | 비교 결과 모델과 좌표 규칙 = [ADR 0001](../adr/0001-compare-result-model.md): 박스는 CropBox 원점이 들어간 사용자 공간 좌표(회전 전, `UserUnit` 미적용), 쪽 번호 0부터, `Change.id` = SHA-256 안정 키, `needs_review`로 변경을 둘로 나눠 셈, 계약 타입은 `src-tauri` 미러 | 박스를 CropBox 상대 좌표로 두고 프론트가 보정, 순번 id, 쪽마다 안내 | 화면 변환을 pdf.js viewport 하나에 맡겨 보정 지점을 Rust 한 곳으로, 재실행해도 선택 유지, `pdf-core`는 specta를 모른다 |
 
 ## 12. 리스크
 
@@ -845,7 +899,7 @@ pnpm tauri dev                           # P1-1 이후
 | pdfium 직렬화로 인한 처리 대기 | 병합과 비교를 동시에 하면 대기 | 작업 큐 + 진행률 표시. 측정 후 필요하면 Phase 5 병렬화 |
 | ToUnicode가 깨진 PDF | 비교 품질 저하 | `LowTextConfidence` 안내. 그래픽 diff는 Phase 5 |
 | 스캔 PDF의 OCR 오인식(특히 숫자·금액·날짜) | 오인식이 차이로 보이거나, 실제 차이를 놓침 | 신뢰도 기준 미만은 "확인 필요"로 분리(숫자는 더 엄격), P2-2a 게이트에서 CER·숫자 일치율·조용한 오인식 0건 확인 (§6.4) |
-| OCR 띄어쓰기 오류 | 단어 토큰이 갈라져 거짓 차이 | OCR 쪽이 섞인 띄어쓰기만 다른 치환은 "확인 필요"로 분리 |
+| OCR 띄어쓰기·문장부호 오류 | 단어 토큰이 갈라지거나 끝 마침표가 빠져 거짓 차이 | OCR 쪽이 섞인 띄어쓰기만·문장부호만 다른 치환은 "확인 필요"로 분리(ADR 0001 §5) |
 | OCR 런타임·모델 번들·서명 실패 | 스캔본 비교 불가 | **P2-2a를 게이트로** 두고 서명된 `.app`에서 로드 확인. 런타임·모델이 없으면 `NoTextLayer`로 알리고 비교는 계속 |
 | OCR 런타임·모델로 앱 크기 증가 | 다운로드·설치 크기 증가 | P2-2a 합격 기준에 증가량 상한. 넘으면 작은 모델 또는 첫 사용 때 모델 받기 |
 | OCR 처리 시간 | 스캔본 비교가 느림 | 쪽당 시간 상한(P2-2a), 진행률 `ocr` 단계, 쪽마다 취소, 파일 해시 기준 OCR 캐시 |

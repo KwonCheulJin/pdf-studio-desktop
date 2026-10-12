@@ -1,0 +1,132 @@
+%PDF-1.6
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [4 0 R 6 0 R 8 0 R 10 0 R 12 0 R 14 0 R 16 0 R 18 0 R 20 0 R] /Count 9 /MediaBox [0 0 612 792] >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
+endobj
+5 0 obj
+<< /Length 204 >>
+stream
+BT /F1 18 Tf 72 700 Td (Plain page, inherited MediaBox) Tj ET
+BT /F1 1 Tf 18 0 0 18 72 670 Tm (Text matrix sets the size) Tj ET
+q 2 0 0 2 0 0 cm BT /F1 9 Tf 36 320 Td (CTM scales this line: jumpy) Tj ET Q
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 3 0 R >> >> /MediaBox [0 0 612 792] /CropBox [100 150 500 650] /Contents 7 0 R >>
+endobj
+7 0 obj
+<< /Length 225 >>
+stream
+BT /F1 18 Tf 130 600 Td (Inside the offset CropBox) Tj ET
+BT /F1 18 Tf 130 570 Td (Origin is not zero: typography) Tj ET
+BT /F1 18 Tf 420 300 Td (Straddles the edge) Tj ET
+BT /F1 18 Tf 20 60 Td (Hidden outside the crop) Tj ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 3 0 R >> >> /MediaBox [100 100 500 600] /CropBox [50 200 450 700] /Contents 9 0 R >>
+endobj
+9 0 obj
+<< /Length 118 >>
+stream
+BT /F1 18 Tf 150 500 Td (MediaBox origin is 100 100) Tj ET
+BT /F1 18 Tf 150 470 Td (CropBox clipped by MediaBox) Tj ET
+endstream
+endobj
+10 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 3 0 R >> >> /MediaBox [0 0 612 792] /CropBox [60 80 560 720] /Rotate 90 /Contents 11 0 R >>
+endobj
+11 0 obj
+<< /Length 116 >>
+stream
+BT /F1 18 Tf 100 650 Td (Rotated 90 with a CropBox) Tj ET
+BT /F1 18 Tf 100 620 Td (Second line, quickly typed) Tj ET
+endstream
+endobj
+12 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 3 0 R >> >> /Rotate 180 /Contents 13 0 R >>
+endobj
+13 0 obj
+<< /Length 116 >>
+stream
+BT /F1 18 Tf 72 700 Td (Rotated 180 degrees: upside) Tj ET
+BT /F1 18 Tf 72 670 Td (down on the display, jolly) Tj ET
+endstream
+endobj
+14 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 3 0 R >> >> /MediaBox [30 40 625 882] /Rotate 270 /Contents 15 0 R >>
+endobj
+15 0 obj
+<< /Length 111 >>
+stream
+BT /F1 18 Tf 80 800 Td (Rotated 270 on offset A4) Tj ET
+BT /F1 18 Tf 80 770 Td (MediaBox starts at 30 40) Tj ET
+endstream
+endobj
+16 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 3 0 R >> >> /MediaBox [0 0 306 396] /CropBox [20 30 286 376] /UserUnit 2 /Contents 17 0 R >>
+endobj
+17 0 obj
+<< /Length 111 >>
+stream
+BT /F1 9 Tf 40 330 Td (UserUnit is two: each unit) Tj ET
+BT /F1 9 Tf 40 315 Td (spans two points; quirky) Tj ET
+endstream
+endobj
+18 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 3 0 R >> >> /Contents 19 0 R >>
+endobj
+19 0 obj
+<< /Length 36 >>
+stream
+BT /F1 10 Tf 290 40 Td (- 8 -) Tj ET
+endstream
+endobj
+20 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 3 0 R >> >> /MediaBox [0 0 612 792] /CropBox [700 800 900 1000] /Contents 21 0 R >>
+endobj
+21 0 obj
+<< /Length 117 >>
+stream
+BT /F1 18 Tf 72 700 Td (CropBox misses the MediaBox) Tj ET
+BT /F1 18 Tf 72 670 Td (so the view falls back, hmm) Tj ET
+endstream
+endobj
+xref
+0 22
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000199 00000 n 
+0000000269 00000 n 
+0000000371 00000 n 
+0000000626 00000 n 
+0000000779 00000 n 
+0000001055 00000 n 
+0000001211 00000 n 
+0000001380 00000 n 
+0000001544 00000 n 
+0000001712 00000 n 
+0000001828 00000 n 
+0000001996 00000 n 
+0000002138 00000 n 
+0000002301 00000 n 
+0000002466 00000 n 
+0000002629 00000 n 
+0000002733 00000 n 
+0000002820 00000 n 
+0000002976 00000 n 
+trailer
+<< /Size 22 /Root 1 0 R >>
+startxref
+3145
+%%EOF

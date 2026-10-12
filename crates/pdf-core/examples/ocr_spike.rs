@@ -9,8 +9,10 @@
 //!
 //! - 픽스처(`tests/fixtures/ocr/`): 줄 단위로 정답과 맞춰 CER(공백 제외), 도장 겹친 줄 CER,
 //!   숫자 토큰 완전 일치율, 숫자 토큰 조용한 오인식, 쪽당 시간, 글자 상자 위치를 잰다.
+//!   정답·OCR 양쪽을 NFKC로 정규화하고, 숫자 토큰은 끝 `.`·`,`를 뺀 부분으로 판정한다
+//!   (ADR 0001 §5, 2026-10-13 사용자 결정). `strict`는 토큰 전체를 본 이전 정의(참고값)다.
 //! - `--local`: 레포 밖 로컬 스캔본을 쪽 단위로 맞춰 CER·숫자 토큰만 잰다. 실제 계약서 내용이
-//!   새지 않게 집계 수치만 출력한다.
+//!   새지 않게 집계 수치만 출력한다. `(NFKC)` 줄이 판정값, 아닌 줄은 정규화 없는 참고값이다.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -18,6 +20,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use unicode_normalization::UnicodeNormalization;
+use unicode_properties::{GeneralCategoryGroup, UnicodeGeneralCategory};
 
 use pdf_core::{
     OCR_DET_MAX_SIDE, OCR_RENDER_DPI, OcrEngine, OcrLine, PdfEngine, read_pdf_info,
@@ -35,7 +38,7 @@ const ROW_MATCH_SLACK_PT: f32 = 3.0;
 const SAME_ROW_TOLERANCE_PT: f32 = 0.5;
 /// 글자 상자 판정: OCR 글자 중심이 정답 글자 상자 좌우로 이만큼 안에 있으면 맞다(pt)
 const CHAR_BOX_TOLERANCE_PT: f32 = 1.0;
-/// 토큰 끝의 문장부호. 숫자 토큰의 "핵심" 일치(참고값)에서 뺀다
+/// 숫자 토큰 판정에서 빼는 토큰 끝 문장부호(ADR 0001 §5, 2026-10-13 사용자 결정)
 const TRAILING_PUNCTUATION: [char; 2] = ['.', ','];
 /// 픽스처 스캔 해상도(scans.tsv의 dpi). 렌더 해상도(`OCR_RENDER_DPI`)와 따로 묶는다
 const FIXTURE_HIGH_DPI: u32 = 300;
@@ -143,30 +146,105 @@ fn edit_distance(ops: &[Op]) -> usize {
     ops.iter().filter(|op| !matches!(op, Op::Match(..))).count()
 }
 
+/// 유니코드 일반 범주 P*(Pc·Pd·Ps·Pe·Pi·Pf·Po)
+fn is_punctuation(character: char) -> bool {
+    character.general_category_group() == GeneralCategoryGroup::Punctuation
+}
+
+/// 토큰 하나의 판정 재료
+#[derive(Clone, Copy)]
+struct TokenVerdict {
+    exact: bool,
+    has_ocr: bool,
+    minimum: f32,
+    punctuation_only: bool,
+}
+
+/// 토큰 판정 집계
+#[derive(Default)]
+struct NumericCounts {
+    total: usize,
+    exact: usize,
+    /// 틀렸는데 관련 OCR 글자 신뢰도가 모두 `OCR_MIN_CONFIDENCE_NUMERIC` 이상
+    silent: usize,
+    /// 관련 OCR 글자가 하나도 없음(통째로 빠짐)
+    missing: usize,
+    /// 틀린 숫자 토큰 중 신뢰도가 `OCR_MIN_CONFIDENCE` 미만(확인 필요로 걸러짐)
+    wrong_low_confidence: usize,
+    /// 맞은 토큰 중 기준 미만(불필요한 확인 필요)
+    right_flagged: usize,
+    /// 틀렸지만 문장부호(유니코드 P*)만 다름 → 신뢰도와 상관없이 확인 필요(ADR 0001 §5 규칙 3)
+    punctuation_only: usize,
+}
+
+impl NumericCounts {
+    fn add(&mut self, other: &NumericCounts) {
+        self.total += other.total;
+        self.exact += other.exact;
+        self.silent += other.silent;
+        self.missing += other.missing;
+        self.wrong_low_confidence += other.wrong_low_confidence;
+        self.right_flagged += other.right_flagged;
+        self.punctuation_only += other.punctuation_only;
+    }
+
+    /// `threshold`는 그 토큰 종류의 확인 필요 기준(숫자 0.95, 일반 0.80)이다.
+    fn record(&mut self, verdict: TokenVerdict, threshold: f32) {
+        let TokenVerdict {
+            exact,
+            has_ocr,
+            minimum,
+            punctuation_only,
+        } = verdict;
+        self.total += 1;
+        if exact {
+            self.exact += 1;
+            if minimum < threshold {
+                self.right_flagged += 1;
+            }
+        } else if !has_ocr {
+            self.missing += 1;
+        } else if punctuation_only {
+            self.punctuation_only += 1;
+        } else if minimum >= threshold {
+            self.silent += 1;
+        } else if minimum < OCR_MIN_CONFIDENCE {
+            self.wrong_low_confidence += 1;
+        }
+    }
+
+    fn summary(&self) -> String {
+        format!(
+            "exact {:>6.2}% ({}/{}) silent {} missing {} wrong<0.80 {} punct-only {} right<threshold {}",
+            percent(self.exact, self.total),
+            self.exact,
+            self.total,
+            self.silent,
+            self.missing,
+            self.wrong_low_confidence,
+            self.punctuation_only,
+            self.right_flagged
+        )
+    }
+}
+
 #[derive(Default)]
 struct Totals {
     distance: usize,
     length: usize,
-    numeric_total: usize,
-    numeric_exact: usize,
-    /// 틀렸는데 관련 OCR 글자 신뢰도가 모두 `OCR_MIN_CONFIDENCE_NUMERIC` 이상
-    numeric_silent: usize,
-    /// 관련 OCR 글자가 하나도 없음(통째로 빠짐)
-    numeric_missing: usize,
-    /// 틀린 숫자 토큰 중 신뢰도가 `OCR_MIN_CONFIDENCE` 미만(확인 필요로 걸러짐)
-    numeric_wrong_low_confidence: usize,
-    /// 맞은 숫자 토큰 중 `OCR_MIN_CONFIDENCE_NUMERIC` 미만(불필요한 확인 필요)
-    numeric_right_flagged: usize,
-    /// 토큰 끝 문장부호(`TRAILING_PUNCTUATION`)를 뺀 숫자 토큰 기준(제안 정의용 참고값)
-    numeric_core_exact: usize,
-    numeric_core_silent: usize,
+    /// 판정 정의(2026-10-13 사용자 결정): 토큰 끝 `TRAILING_PUNCTUATION`을 뺀 부분이 같은가
+    numeric: NumericCounts,
+    /// 이전 정의(참고값): 공백으로 나눈 토큰 전체가 같은가
+    numeric_strict: NumericCounts,
+    /// 숫자가 없는 일반 토큰(판정 정의와 같은 방법, 기준 `OCR_MIN_CONFIDENCE`)
+    general: NumericCounts,
     box_checked: usize,
     box_inside: usize,
     box_error_sum: f32,
     box_rows_skipped: usize,
     pages: usize,
     page_times: Vec<Duration>,
-    /// 틀린 숫자 토큰 (정답, OCR, 최소 신뢰도). `--verbose`에서만 출력한다
+    /// 판정 정의로 틀린 숫자 토큰 (정답, OCR, 최소 신뢰도). `--verbose`에서만 출력한다
     numeric_failures: Vec<(String, String, f32)>,
 }
 
@@ -174,14 +252,9 @@ impl Totals {
     fn add(&mut self, other: &Totals) {
         self.distance += other.distance;
         self.length += other.length;
-        self.numeric_total += other.numeric_total;
-        self.numeric_exact += other.numeric_exact;
-        self.numeric_silent += other.numeric_silent;
-        self.numeric_missing += other.numeric_missing;
-        self.numeric_wrong_low_confidence += other.numeric_wrong_low_confidence;
-        self.numeric_right_flagged += other.numeric_right_flagged;
-        self.numeric_core_exact += other.numeric_core_exact;
-        self.numeric_core_silent += other.numeric_core_silent;
+        self.numeric.add(&other.numeric);
+        self.numeric_strict.add(&other.numeric_strict);
+        self.general.add(&other.general);
         self.box_checked += other.box_checked;
         self.box_inside += other.box_inside;
         self.box_error_sum += other.box_error_sum;
@@ -201,20 +274,14 @@ impl Totals {
         let mean = millis.iter().sum::<u128>() / millis.len().max(1) as u128;
         let max = millis.iter().max().copied().unwrap_or_default();
         format!(
-            "pages {:>2} | CER {:>5.2}% ({}/{}) | numeric exact {:>6.2}% ({}/{}) silent {} missing {} wrong<0.80 {} right<0.95 {} | core exact {:>6.2}% silent {} | page ms mean {} max {}",
+            "pages {:>2} | CER {:>5.2}% ({}/{}) | numeric {} | strict {} | general {} | page ms mean {} max {}",
             self.pages,
             self.cer(),
             self.distance,
             self.length,
-            percent(self.numeric_exact, self.numeric_total),
-            self.numeric_exact,
-            self.numeric_total,
-            self.numeric_silent,
-            self.numeric_missing,
-            self.numeric_wrong_low_confidence,
-            self.numeric_right_flagged,
-            percent(self.numeric_core_exact, self.numeric_total),
-            self.numeric_core_silent,
+            self.numeric.summary(),
+            self.numeric_strict.summary(),
+            self.general.summary(),
             mean,
             max
         )
@@ -240,15 +307,14 @@ fn percent(part: usize, whole: usize) -> f32 {
     }
 }
 
-/// 정답 글자열의 공백 없는 위치 기준 숫자 토큰 구간들
-fn numeric_spans(text: &str) -> Vec<(usize, usize)> {
+/// 정답 글자열의 공백 없는 위치 기준 토큰 구간들과 숫자 토큰 여부
+fn token_spans(text: &str) -> Vec<(usize, usize, bool)> {
     let mut spans = Vec::new();
     let mut offset = 0;
     for token in text.split_whitespace() {
         let length = token.chars().count();
-        if token.chars().any(|character| character.is_ascii_digit()) {
-            spans.push((offset, offset + length));
-        }
+        let numeric = token.chars().any(|character| character.is_ascii_digit());
+        spans.push((offset, offset + length, numeric));
         offset += length;
     }
     spans
@@ -280,8 +346,8 @@ fn score_sequence(truth_text: &str, glyphs: &[OcrGlyph], totals: &mut Totals) ->
             Op::Insert(j) => inserted_after.entry(last_truth).or_default().push(j),
         }
     }
-    // 구간 [start, end)의 (완전 일치 여부, 관련 OCR 글자 위치들)
-    let evaluate = |start: usize, end: usize| {
+    // 구간 [start, end)의 판정 재료와 관련 OCR 글자 위치들
+    let evaluate = |start: usize, end: usize, punctuation_rule: bool| {
         let mut involved: Vec<usize> = Vec::new();
         let mut exact = true;
         for (i, slot) in aligned.iter().enumerate().take(end).skip(start) {
@@ -303,38 +369,40 @@ fn score_sequence(truth_text: &str, glyphs: &[OcrGlyph], totals: &mut Totals) ->
             .iter()
             .map(|j| glyphs[*j].confidence)
             .fold(f32::MAX, f32::min);
-        (exact, involved, minimum)
+        let without_punctuation = |chars: &mut dyn Iterator<Item = char>| -> String {
+            chars.filter(|c| !is_punctuation(*c)).collect()
+        };
+        let punctuation_only = punctuation_rule
+            && !exact
+            && without_punctuation(&mut truth[start..end].iter().copied())
+                == without_punctuation(&mut involved.iter().map(|j| glyphs[*j].character));
+        let verdict = TokenVerdict {
+            exact,
+            has_ocr: !involved.is_empty(),
+            minimum,
+            punctuation_only,
+        };
+        (verdict, involved)
     };
-    for (start, end) in numeric_spans(truth_text) {
-        totals.numeric_total += 1;
-        let (exact, involved, minimum) = evaluate(start, end);
-        if !exact {
-            let read: String = involved.iter().map(|j| glyphs[*j].character).collect();
-            let expected: String = truth[start..end].iter().collect();
-            totals.numeric_failures.push((expected, read, minimum));
-        }
-        if exact {
-            totals.numeric_exact += 1;
-            if minimum < OCR_MIN_CONFIDENCE_NUMERIC {
-                totals.numeric_right_flagged += 1;
-            }
-        } else if involved.is_empty() {
-            totals.numeric_missing += 1;
-        } else if minimum >= OCR_MIN_CONFIDENCE_NUMERIC {
-            totals.numeric_silent += 1;
-        } else if minimum < OCR_MIN_CONFIDENCE {
-            totals.numeric_wrong_low_confidence += 1;
-        }
-
+    for (start, end, numeric) in token_spans(truth_text) {
         let mut core_end = end;
         while core_end > start + 1 && TRAILING_PUNCTUATION.contains(&truth[core_end - 1]) {
             core_end -= 1;
         }
-        let (core_exact, core_involved, core_minimum) = evaluate(start, core_end);
-        if core_exact {
-            totals.numeric_core_exact += 1;
-        } else if !core_involved.is_empty() && core_minimum >= OCR_MIN_CONFIDENCE_NUMERIC {
-            totals.numeric_core_silent += 1;
+        let (core, core_involved) = evaluate(start, core_end, true);
+        if !numeric {
+            totals.general.record(core, OCR_MIN_CONFIDENCE);
+            continue;
+        }
+        let (strict, _) = evaluate(start, end, false);
+        totals
+            .numeric_strict
+            .record(strict, OCR_MIN_CONFIDENCE_NUMERIC);
+        totals.numeric.record(core, OCR_MIN_CONFIDENCE_NUMERIC);
+        if !core.exact {
+            let read: String = core_involved.iter().map(|j| glyphs[*j].character).collect();
+            let expected: String = truth[start..core_end].iter().collect();
+            totals.numeric_failures.push((expected, read, core.minimum));
         }
     }
     ops
@@ -559,8 +627,10 @@ fn measure_fixtures(pdf: &PdfEngine, ocr: &mut OcrEngine, directory: &Path, verb
         };
         for (row, mut parts) in page_rows.iter().zip(assigned) {
             parts.sort_by(|left, right| left.0.total_cmp(&right.0));
-            let glyphs: Vec<OcrGlyph> = parts.iter().flat_map(|part| part.1.clone()).collect();
-            let truth = row.text();
+            // OCR 쪽이 있는 비교는 NFKC로 정규화한다(ADR 0001 §5). 정답·OCR 양쪽에 건다
+            let raw: Vec<OcrGlyph> = parts.iter().flat_map(|part| part.1.clone()).collect();
+            let glyphs = nfkc_glyphs(&raw);
+            let truth: String = row.text().nfkc().collect();
             let mut row_totals = Totals::default();
             let ops = score_sequence(&truth, &glyphs, &mut row_totals);
             if verbose {
@@ -801,7 +871,7 @@ fn measure_local(pdf: &PdfEngine, ocr: &mut OcrEngine, root: &Path, verbose: boo
                 };
                 score_sequence(truth, &glyphs, &mut page_totals);
                 file_totals.add(&page_totals);
-                // 비교 단계의 NFKC 정규화(P2-3 옵션)를 양쪽에 건 값: ② → 2 같은 호환 문자 차이를 뺀다
+                // 판정값: OCR 쪽 비교의 NFKC(ADR 0001 §5)를 양쪽에 건다. ② → 2 같은 호환 문자 차이가 빠진다
                 let mut page_nfkc = Totals {
                     pages: 1,
                     page_times: vec![elapsed],

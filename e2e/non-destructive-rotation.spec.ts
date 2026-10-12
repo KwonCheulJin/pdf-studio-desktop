@@ -129,9 +129,17 @@ async function readVisibleRotation(card: Locator): Promise<number> {
   return Number(match[1]);
 }
 
-/** 화면의 페이지 카드를 보이는 순서(= 병합 순서)대로 읽는다. */
+/** 삭제된 페이지 카드(제자리에 흐리게 남고 복원 버튼이 있다) */
+function restoreButton(page: Page): Locator {
+  return page.getByRole("button", { name: "페이지 복원", exact: true });
+}
+
+/** 삭제 안 된 페이지 카드를 보이는 순서(= 병합 순서)대로 읽는다. */
 async function readVisiblePages(page: Page): Promise<VisiblePage[]> {
-  const cards = await page.getByTestId("page-card").all();
+  const cards = await page
+    .getByTestId("page-card")
+    .filter({ hasNot: restoreButton(page) })
+    .all();
   const visiblePages: VisiblePage[] = [];
   for (const card of cards) {
     const name = await card.getByRole("img").getAttribute("alt");
@@ -224,11 +232,11 @@ test("회전·삭제·병합·저장 후에도 원본에 쓰기를 요청하지 
     times: 5
   });
 
-  // 삭제(복원 화면은 Step 6 B10에서 붙는다)
+  // 삭제: 카드는 제자리에 "삭제됨"으로 남는다(복원은 page-restore.spec.ts).
   const deletedPages = [plain(3), rotated(5)];
   for (const ref of deletedPages) {
     await clickCardAction({ card: pageCard(page, ref), action: "페이지 삭제" });
-    await expect(pageCard(page, ref)).toHaveCount(0);
+    await expect(pageCard(page, ref).getByText("삭제됨")).toBeVisible();
   }
 
   const visiblePages = await readVisiblePages(page);

@@ -205,10 +205,11 @@ export const useMergeStore = create<MergeStore>((set) => ({
         (item) => item.fileId !== fileId
       );
 
-      // 삽입할 아이템들
-      const itemsToInsert: MergeOrderItem[] = fileToMove.pages
-        .filter((p) => !p.isDeleted)
-        .map((p) => ({ fileId, pageId: p.id }));
+      // 삽입할 아이템들. 삭제된 페이지도 함께 옮겨야 제자리에서 복원할 수 있다.
+      const itemsToInsert: MergeOrderItem[] = fileToMove.pages.map((p) => ({
+        fileId,
+        pageId: p.id
+      }));
 
       // 삽입 위치 결정
       let insertIndex: number;
@@ -359,7 +360,7 @@ export const useMergeStore = create<MergeStore>((set) => ({
       )
     })),
 
-  // 페이지 삭제 (soft delete)
+  // 페이지 삭제 (soft delete). mergeOrder에는 남겨 두어 제자리에서 복원할 수 있게 한다.
   deletePage: (fileId, pageId) =>
     set((state) => ({
       files: state.files.map((file) =>
@@ -371,12 +372,10 @@ export const useMergeStore = create<MergeStore>((set) => ({
               )
             }
           : file
-      ),
-      // mergeOrder에서도 해당 페이지 제거
-      mergeOrder: state.mergeOrder.filter((item) => item.pageId !== pageId)
+      )
     })),
 
-  // 페이지 복원
+  // 페이지 복원. mergeOrder 자리가 그대로라 원래 위치로 돌아간다.
   restorePage: (fileId, pageId) =>
     set((state) => ({
       files: state.files.map((file) =>

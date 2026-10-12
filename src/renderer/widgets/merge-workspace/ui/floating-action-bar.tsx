@@ -6,7 +6,8 @@ import {
   RotateCw,
   RotateCcw,
   X,
-  Combine
+  Combine,
+  Undo2
 } from "lucide-react";
 import {
   useZoomStore,
@@ -22,7 +23,10 @@ interface FloatingActionBarProps {
   selectedCount: number;
   selectionType: SelectionType;
   hasFiles: boolean;
+  /** 선택에 삭제된 페이지가 섞이면 복원 버튼을 보인다 */
+  hasDeletedInSelection: boolean;
   onDelete: () => void;
+  onRestore: () => void;
   onRotateCw: () => void;
   onRotateCcw: () => void;
   onClearSelection: () => void;
@@ -33,7 +37,9 @@ export function FloatingActionBar({
   selectedCount,
   selectionType,
   hasFiles,
+  hasDeletedInSelection,
   onDelete,
+  onRestore,
   onRotateCw,
   onRotateCcw,
   onClearSelection,
@@ -104,6 +110,19 @@ export function FloatingActionBar({
                 <Trash2 size={16} />
               </Button>
             </Tooltip>
+            {hasDeletedInSelection && (
+              <Tooltip content="삭제된 페이지 복원">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onRestore}
+                  aria-label="선택 페이지 복원"
+                >
+                  <Undo2 size={16} />
+                  <span className="ml-1 text-xs">복원</span>
+                </Button>
+              </Tooltip>
+            )}
             {selectedCount >= 2 && (
               <Tooltip content="선택 파일 병합">
                 <Button

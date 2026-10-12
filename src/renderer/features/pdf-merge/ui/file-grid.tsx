@@ -289,6 +289,7 @@ export function FileGrid({
                     document={card.file}
                     groupId={card.groupId}
                     groupPageIds={card.groupPageIds}
+                    deletedPageCount={card.deletedPageCount}
                     imageSize={imageSize}
                     isStacked={true}
                     onPreview={onPreviewFile}

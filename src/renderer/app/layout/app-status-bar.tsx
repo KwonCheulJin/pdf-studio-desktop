@@ -1,14 +1,15 @@
 import {
   MERGE_STATUS,
   useMergeFiles,
-  useTotalPages,
+  useTotalActivePages,
   useMergeStatus
 } from "@/renderer/entities/merge-plan";
 import { APP_STATUS } from "@/renderer/shared/constants";
 
 export function AppStatusBar() {
   const files = useMergeFiles();
-  const totalPages = useTotalPages();
+  // 삭제된(복원 대기) 페이지는 병합되지 않으므로 세지 않는다.
+  const totalPages = useTotalActivePages();
   const status = useMergeStatus();
 
   const statusText = (() => {

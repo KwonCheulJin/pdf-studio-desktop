@@ -273,13 +273,13 @@ describe("merge-store", () => {
       expect(useMergeStore.getState().mergeOrder).toBe(before);
     });
 
-    it("이동 파일의 삭제된 페이지는 다시 넣지 않는다", () => {
+    it("이동 파일의 삭제된 페이지도 함께 옮긴다(B10: 제자리 복원용)", () => {
       seedThreeFiles();
       useMergeStore.getState().deletePage("A", "A1");
       useMergeStore
         .getState()
         .insertFileAtPosition({ fileId: "A", targetPageId: null });
-      expect(orderOf()).toEqual(["B1", "B2", "C1", "A2"]);
+      expect(orderOf()).toEqual(["B1", "B2", "C1", "A1", "A2"]);
     });
 
     it("files 배열은 바꾸지 않는다", () => {
@@ -458,11 +458,11 @@ describe("merge-store", () => {
   });
 
   describe("deletePage", () => {
-    it("페이지를 soft delete 하고 mergeOrder에서 제거한다", () => {
+    it("페이지를 soft delete 하고 mergeOrder 자리는 남긴다(B10)", () => {
       seedThreeFiles();
       useMergeStore.getState().deletePage("A", "A1");
       expect(findPage("A", "A1")?.isDeleted).toBe(true);
-      expect(orderOf()).toEqual(["A2", "B1", "B2", "C1"]);
+      expect(orderOf()).toEqual(["A1", "A2", "B1", "B2", "C1"]);
     });
 
     it("pages 배열과 pageCount는 그대로 유지한다", () => {
@@ -491,11 +491,11 @@ describe("merge-store", () => {
       expect(findPage("A", "A1")?.isDeleted).toBe(false);
     });
 
-    it("현재 동작: 복원해도 mergeOrder에는 다시 들어가지 않는다", () => {
+    it("복원하면 mergeOrder의 원래 자리 그대로다(B10)", () => {
       seedThreeFiles();
       useMergeStore.getState().deletePage("A", "A1");
       useMergeStore.getState().restorePage("A", "A1");
-      expect(orderOf()).toEqual(["A2", "B1", "B2", "C1"]);
+      expect(orderOf()).toEqual(["A1", "A2", "B1", "B2", "C1"]);
     });
   });
 

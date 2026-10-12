@@ -27,6 +27,8 @@ interface DocumentCardProps {
   groupId: string;
   /** 그룹에 속한 페이지 ID 목록 (페이지 범위 표시용) */
   groupPageIds: string[];
+  /** 그룹에서 삭제된(복원 가능한) 페이지 수 */
+  deletedPageCount: number;
   /** 이미지 고정 크기 (정사각형) */
   imageSize?: number;
   // 스택 효과 표시 여부 (접힌 상태에서만)
@@ -40,12 +42,14 @@ interface DocumentCardProps {
  * Adobe Acrobat CombineGridItem 스타일
  * - 스택 효과: thumbnailBorderTop + thumbnailBorderLeft
  * - 퀵 액션: Expand, 삭제
- * - 푸터: 파일명 + 페이지 범위
+ * - 삭제된 페이지가 있으면 "n쪽 삭제됨" 배지 (펼쳐서 복원)
+ * - 푸터: 파일명 + 페이지 범위 (삭제 안 된 페이지만)
  */
 export function DocumentCard({
   document,
   groupId,
   groupPageIds,
+  deletedPageCount,
   imageSize,
   isStacked = true,
   onPreview
@@ -248,6 +252,12 @@ export function DocumentCard({
               >
                 <ZoomIn size={24} className="text-white" />
               </button>
+            )}
+
+            {deletedPageCount > 0 && (
+              <span className="bg-destructive text-destructive-foreground pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded px-2 py-0.5 text-xs font-medium whitespace-nowrap">
+                {deletedPageCount}쪽 삭제됨
+              </span>
             )}
           </div>
         </div>

@@ -41,7 +41,8 @@ export function MergeWorkspace() {
   // FloatingActionBar에서 사용하는 훅
   const { handleRotateSelectedCw, handleRotateSelectedCcw } =
     usePageRotation(files);
-  const { handleDeleteSelected } = useSelectionActions(files);
+  const { handleDeleteSelected, hasDeletedInSelection, handleRestoreSelected } =
+    useSelectionActions(files);
 
   // 선택 파일 병합
   const [isMergePreviewOpen, setIsMergePreviewOpen] = useState(false);
@@ -139,7 +140,9 @@ export function MergeWorkspace() {
         selectedCount={selectedCount}
         selectionType={selectionType}
         hasFiles={hasFiles}
+        hasDeletedInSelection={hasDeletedInSelection}
         onDelete={handleDeleteSelected}
+        onRestore={handleRestoreSelected}
         onRotateCw={handleRotateSelectedCw}
         onRotateCcw={handleRotateSelectedCcw}
         onClearSelection={clearSelection}

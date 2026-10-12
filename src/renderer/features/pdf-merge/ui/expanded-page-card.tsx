@@ -5,6 +5,7 @@ import {
   Trash2,
   ChevronsLeftRight,
   FileText,
+  Undo2,
   ZoomIn
 } from "lucide-react";
 import {
@@ -46,6 +47,7 @@ interface ExpandedPageCardProps {
  * Adobe Acrobat 펼침 상태 스타일
  * - 스택 효과: 첫 페이지만 (isStacked prop)
  * - 퀵 액션: Collapse (첫 페이지만), 회전, 삭제
+ * - 삭제된 페이지: 제자리에 흐리게(점선 테두리) + "삭제됨" 배지 + 복원 버튼
  * - 푸터: 파일명 + 단일 페이지 번호
  */
 export function ExpandedPageCard({
@@ -67,6 +69,7 @@ export function ExpandedPageCard({
   const { toggle, switchToPageMode } = useSelectionStore();
   const files = useMergeFiles();
   const deletePage = useMergeStore((state) => state.deletePage);
+  const restorePage = useMergeStore((state) => state.restorePage);
   const toggleGroupExpand = useMergeStore((state) => state.toggleGroupExpand);
 
   const { handleRotateCw, handleRotateCcw } = usePageRotateHandlers({
@@ -115,6 +118,15 @@ export function ExpandedPageCard({
     [fileId, page.id, deletePage]
   );
 
+  // 페이지 복원 핸들러 (병합 순서의 원래 자리로 돌아온다)
+  const handleRestore = useCallback(
+    (event: React.MouseEvent) => {
+      event.stopPropagation();
+      restorePage(fileId, page.id);
+    },
+    [fileId, page.id, restorePage]
+  );
+
   // 미리보기 핸들러
   const handlePreview = useCallback(
     (event: React.MouseEvent) => {
@@ -146,7 +158,8 @@ export function ExpandedPageCard({
             isSelected
               ? "border-primary ring-primary/30 ring-2"
               : "border-border",
-            groupColor && !isSelected && groupColor
+            groupColor && !isSelected && !page.isDeleted && groupColor,
+            page.isDeleted && "border-muted-foreground border-dashed"
           )}
         >
           {/* 선택 체크박스 */}
@@ -165,69 +178,99 @@ export function ExpandedPageCard({
             />
           </div>
 
-          {/* 퀵 액션 버튼 (우상단) - Collapse, 미리보기, 회전, 삭제 */}
-          <div className="pointer-events-none absolute top-2 right-2 z-10 flex cursor-default flex-col gap-1 rounded-md bg-black/60 p-1 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
-            {showCollapseButton && (
-              <Tooltip content="접기">
-                <Button
-                  variant="card-action"
-                  size="icon-sm"
-                  onClick={handleCollapse}
-                  aria-label="접기"
-                  className="rounded-full"
-                >
-                  <ChevronsLeftRight size={16} />
-                </Button>
-              </Tooltip>
-            )}
-            <Tooltip content="미리보기">
+          {/* 퀵 액션 버튼 (우상단) - Collapse, 미리보기, 회전, 삭제. 삭제된 페이지는 접기만 */}
+          {(showCollapseButton || !page.isDeleted) && (
+            <div className="pointer-events-none absolute top-2 right-2 z-10 flex cursor-default flex-col gap-1 rounded-md bg-black/60 p-1 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
+              {showCollapseButton && (
+                <Tooltip content="접기">
+                  <Button
+                    variant="card-action"
+                    size="icon-sm"
+                    onClick={handleCollapse}
+                    aria-label="접기"
+                    className="rounded-full"
+                  >
+                    <ChevronsLeftRight size={16} />
+                  </Button>
+                </Tooltip>
+              )}
+              {!page.isDeleted && (
+                <>
+                  <Tooltip content="미리보기">
+                    <Button
+                      variant="card-action"
+                      size="icon-sm"
+                      onClick={handlePreview}
+                      aria-label="미리보기"
+                      className="rounded-full"
+                    >
+                      <ZoomIn size={16} />
+                    </Button>
+                  </Tooltip>
+                  <Tooltip content="왼쪽으로 회전">
+                    <Button
+                      variant="card-action"
+                      size="icon-sm"
+                      onClick={handleRotateCcw}
+                      aria-label="반시계 방향 회전"
+                      className="rounded-full"
+                    >
+                      <RotateCcw size={16} />
+                    </Button>
+                  </Tooltip>
+                  <Tooltip content="오른쪽으로 회전">
+                    <Button
+                      variant="card-action"
+                      size="icon-sm"
+                      onClick={handleRotateCw}
+                      aria-label="시계 방향 회전"
+                      className="rounded-full"
+                    >
+                      <RotateCw size={16} />
+                    </Button>
+                  </Tooltip>
+                  <Tooltip content="삭제">
+                    <Button
+                      variant="card-action-destructive"
+                      size="icon-sm"
+                      onClick={handleDelete}
+                      aria-label="페이지 삭제"
+                      className="rounded-full"
+                    >
+                      <Trash2 size={16} />
+                    </Button>
+                  </Tooltip>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* 삭제된 페이지: 배지 + 복원 버튼 (썸네일만 흐리게, 버튼은 그대로) */}
+          {page.isDeleted && (
+            <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2">
+              <span className="bg-destructive text-destructive-foreground rounded px-2 py-0.5 text-xs font-medium">
+                삭제됨
+              </span>
               <Button
-                variant="card-action"
-                size="icon-sm"
-                onClick={handlePreview}
-                aria-label="미리보기"
-                className="rounded-full"
+                variant="secondary"
+                size="sm"
+                onClick={handleRestore}
+                aria-label="페이지 복원"
+                className="pointer-events-auto"
               >
-                <ZoomIn size={16} />
+                <Undo2 size={14} />
+                복원
               </Button>
-            </Tooltip>
-            <Tooltip content="왼쪽으로 회전">
-              <Button
-                variant="card-action"
-                size="icon-sm"
-                onClick={handleRotateCcw}
-                aria-label="반시계 방향 회전"
-                className="rounded-full"
-              >
-                <RotateCcw size={16} />
-              </Button>
-            </Tooltip>
-            <Tooltip content="오른쪽으로 회전">
-              <Button
-                variant="card-action"
-                size="icon-sm"
-                onClick={handleRotateCw}
-                aria-label="시계 방향 회전"
-                className="rounded-full"
-              >
-                <RotateCw size={16} />
-              </Button>
-            </Tooltip>
-            <Tooltip content="삭제">
-              <Button
-                variant="card-action-destructive"
-                size="icon-sm"
-                onClick={handleDelete}
-                aria-label="페이지 삭제"
-                className="rounded-full"
-              >
-                <Trash2 size={16} />
-              </Button>
-            </Tooltip>
-          </div>
+            </div>
+          )}
 
           {/* 썸네일 이미지 - 고정 크기 컨테이너 */}
-          <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded">
+          <div
+            className={cn(
+              "relative flex h-full w-full items-center justify-center overflow-hidden rounded",
+              page.isDeleted && "opacity-40"
+            )}
+          >
             <div
               ref={thumbnailRef}
               className="bg-muted flex items-center justify-center overflow-hidden rounded"

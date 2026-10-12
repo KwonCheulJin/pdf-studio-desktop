@@ -1,0 +1,6 @@
+/* 앱은 오프라인으로 돌아야 하므로 글꼴을 CDN이 아니라 npm 패키지로 번들한다(OFL). */
+@import "@fontsource/ibm-plex-sans-kr/400.css";
+@import "@fontsource/ibm-plex-sans-kr/500.css";
+@import "@fontsource/ibm-plex-sans-kr/600.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";

@@ -24,7 +24,7 @@ import {
   calculateDropIndex,
   type GridPosition
 } from "@/renderer/shared/lib/layout-calculator";
-import { getGroupColor } from "@/renderer/shared/constants/group-colors";
+import { getGroupColorClass } from "@/renderer/shared/config/theme";
 import { GRID_CONFIG } from "@/renderer/shared/constants/grid-layout";
 import { GridItemWrapper, DropZoneIndicator } from "@/renderer/shared/ui";
 import { useFileDropZone } from "../model/use-file-drop-zone";
@@ -303,7 +303,7 @@ export function FileGrid({
 
             const card = item.card;
             const sortId = getCardSortId(card);
-            const groupColor = getGroupColor(card.fileIndex);
+            const groupColor = getGroupColorClass({ index: card.fileIndex });
 
             return (
               <SortableCard

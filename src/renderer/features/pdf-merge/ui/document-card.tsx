@@ -159,13 +159,13 @@ export function DocumentCard({
       <div className="relative flex-1">
         {/* 스택 효과 (접힘 상태에서만) - Adobe thumbnailBorder 스타일 */}
         {isStacked && (
-          <div className="border-border bg-card absolute -top-1.5 right-1.5 bottom-1.5 -left-1.5 rounded-[4px] border" />
+          <div className="border-border bg-card absolute -top-1.5 right-1.5 bottom-1.5 -left-1.5 rounded-xs border" />
         )}
 
         {/* 썸네일 영역 - 절대 좌표 기반으로 flex-1 사용 */}
         <div
           className={cn(
-            "bg-card relative h-full w-full cursor-grab rounded-[4px] border transition-all hover:shadow-lg",
+            "bg-card relative h-full w-full cursor-grab rounded-xs border transition-all hover:shadow-lg",
             isSelected
               ? "border-primary ring-primary/30 ring-2"
               : "border-border"
@@ -174,7 +174,7 @@ export function DocumentCard({
           {/* 선택 체크박스 */}
           <div
             className={cn(
-              "absolute top-2 left-2 z-10 flex cursor-default items-center justify-center rounded-[4px] bg-black/60 p-2 transition-opacity",
+              "bg-media-scrim absolute top-2 left-2 z-10 flex cursor-default items-center justify-center rounded-xs p-2 transition-opacity",
               isSelected
                 ? "opacity-100"
                 : "opacity-0 group-focus-within:opacity-100 group-hover:opacity-100"
@@ -186,12 +186,12 @@ export function DocumentCard({
               onCheckedChange={handleCheckboxChange}
               onClick={(e) => e.stopPropagation()}
               aria-label={`${document.name} 선택`}
-              className="size-5"
+              className="border-media-foreground/50 size-5"
             />
           </div>
 
           {/* 퀵 액션 버튼 (우상단) */}
-          <div className="pointer-events-none absolute top-2 right-2 z-10 flex flex-col gap-1 rounded-md bg-black/60 p-1 opacity-0 transition-opacity group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100">
+          <div className="bg-media-scrim pointer-events-none absolute top-2 right-2 z-10 flex flex-col gap-1 rounded-md p-1 opacity-0 transition-opacity group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100">
             <Tooltip content="펼치기">
               <Button
                 variant="card-action"

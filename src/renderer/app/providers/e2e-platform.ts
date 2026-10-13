@@ -11,8 +11,11 @@ import type {
   MergeRequest,
   OpenedFile,
   PreviewCompareReportRequest,
+  SourceLanguage,
+  TranslateModel,
   TranslateProgress,
   TranslateRequest,
+  TranslationPlan,
   TranslationResult
 } from "@/renderer/shared/api/bindings";
 import {
@@ -31,7 +34,8 @@ import {
   type NativeFileDropEvent,
   type PickSavePathOptions,
   type PlatformError,
-  type PlatformErrorCode
+  type PlatformErrorCode,
+  type PrepareTranslationParams
 } from "@/renderer/shared/platform";
 import type { ValueOf } from "@/renderer/shared/types/common";
 
@@ -92,6 +96,25 @@ export interface E2eTranslateScript {
   result?: TranslationResult;
 }
 
+/** 계획 시드를 고를 조건. 적은 값만 요청과 맞춰 본다(용어집은 정규화한 용어 수로). */
+export interface E2ePlanMatch {
+  path?: string;
+  sourceLanguage?: SourceLanguage;
+  range?: string;
+  includeScanPages?: boolean;
+  model?: TranslateModel;
+  glossaryCount?: number;
+}
+
+/**
+ * `prepareTranslation`이 돌려줄 계획. mock 검사(경로·쪽 범위)를 거친 뒤 앞에서부터 `match`가 맞는 첫 시드를 쓰고,
+ * 맞는 것이 없으면 mock 계획(문단·예상치 0, 언어 모름)이다.
+ */
+export interface E2eTranslationPlan {
+  match?: E2ePlanMatch;
+  plan: TranslationPlan;
+}
+
 export interface E2eMockSeed {
   files: E2eMockFile[];
   /** 열기 다이얼로그를 열 때마다 앞에서부터 하나씩 고를 경로 목록. 다 쓰면 `files`를 모두 고른다. */
@@ -118,6 +141,8 @@ export interface E2eMockSeed {
   apiKeyChecks?: (ErrorCode | null)[];
   /** `translatePdf`를 부를 때마다 앞에서부터 하나씩 쓴다. 다 쓰면 mock 그대로 문단 없는 결과다. */
   translateScripts?: E2eTranslateScript[];
+  /** 옵션별 계획(`prepareTranslation`). 쓰고 나도 남는다(같은 옵션이면 같은 계획). */
+  translationPlans?: E2eTranslationPlan[];
 }
 
 /** 시드 키 확인 실패의 로그용 설명 */
@@ -279,6 +304,17 @@ declare global {
     __E2E_RELEASE_TRANSLATE__?: () => void;
     /** 앱이 보낸 번역 요청(`translatePdf`, 옵션 포함)을 부른 순서대로 기록하는 곳 */
     __E2E_MOCK_TRANSLATES__?: TranslateRequest[];
+    /** 앱이 보낸 계획 요청(`prepareTranslation`, 옵션 포함)을 부른 순서대로 기록하는 곳 */
+    __E2E_MOCK_PLANS__?: PrepareTranslationParams[];
+    /** 응답(성공·실패)을 돌려준 계획 요청 수. 늦게 온 응답을 앱이 받은 뒤를 기다릴 때 쓴다. */
+    __E2E_MOCK_PLANS_SETTLED__?: number;
+    /**
+     * 테스트가 넣으면 그 뒤에 온 계획 요청을 이 Promise가 풀릴 때까지 붙잡는다(요청할 때의 값을 본다).
+     * 받는 동안의 "…"와 늦게 온 앞 응답을 버리는지 확인한다.
+     */
+    __E2E_HOLD_PLAN__?: Promise<void>;
+    /** `__E2E_HOLD_PLAN__`을 푸는 함수. 테스트가 함께 넣는다. */
+    __E2E_RELEASE_PLAN__?: () => void;
     /** 앱이 클립보드에 복사한 글(`copyText`)을 차례로 기록하는 곳 */
     __E2E_MOCK_CLIPBOARD__?: string[];
     /** 앱이 `verifyApiKey`를 부른 수(키 원문은 남기지 않는다) */
@@ -628,6 +664,63 @@ function recordTranslates({
   };
 }
 
+/** 시드 조건이 요청과 맞는가(적지 않은 값은 보지 않는다) */
+interface MatchesPlanParams extends PrepareTranslationParams {
+  match: E2ePlanMatch;
+}
+
+function matchesPlan({ match, path, options }: MatchesPlanParams): boolean {
+  const actual: Required<E2ePlanMatch> = {
+    path,
+    sourceLanguage: options.sourceLanguage,
+    range: options.range,
+    includeScanPages: options.includeScanPages,
+    model: options.model,
+    glossaryCount: options.glossary.length
+  };
+  return (Object.keys(match) as (keyof E2ePlanMatch)[]).every(
+    (key) => match[key] === actual[key]
+  );
+}
+
+interface SeedPlansParams {
+  platform: DesktopPlatform;
+  plans: E2eTranslationPlan[];
+  requests: PrepareTranslationParams[];
+}
+
+/**
+ * 계획 요청을 위임 전에 기록하고, 요청할 때의 `__E2E_HOLD_PLAN__`을 기다린 뒤 mock 검사를 거쳐 맞는 시드 계획을
+ * 돌려준다. 응답을 돌려준 수를 센다(거부도 센다).
+ */
+function seedPlans({
+  platform,
+  plans,
+  requests
+}: SeedPlansParams): DesktopPlatform {
+  return {
+    ...platform,
+    prepareTranslation: async (params) => {
+      const request = structuredClone(params);
+      requests.push(request);
+      const hold = window.__E2E_HOLD_PLAN__;
+      try {
+        await hold;
+        const mockPlan = await platform.prepareTranslation(params);
+        const seeded = plans.find(
+          (seed) =>
+            seed.match === undefined ||
+            matchesPlan({ match: seed.match, ...request })
+        );
+        return seeded?.plan ?? mockPlan;
+      } finally {
+        window.__E2E_MOCK_PLANS_SETTLED__ =
+          (window.__E2E_MOCK_PLANS_SETTLED__ ?? 0) + 1;
+      }
+    }
+  };
+}
+
 interface RecordClipboardParams {
   platform: DesktopPlatform;
   clipboard: string[];
@@ -741,6 +834,7 @@ export function createE2ePlatform(): DesktopPlatform {
   const compares: CompareRequest[] = [];
   const previews: PreviewCompareReportRequest[] = [];
   const translates: TranslateRequest[] = [];
+  const planRequests: PrepareTranslationParams[] = [];
   const clipboard: string[] = [];
   const updateCalls: E2eUpdateCall[] = [];
   window.__E2E_MOCK_WRITES__ = writes;
@@ -750,6 +844,8 @@ export function createE2ePlatform(): DesktopPlatform {
   window.__E2E_MOCK_READS__ = reads;
   window.__E2E_MOCK_SAVE_DIALOGS__ = saveDialogs;
   window.__E2E_MOCK_TRANSLATES__ = translates;
+  window.__E2E_MOCK_PLANS__ = planRequests;
+  window.__E2E_MOCK_PLANS_SETTLED__ = 0;
   window.__E2E_MOCK_CLIPBOARD__ = clipboard;
   window.__E2E_MOCK_KEY_CHECKS__ = 0;
   window.__E2E_PDF_CACHE_STATS__ = getPdfCacheStats;
@@ -775,21 +871,25 @@ export function createE2ePlatform(): DesktopPlatform {
   return persistSettings(
     seedUpdates({
       platform: recordClipboard({
-        platform: recordTranslates({
-          platform: recordSaveDialogs({
-            platform: recordPreviews({
-              platform: recordCompares({
-                platform: recordReads({
-                  platform: recordWrites(seededPlatform, writes),
-                  reads
+        platform: seedPlans({
+          platform: recordTranslates({
+            platform: recordSaveDialogs({
+              platform: recordPreviews({
+                platform: recordCompares({
+                  platform: recordReads({
+                    platform: recordWrites(seededPlatform, writes),
+                    reads
+                  }),
+                  compares
                 }),
-                compares
+                previews
               }),
-              previews
+              saveDialogs
             }),
-            saveDialogs
+            translates
           }),
-          translates
+          plans: seed.translationPlans ?? [],
+          requests: planRequests
         }),
         clipboard
       }),

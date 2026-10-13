@@ -12,7 +12,8 @@ import type { NativeFileDropEvent } from "../src/renderer/shared/platform";
  * 번역 진입(계획서 P6-7, 진행 가이드 Step 42, 시안 1·10 머리).
  * - 홈 번역 카드: 누르면 열기 다이얼로그(PDF 1개), 카드에 놓으면 그 파일로 번역 모드. 2개 이상·PDF 아님은 알리고 홈에 남는다.
  * - 모드 탭 `[병합 | 비교 | 번역]`: 모드를 오가도 번역 세션과 읽은 문서가 남는다.
- * - 번역 화면: 빈 상태는 점선 "PDF 고르기", 채우면 썸네일·이름·크기·쪽수·"교체"(`openFiles` 결과만).
+ * - 번역 화면: 빈 상태는 점선 "PDF 고르기", 채우면 썸네일·이름·크기·쪽수·"교체"(`openFiles` 결과). 계획으로 더하는
+ *   글자층·스캔 쪽 수와 감지 배지는 `translate-options.spec.ts`가 본다.
  */
 
 const FIXTURE_BYTES = readFileSync(
@@ -127,7 +128,7 @@ function translateHeading(page: Page): Locator {
 
 interface FilledFileText {
   name: string;
-  /** 크기 · 쪽수 */
+  /** 크기 · 쪽수(mono 줄 앞부분. 계획을 받으면 뒤에 글자층·스캔 쪽 수가 붙는다) */
   meta: string;
 }
 
@@ -138,7 +139,9 @@ async function expectFilledCard(
 ): Promise<void> {
   const card = fileCard(page);
   await expect(card).toContainText(name);
-  await expect(card.getByText(meta, { exact: true })).toBeVisible();
+  await expect(
+    card.getByText(new RegExp(`^${meta.split(".").join("\\.")}( · |$)`))
+  ).toBeVisible();
   await expect(card.getByRole("button", { name: "교체" })).toBeVisible();
   await expect(card.locator("img")).toHaveAttribute("src", /^blob:/);
   await expect(card.getByRole("button", { name: /^PDF 고르기/ })).toHaveCount(

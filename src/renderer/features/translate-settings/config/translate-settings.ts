@@ -1,3 +1,9 @@
+import {
+  RECOMMENDED_MODEL_BADGE,
+  TRANSLATE_MODEL,
+  TRANSLATE_MODEL_INFO,
+  TRANSLATE_MODEL_ORDER
+} from "@/renderer/entities/translation";
 import type { TranslateModel } from "@/renderer/shared/api/bindings";
 import type { SegmentedOption } from "@/renderer/shared/ui";
 
@@ -10,21 +16,21 @@ export const TRANSLATE_SETTING_KEY = {
   GLOSSARY: "translate.glossary"
 } as const;
 
-export const TRANSLATE_MODEL = {
-  SONNET: "sonnet",
-  HAIKU: "haiku"
-} as const satisfies Record<string, TranslateModel>;
-
 /** 저장된 값이 없을 때(첫 실행) */
 export const DEFAULT_TRANSLATE_SETTINGS = {
   MODEL: TRANSLATE_MODEL.SONNET,
   CONFIRM_EXTERNAL_TRANSFER: true
 } as const;
 
-export const MODEL_OPTIONS: readonly SegmentedOption<TranslateModel>[] = [
-  { value: TRANSLATE_MODEL.SONNET, label: "Sonnet 5.5 (권장)" },
-  { value: TRANSLATE_MODEL.HAIKU, label: "Haiku 5.5" }
-];
+/** 기본 모델 세그먼트(시안 14 `Sonnet 5.5 (권장) | Haiku 5.5`) */
+export const MODEL_OPTIONS: readonly SegmentedOption<TranslateModel>[] =
+  TRANSLATE_MODEL_ORDER.map((model) => {
+    const { name, isRecommended } = TRANSLATE_MODEL_INFO[model];
+    return {
+      value: model,
+      label: isRecommended ? `${name} (${RECOMMENDED_MODEL_BADGE})` : name
+    };
+  });
 
 export const TRANSLATE_SETTINGS_TEXT = {
   DEFAULT_MODEL: "기본 모델",

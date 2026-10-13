@@ -53,5 +53,7 @@ export const API_KEY_TEXT = {
   DELETE_CONFIRM: "키를 지울까요?",
   DELETE_ACTION: "지우기",
   DELETE_FAILED: "API 키를 지우지 못했어요.",
-  STATUS_FAILED: "API 키 상태를 읽지 못했어요."
+  STATUS_FAILED: "API 키 상태를 읽지 못했어요.",
+  ROW_REGISTERED: "API 키 등록됨",
+  ROW_MISSING: "API 키 없음"
 } as const;

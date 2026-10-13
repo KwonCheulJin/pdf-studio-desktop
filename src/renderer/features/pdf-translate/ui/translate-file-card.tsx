@@ -1,9 +1,22 @@
 import { useRef } from "react";
 import { FileUp } from "lucide-react";
+import {
+  DETECTED_LANGUAGE,
+  DETECTED_LANGUAGE_LABEL
+} from "@/renderer/entities/translation";
+import type { TranslationPlan } from "@/renderer/shared/api/bindings";
 import { formatFileSize } from "@/renderer/shared/lib/format-file-size";
 import { useRenderedPage } from "@/renderer/shared/lib/pdfjs";
 import { TRANSLATE_THUMBNAIL_RENDER } from "../config/translate-files";
-import { useTranslateFile } from "../model/translate-session-store";
+import {
+  TRANSLATE_OPTIONS_TEXT,
+  translateOptionsText
+} from "../config/translate-options";
+import {
+  useTranslateFile,
+  useTranslateFilePlan,
+  type TranslateFile
+} from "../model/translate-session-store";
 import { useTranslateFileDrop } from "../model/use-translate-file-drop";
 import { useTranslateIntake } from "../model/use-translate-intake";
 
@@ -38,14 +51,49 @@ function Thumbnail({ path }: ThumbnailProps) {
   );
 }
 
+interface FileMetaProps {
+  file: TranslateFile;
+  /** 이 문서로 받은 계획. 받기 전이면 크기·쪽수만 */
+  plan: TranslationPlan | null;
+}
+
+/** mono 줄(`2.8 MB · 24쪽 · 글자층 22쪽 / 스캔 2쪽`)과 감지 배지 */
+function FileMeta({ file, plan }: FileMetaProps) {
+  const meta = [
+    formatFileSize(file.sizeBytes),
+    translateOptionsText.pages(file.pageCount),
+    ...(plan === null ? [] : [translateOptionsText.pageKinds(plan)])
+  ];
+  const detected = plan?.detectedLanguage;
+  return (
+    <>
+      <span className="text-muted-foreground font-mono text-xs/4">
+        {meta.join(" · ")}
+      </span>
+      {detected !== undefined && (
+        <span className="flex text-xs/4.25">
+          <span className="bg-accent text-accent-foreground rounded-full px-2 leading-5 font-medium">
+            {detected === DETECTED_LANGUAGE.UNKNOWN
+              ? TRANSLATE_OPTIONS_TEXT.UNKNOWN_LANGUAGE_BADGE
+              : translateOptionsText.detectedBadge(
+                  DETECTED_LANGUAGE_LABEL[detected]
+                )}
+          </span>
+        </span>
+      )}
+    </>
+  );
+}
+
 /**
  * 번역할 문서 카드(시안 10 위쪽). 비어 있으면 누르거나 끌어다 놓는 점선 영역,
- * 채우면 첫 쪽 썸네일·이름·크기·쪽수와 "교체" 버튼이다. 파일을 끌어 카드 위에 올리면 `primary` 고리가 생긴다.
+ * 채우면 첫 쪽 썸네일·이름·크기·쪽수(계획을 받으면 글자층·스캔 쪽 수와 감지 배지)와 "교체" 버튼이다. 파일을 끌어 카드 위에 올리면 `primary` 고리가 생긴다.
  * 창 어디에 놓아도 받는다(1개까지).
  */
 export function TranslateFileCard() {
   const cardRef = useRef<HTMLElement>(null);
   const file = useTranslateFile();
+  const plan = useTranslateFilePlan();
   const { pickTranslateFile, placeTranslateFiles } = useTranslateIntake();
   const isDropTarget = useTranslateFileDrop({
     areaRef: cardRef,
@@ -70,9 +118,7 @@ export function TranslateFileCard() {
             >
               {file.name}
             </span>
-            <span className="text-muted-foreground font-mono text-xs/4">
-              {formatFileSize(file.sizeBytes)} · {file.pageCount}쪽
-            </span>
+            <FileMeta file={file} plan={plan} />
           </div>
           <button
             type="button"

@@ -572,6 +572,9 @@ pub(crate) fn edit<T>(
 }
 
 #[cfg(test)]
+mod live_check;
+
+#[cfg(test)]
 mod tests {
     use std::sync::atomic::AtomicBool;
 

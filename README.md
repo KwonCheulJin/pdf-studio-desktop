@@ -44,6 +44,23 @@ pnpm tauri dev      # 개발 실행(HMR)
 pnpm tauri build    # 현재 OS용 앱 번들 생성 (macOS: .app/.dmg)
 ```
 
+## 릴리스
+
+```bash
+pnpm release:patch               # main·깨끗한 작업 트리에서 버전 범프 → 커밋 → 태그 v<버전> (minor/major도 같다)
+git push origin main --follow-tags  # 푸시는 직접 한다. 태그 푸시가 release 워크플로를 깨운다
+```
+
+`v*` 태그가 올라가면 `.github/workflows/release.yml`이 macOS(Apple Silicon `.dmg`)와
+Windows(NSIS 설치 파일)를 빌드해 Draft Release에 올린다. 워크플로의 "macOS 서명 검사"가
+통과했는지 확인한 뒤 Draft를 공개한다. 릴리스 없이 빌드만 보려면 Actions에서 Release
+워크플로를 수동 실행(`workflow_dispatch`)한다. 결과는 워크플로 아티팩트로 올라간다.
+
+- macOS 앱은 ad-hoc 서명이라 처음 열 때 Gatekeeper 경고가 뜬다. Finder에서 우클릭 → 열기,
+  또는 `xattr -dr com.apple.quarantine "/Applications/PDF Studio.app"`.
+- Windows 설치 파일은 서명하지 않아 SmartScreen 경고가 뜬다.
+- 로컬 서명 검사: `pnpm tauri build --bundles app` 뒤 `node scripts/verify-macos-signature.mjs`.
+
 ## 프로젝트 구조 (요약)
 
 - `crates/pdf-core/` : PDF 처리(병합·회전·TIFF 변환). Tauri에 의존하지 않는다
@@ -63,6 +80,7 @@ pnpm tauri build    # 현재 OS용 앱 번들 생성 (macOS: .app/.dmg)
 - `pnpm tauri dev` / `pnpm tauri build` : 개발 실행 / 앱 빌드
 - `pnpm dev:web` / `pnpm build:web` : 렌더러만 실행 / 빌드
 - `pnpm validate` : lint + typecheck + test
+- `pnpm release:patch|minor|major` : 버전 범프·릴리스 커밋·태그 (푸시는 직접)
 - `cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test` :
   Rust 검증 (`PDFIUM_LIB_PATH`에 pdfium 라이브러리 파일 경로)
 

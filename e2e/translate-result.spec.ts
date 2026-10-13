@@ -589,8 +589,9 @@ test("쪽 종류 자리표시와 실패·거절·고친 문단을 보인다", as
   // 3쪽: 실패·거절 문단은 번역 자리에 이유 문구, 고친 문단은 "고침" 배지
   await goToPage(page, 3);
   const target = rows(page, "번역");
-  await expect(target.nth(0)).toHaveText(`1${TEXT.MISMATCH}`);
-  await expect(target.nth(1)).toHaveText(`2${TEXT.REFUSED}`);
+  // 실패·거절 문단은 이유 뒤에 "이 문단 다시 번역"이 늘 있다(Step 47, translate-paragraph-actions.spec.ts).
+  await expect(target.nth(0)).toHaveText(`1${TEXT.MISMATCH}이 문단 다시 번역`);
+  await expect(target.nth(1)).toHaveText(`2${TEXT.REFUSED}이 문단 다시 번역`);
   await expect(target.nth(2)).toHaveText("3정격 주파수는 50Hz예요.고침");
   await expect(rows(page, "원문").nth(0)).toContainText(
     "如因未按本说明书操作而造成损坏。"

@@ -15,7 +15,7 @@ import { ZoomControls } from "./zoom-controls";
 /**
  * 번역 결과 대역 보기(시안 13, 계획서 P6-11). 머리는 앱 툴바(`AppToolbarTranslate`)가 그린다.
  * 툴바(보기 방식·용어집 n·쪽 이동·배율) / 한 번에 한 쪽의 원문·번역 문단 행.
- * ←→ 쪽 이동, ↑↓ 문단 고르기. 문단 동작(다시 번역·직접 고치기·복사)은 Step 47이 더한다.
+ * ←→ 쪽 이동, ↑↓ 문단 고르기. 번역 쪽 행이 문단 동작(다시 번역·직접 고치기·복사, `features/pdf-translate`)을 조립한다.
  */
 export function TranslationViewer() {
   const result = useTranslateResult();

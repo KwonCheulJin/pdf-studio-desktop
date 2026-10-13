@@ -16,6 +16,7 @@ export {
 export { PAGE_KIND, PARAGRAPH_STATUS } from "./config/translation-result";
 export {
   firstRangePageOf,
+  isUntranslatedParagraph,
   paragraphCountOf,
   rangePageCountOf
 } from "./lib/translation-result";

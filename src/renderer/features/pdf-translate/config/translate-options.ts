@@ -61,6 +61,8 @@ export const TRANSLATE_OPTIONS_TEXT = {
   VIEW_RESULT: "결과 보기",
   ALREADY_TRANSLATED: "이미 번역한 문서예요 · 추가 요금 없음",
   REASON_NO_FILE: "번역할 PDF를 넣어 주세요.",
+  REASON_RETRANSLATING:
+    "문단을 다시 번역하는 중이에요. 끝나면 시작할 수 있어요.",
   REASON_INVALID_RANGE: "페이지 범위를 고치면 시작할 수 있어요.",
   REASON_UNKNOWN_LANGUAGE: "원문 언어를 골라 주세요.",
   REASON_NOTHING_TO_TRANSLATE: "범위 안에 번역할 글이 없어요.",

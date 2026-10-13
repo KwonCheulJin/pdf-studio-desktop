@@ -156,6 +156,9 @@ export function TranslateRunSummaryCard({
   const setConsentChecked = useTranslateSessionStore(
     (state) => state.setTransferConsentChecked
   );
+  const isRetranslating = useTranslateSessionStore(
+    (state) => state.retranslation !== null
+  );
   const isConfirmedOnce = useTransferConsentStore(
     (state) => state.isConfirmedOnce
   );
@@ -172,6 +175,7 @@ export function TranslateRunSummaryCard({
   });
   const readiness = translateReadinessOf({
     hasFile: file !== null,
+    isRetranslating,
     rangeError: translateRangeErrorOf({ file, range: options.range }),
     options,
     planState,

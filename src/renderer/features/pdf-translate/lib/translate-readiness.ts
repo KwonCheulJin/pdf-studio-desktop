@@ -37,6 +37,8 @@ export interface TranslateReadiness {
 
 interface TranslateReadinessParams {
   hasFile: boolean;
+  /** 결과 화면의 문단 다시 번역이 도는 중(번역은 한 번에 하나, ADR 0002 §10) */
+  isRetranslating: boolean;
   rangeError: PageRangeError | null;
   options: TranslateOptions;
   planState: TranslationPlanState;
@@ -87,11 +89,12 @@ function planBlockReason({ options, plan }: PlanCheckParams): string | null {
 
 /**
  * 실행 전 확인 바닥의 막힘 이유(계획서 §9.1.6 "시안에 없는 상태"), 위에서부터 하나:
- * 파일 없음 → 범위 오류 → (계획을 받는 중·실패) → 언어 모름 → 번역할 것 없음 → 키 없음(버튼은 켜져 있고
+ * 파일 없음 → 문단 다시 번역 중 → 범위 오류 → (계획을 받는 중·실패) → 언어 모름 → 번역할 것 없음 → 키 없음(버튼은 켜져 있고
  * 키 모달) → 동의 없음. 모든 문단이 이미 번역됐으면 동의 없이 "결과 보기"다.
  */
 export function translateReadinessOf({
   hasFile,
+  isRetranslating,
   rangeError,
   options,
   planState,
@@ -100,6 +103,9 @@ export function translateReadinessOf({
   isConsentChecked
 }: TranslateReadinessParams): TranslateReadiness {
   if (!hasFile) return blocked(TRANSLATE_OPTIONS_TEXT.REASON_NO_FILE);
+  if (isRetranslating) {
+    return blocked(TRANSLATE_OPTIONS_TEXT.REASON_RETRANSLATING);
+  }
   if (rangeError !== null) {
     return blocked(TRANSLATE_OPTIONS_TEXT.REASON_INVALID_RANGE);
   }

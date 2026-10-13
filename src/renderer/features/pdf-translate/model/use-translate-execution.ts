@@ -70,7 +70,8 @@ async function runTranslation({
   info
 }: RunTranslationParams): Promise<void> {
   const session = useTranslateSessionStore.getState();
-  if (session.run !== null) return;
+  // 문단 다시 번역이 도는 동안에는 시작하지 않는다(Rust도 `JOB_ALREADY_RUNNING`, 옵션 화면이 먼저 막는다).
+  if (session.run !== null || session.retranslation !== null) return;
   session.startRun({ request, info, startedAt: Date.now() });
   try {
     const result = await getPlatform().translatePdf({

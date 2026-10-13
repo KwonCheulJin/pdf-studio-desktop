@@ -18,6 +18,8 @@ export const commands = {
 	readPdf: (path: string) => typedError<ArrayBuffer, AppError>(__TAURI_INVOKE("read_pdf", { path })),
 	/**  병합. 진행률은 `on_progress`로, 취소는 `cancel_job(request.jobId)`로 한다. */
 	mergePdfs: (request: MergeRequest, onProgress: Channel<MergeProgress>) => typedError<MergeResult, AppError>(__TAURI_INVOKE("merge_pdfs", { request, onProgress })),
+	/**  두 PDF 비교. 진행률은 `on_progress`로, 취소는 `cancel_job(request.jobId)`로 한다. */
+	comparePdfs: (request: CompareRequest, onProgress: Channel<CompareProgress>) => typedError<CompareResult, AppError>(__TAURI_INVOKE("compare_pdfs", { request, onProgress })),
 	/**  작업 취소. 이미 끝났거나 없는 작업이면 아무 일도 하지 않는다. */
 	cancelJob: (jobId: string) => __TAURI_INVOKE<void>("cancel_job", { jobId }),
 	/**  이 실행의 병합 미리보기 결과를 저장 다이얼로그에서 고른 경로로 복사한다. */
@@ -49,11 +51,77 @@ export type AppError = {
 	path: string | null,
 };
 
+export type Change = {
+	/**  같은 입력·옵션이면 다시 실행해도 같은 키(ADR 0001 §4) */
+	id: string,
+	kind: ChangeKind,
+	before: ChangeSide | null,
+	after: ChangeSide | null,
+	pagePair: [number | null, number | null],
+	/**  "확인 필요". 차이 개수와 따로 센다(ADR 0001 §5). */
+	needsReview: boolean,
+};
+
+export type ChangeKind = "insert" | "delete" | "replace";
+
+export type ChangeSide = {
+	/**  변경에 걸린 토큰을 공백 하나로 이은 원문 글자 */
+	text: string,
+	/**  텍스트 순서. 비어 있지 않다. */
+	boxes: TextBox[],
+	/**  걸린 OCR 토큰의 가장 낮은 신뢰도(0~1, NaN 없음). OCR 토큰이 없으면 `null` */
+	minConfidence: number | null,
+};
+
+/**  비교 옵션(ADR 0001 §13). 쪽 범위는 1부터 센 사용자 표기(`"1,3-5"`, 비우면 전체)다. */
+export type CompareOptions = {
+	rangeA: string,
+	rangeB: string,
+	excludeHeader: boolean,
+	excludeFooter: boolean,
+	excludePageNumbers: boolean,
+	ignoreCase: boolean,
+};
+
+/**  비교 진행률. 화면에 보이는 %(단계·전체)가 바뀔 때만 온다. */
+export type CompareProgress = {
+	jobId: string,
+	stage: CompareStage,
+	done: number,
+	total: number,
+	stagePercent: number,
+	overallPercent: number,
+	detail: ProgressDetail | null,
+};
+
+export type CompareRequest = {
+	/**  프론트가 만든 작업 ID. `cancel_job`에 같은 값을 넘긴다. */
+	jobId: string,
+	/**  A(이전, 왼쪽) 문서 */
+	before: string,
+	/**  B(이후, 오른쪽) 문서 */
+	after: string,
+	options: CompareOptions,
+};
+
+export type CompareResult = {
+	/**  diff 순서 */
+	changes: Change[],
+	/**  화면 행 순서 */
+	pagePairs: ([number | null, number | null])[],
+	pageSizes: PageSizes,
+	pageSources: PageSources,
+	notices: Notice[],
+};
+
+/**  비교 단계. 이 순서대로 진행한다(ADR 0001 §15). */
+export type CompareStage = "extractA" | "extractB" | "ocr" | "normalize" | "diff" | "alignPages";
+
 /**
  *  화면 문구를 고르는 오류 코드. 직렬화 값(`PATH_NOT_ALLOWED` 등)이 바인딩의 문자열 union이 되고,
  *  변형의 이름이 바뀌어도 값은 유지한다.
  */
-export type ErrorCode = "PATH_NOT_ALLOWED" | "UNSUPPORTED_FILE_TYPE" | "OUTPUT_IS_SOURCE" | "JOB_ALREADY_RUNNING" | "INVALID_DIALOG_PATH" | "ENGINE_UNAVAILABLE" | "NOT_READY" | "TASK_FAILED" | "RESOURCE_UNAVAILABLE" | "NOT_FOUND" | "FILE_UNREADABLE" | "INPUT_TOO_LARGE" | "INVALID_PDF" | "PASSWORD_PROTECTED" | "PDFIUM_FAILURE" | "OUTPUT_DIRECTORY_NOT_FOUND" | "WRITE_FAILED" | "EMPTY_REQUEST" | "TOO_MANY_FILES" | "EMPTY_SOURCE" | "INVALID_PAGE" | "CANCELLED" | "INVALID_TIFF" | "UNSUPPORTED_TIFF_COMPRESSION" | "UNSUPPORTED_TIFF_FORMAT" | "IMAGE_TOO_LARGE";
+export type ErrorCode = "PATH_NOT_ALLOWED" | "UNSUPPORTED_FILE_TYPE" | "OUTPUT_IS_SOURCE" | "JOB_ALREADY_RUNNING" | "INVALID_DIALOG_PATH" | "ENGINE_UNAVAILABLE" | "NOT_READY" | "TASK_FAILED" | "RESOURCE_UNAVAILABLE" | "NOT_FOUND" | "FILE_UNREADABLE" | "INPUT_TOO_LARGE" | "INVALID_PDF" | "PASSWORD_PROTECTED" | "PDFIUM_FAILURE" | "OUTPUT_DIRECTORY_NOT_FOUND" | "WRITE_FAILED" | "EMPTY_REQUEST" | "TOO_MANY_FILES" | "EMPTY_SOURCE" | "INVALID_PAGE" | "CANCELLED" | "INVALID_RANGE" | "INVALID_TIFF" | "UNSUPPORTED_TIFF_COMPRESSION" | "UNSUPPORTED_TIFF_FORMAT" | "IMAGE_TOO_LARGE";
 
 /**  병합 결과를 쓸 곳 */
 export type MergeOutput = 
@@ -103,6 +171,12 @@ export type MergeSource = {
 
 export type MergeStage = "readFiles" | "mergePages" | "save";
 
+/**  OCR로 글자를 얻지 못한 이유 */
+export type NoTextReason = "ocrUnavailable" | "ocrFailed";
+
+/**  결과와 함께 보이는 안내(ADR 0001 §6). 쪽 번호는 0부터 센 오름차순이다. */
+export type Notice = { kind: "lowTextConfidence"; side: Side; pages: number[] } | { kind: "noTextLayer"; side: Side; reason: NoTextReason; pages: number[] } | { kind: "truncated"; beforePages: number[]; afterPages: number[] };
+
 /**  `open_files`의 파일 하나 결과. 입력 순서 그대로 돌려준다. */
 export type OpenedFile = { status: "ok"; 
 /**  요청에 들어온 경로 그대로 */
@@ -135,12 +209,35 @@ export type PageInfo = {
 	cropBox: PageBox,
 };
 
+/**  한 쪽의 보이는 영역(CropBox ∩ MediaBox, 회전 전)과 회전 */
+export type PageSize = {
+	viewBox: PageBox,
+	rotation: Rotation,
+};
+
+/**  문서의 모든 쪽. 쪽 번호가 곧 색인이다. */
+export type PageSizes = {
+	before: PageSize[],
+	after: PageSize[],
+};
+
+/**  문서의 모든 쪽. 비교 범위 밖이라 읽지 않은 쪽은 `null`이다. */
+export type PageSources = {
+	before: (TextSource | null)[],
+	after: (TextSource | null)[],
+};
+
 export type PdfInfo = {
 	pageCount: number,
 	/**  문서 제목. 없거나 빈 문자열이면 `null` */
 	title: string | null,
 	pages: PageInfo[],
 };
+
+/**  `done`·`total`로 알 수 없는 덧붙임 정보 */
+export type ProgressDetail = 
+/**  이 단계를 앞선 실행의 캐시로 바로 끝냈다. */
+"cached";
 
 /**  페이지 회전(도). 0·90·180·270만 받는다. */
 export type Rotation = number;
@@ -149,6 +246,22 @@ export type SaveDialogOptions = {
 	/**  다이얼로그가 처음 보일 폴더와 파일 이름 */
 	defaultPath: string | null,
 };
+
+/**  비교하는 두 문서 중 한쪽. `before`가 A(왼쪽), `after`가 B(오른쪽)다. */
+export type Side = "before" | "after";
+
+/**  변경 글자를 덮는 상자(PDF 사용자 공간, ADR 0001 §2). 좌표는 유한한 값이라 JSON `null`이 되지 않는다. */
+export type TextBox = {
+	/**  0부터 센 쪽 번호 */
+	page: number,
+	x: number,
+	y: number,
+	w: number,
+	h: number,
+};
+
+/**  한 쪽의 글자를 어디서 얻었나 */
+export type TextSource = "textLayer" | "ocr";
 
 /* Tauri Specta runtime */
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {

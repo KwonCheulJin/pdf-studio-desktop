@@ -13,12 +13,13 @@
 ## 실행 방식 (worktree + 서브에이전트)
 
 - Step마다 `git worktree add ../pdf-studio-desktop.worktrees/<브랜치의 / 를 - 로> -b <브랜치> main` 후 그 안에서 `pnpm i`. 메인 체크아웃은 `main`에 두고 코드를 고치지 않는다.
+- 병렬 worktree에서는 `E2E_PORT`를 worktree마다 다르게 준다(`E2E_PORT=1436 pnpm test:e2e`, 기본 1430). `src-tauri`를 빌드·테스트하려면 그 worktree에서 `pnpm fetch:pdfium`·`pnpm fetch:ocr`을 먼저 돌린다.
 - 구현·수정·테스트 실행은 `delegated-execution`으로 executor 서브에이전트에 맡긴다. executor는 Jev 라우터(`jev.py route`, 이 프로젝트는 on)가 고른 것을 쓴다. 위임 프롬프트 맨 앞에 `task-spec`(targets는 worktree 절대경로, verify 명령)을 넣는다.
 - 메인 세션은 계획, 위임, 게이트 보고서 확인(`gate.py report`), 커밋·PR·병합, worktree 정리(`git worktree remove`)만 한다.
 
 ## CI
 
-- `.github/workflows/ci.yml`이 PR과 `main` 푸시마다 macOS·Windows·Linux에서 `pnpm validate`, `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`(pdfium 포함)를 돌린다. E2E는 macOS 잡, NSIS 설치 파일(아티팩트 `pdf-studio-windows-nsis`)은 Windows 잡이 만든다.
+- `.github/workflows/ci.yml`이 PR과 `main` 푸시마다 macOS·Windows·Linux에서 `pnpm fetch:pdfium`·`pnpm fetch:ocr`(캐시) 뒤 `pnpm validate`, `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`(pdfium·OCR 테스트 포함)를 돌린다. E2E는 macOS 잡, NSIS 설치 파일(아티팩트 `pdf-studio-windows-nsis`)은 Windows 잡이 만든다.
 
 ## 품질 게이트
 

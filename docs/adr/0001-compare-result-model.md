@@ -1,6 +1,6 @@
 # ADR 0001. 비교 결과 모델(`CompareResult`)과 좌표 규칙
 
-- 상태: 채택 (2026-10, Step 16 / 계획서 P2-1, §11 D16). Step 17이 맡긴 추출 규칙을 §8에, Step 18이 맡긴 정규화·토큰화 규칙을 §9에, Step 19-a가 맡은 OCR 연결 규칙을 §11에, Step 20이 맡은 페이지 짝짓기 규칙을 §12에, Step 21이 맡긴 비교 옵션 규칙을 §13에, Step 23이 맡은 리포트 내보내기 규칙을 §14에, Step 22가 맡은 작업 실행기(진행률·취소·추출 캐시) 규칙을 §15에 더했다.
+- 상태: 채택 (2026-10, Step 16 / 계획서 P2-1, §11 D16). Step 17이 맡긴 추출 규칙을 §8에, Step 18이 맡긴 정규화·토큰화 규칙을 §9에, Step 19-a가 맡은 OCR 연결 규칙을 §11에, Step 20이 맡은 페이지 짝짓기 규칙을 §12에, Step 21이 맡긴 비교 옵션 규칙을 §13에, Step 23이 맡은 리포트 내보내기 규칙을 §14에, Step 22가 맡은 작업 실행기(진행률·취소·추출 캐시) 규칙을 §15에, Step 26이 맡은 비교 커맨드(계약 미러·에러 코드·OCR 엔진 상태) 규칙을 §16에 더했다.
 - 코드: `crates/pdf-core/src/compare/model.rs` (이 문서와 같은 타입만 둔다), 추출은 `crates/pdf-core/src/compare/extract.rs`, 정규화·토큰화는 `crates/pdf-core/src/compare/tokenize.rs`
 - 관련: 계획서 §6.1(결과 모델), §6.2(파이프라인), §6.4(OCR 신뢰도·확인 필요·좌표 되돌리기), §7.1(연결선)
 
@@ -306,6 +306,7 @@ pub struct CompareResult {
 |---|---|
 | 쪽 범위 문자열 | 쉼표로 나눈 `N` 또는 `N-M`. 1부터 센 사용자 표기이고 `parse_page_range`가 0부터 센 쪽 번호 목록(오름차순, 중복 없음)으로 바꾼다. 비었거나 공백뿐이면 전체다. 항목과 `-` 둘레의 공백은 무시한다. |
 | 오류 | 0, 쪽 수 초과, 역방향 구간(`5-3`), 빈 항목(`1,,2`, 끝 쉼표), 숫자 외 글자(부호 포함), `u32` 초과는 `CompareOptionsError::InvalidRange { side, range, page_count }`(코드 `INVALID_RANGE`)다. A·B를 따로 검사하므로 `side`가 어느 쪽인지 알린다. 쪽 수 확인은 비교 시작 때 한 번이고 오류면 비교하지 않는다. |
+| 화면 검사 | 옵션 카드(Step 26)는 입력하는 동안 같은 규칙을 `src/renderer/shared/lib/page-range-parse.ts`로 검사해 이유(형식·역방향·쪽 수 초과)를 보이고 실행을 막는다. 받는지·거부하는지는 이 표와 같아야 하고, 이유는 화면 문구를 고르는 용도다. 실행 때 Rust가 다시 검사하는 것이 마지막 방어선이다(어긋나면 `INVALID_RANGE` 토스트). |
 | 중복·역순 | 사용자 입력이라 관대하게 받는다: `"5,1"` → `[0, 4]`, `"1-3,2"` → `[0, 1, 2]`. `pair_pages`의 오름차순·중복 없음 전제는 이 정렬·중복 제거로 지킨다. |
 | 쪽 번호 ↔ 색인 | `select_pages`가 고른 쪽의 글자 상자 `page`는 문서 전체 기준 쪽 번호 그대로고, `pair_pages`는 쪽 번호 목록 안의 위치로 변환해 다시 쪽 번호를 돌려준다. 그래서 범위가 `"3-5"`처럼 0부터 이어지지 않아도 결과 `PagePair`는 문서 전체 쪽 번호다. |
 | 줄 | 글자열에서 이어진 글자가 §10의 같은 줄 판정(상자 병합과 같은 `continues_line`)인 동안 한 줄이다. 판정은 화면 방향 좌표에서 한다. 공백 글리프와 pdfium이 만든 공백·줄바꿈은 직전 줄에 붙고, 첫 줄 앞의 것은 어느 줄에도 속하지 않아 남는다. 줄이 제외되면 붙은 글자도 함께 빠진다. |
@@ -391,6 +392,25 @@ pub struct CompareResult {
   - 문서 전체 쪽을 OCR: 범위를 좁힌 비교에서도 스캔 문서 전체(쪽당 약 1초)를 읽는다.
   - 쪽 짝짓기 단위를 행으로: 0% 이벤트에 `total`이 없다.
   - diff 구간마다 변경까지 만들기: `Change.id`의 뒤 문맥(§4)이 다음 구간의 공통 토큰을 봐야 해 구간을 미리 나눌 수 없다. 구간은 Myers 전에 세고 변경 만들기는 마지막 구간에 든다.
+
+### 16. 비교 커맨드 (Step 26에서 정함)
+
+커맨드는 `compare_pdfs(request: CompareRequest, on_progress: Channel<CompareProgress>) -> CompareResult`, 취소는 병합과 같은 `cancel_job(request.jobId)`다. 코드는 `src-tauri/src/compare.rs`(검증과 실행기 위임, 앱 상태), 계약 미러는 `src-tauri/src/contract.rs`, 에러 코드는 `src-tauri/src/error.rs`다.
+
+| 항목 | 규칙 |
+|---|---|
+| 요청 | `CompareRequest { jobId, before, after, options: CompareOptions { rangeA, rangeB, excludeHeader, excludeFooter, excludePageNumbers, ignoreCase } }`. 옵션은 §13과 같은 필드를 camelCase로 받아 `From`으로 pdf-core `CompareOptions`에 옮긴다. |
+| 경로 | A·B는 허용 경로 목록(사용자가 고르거나 놓은 파일, 앱 폴더) 안의 PDF만 받는다(`PathAccess::readable`). 밖이면 진행 이벤트 없이 `PATH_NOT_ALLOWED`. 실행기에는 canonical 경로를 넘겨 추출 캐시 키(§15)가 같은 파일에서 같다. |
+| 진행 이벤트 | `CompareProgress { jobId, stage, done, total, stagePercent, overallPercent, detail }`. 단계 값은 camelCase(`extractA`·`extractB`·`ocr`·`normalize`·`diff`·`alignPages`)로 병합(`readFiles`)과 §7 단위 enum 규칙을 따른다. `detail`은 `"cached"` 또는 `null`. 받는 창이 닫혀 보내지 못해도 비교는 계속한다. |
+| 결과 | §7 계약 JSON 그대로다. `Notice`·`PageSizes`·`PageSources`·`Side`·`TextSource`·`NoTextReason`은 pdf-core에 `Serialize`가 없어 미러만 직렬화한다. 확인: `compare.rs`의 `contract_json_mirrors_the_pdf_core_result`가 같은 비교의 계약 JSON과 pdf-core 직렬화(변경·쪽 짝·쪽 크기)를 맞대고, `Notice`·출처는 §7의 모양 리터럴과 맞댄다. |
+| 에러 코드 | `CompareError::Document` → 문서 열기 코드(`NOT_FOUND`·`INVALID_PDF`·`PASSWORD_PROTECTED`…), `path` = 그 문서. `CompareError::Options(InvalidRange)` → 새 코드 `INVALID_RANGE`, `path` = `null`(입력 파일이 아니라 사용자가 쓴 범위 문자열 탓이다. 화면은 실행 전에 같은 규칙으로 막는다, §13). `CompareError::Cancelled` → `CANCELLED`. 짝짓기는 `error.rs` 한 곳의 `match`라 pdf-core에 변형이 늘면 컴파일이 멈춘다. |
+| 앱 상태 | `CompareState` 하나를 `app.manage`한다: 추출 메모리 캐시(`ExtractionCache`, 앱에 하나), OCR 디스크 캐시(`OcrCache::new(앱 캐시 폴더/ocr)`), OCR 엔진 슬롯(`Mutex<OcrSlot>`: 로드 전·로드됨·없음). `compare_pdfs`가 엔진을 `&mut`로 쓰므로 비교 하나가 끝날 때까지 잠금을 잡는다(동시에 두 비교가 오면 뒤의 것이 기다린다. 화면은 한 번에 하나만 실행한다). |
+| OCR 엔진 | 첫 비교에서 로드한다(`OcrEngine::load(번들 라이브러리 폴더, 리소스/ocr-models)`, 개발·테스트는 `ONNXRUNTIME_LIB_PATH`·`OCR_MODEL_DIR`이 먼저). 실패하면(런타임·모델이 없음, 번들 경로를 모름) 경고 로그를 남기고 슬롯을 "없음"으로 두어 OCR 없이 비교한다(스캔 쪽은 `NoTextLayer(OcrUnavailable)`, §15). 앱을 다시 시작할 때까지 다시 로드하지 않는다. |
+| 번들 위치 | macOS는 ONNX Runtime dylib를 pdfium과 같은 `Contents/Frameworks`(`bundle.macOS.frameworks`), 모델 세 파일은 `Contents/Resources/ocr-models`(`bundle.resources`). Windows·Linux의 라이브러리는 리소스 폴더(`pdf_engine::bundled_library_dir`)에서 찾고, 그 번들 설정은 CI(P4-1)가 `--config`로 더한다(계획서 §6.4 배포). |
+
+- 측정(release, Apple M3 Pro): OCR 엔진 첫 로드 711 ms(dylib 로드 + 검출·인식 세션 생성), 상주 메모리 +68 MB(로드 안 한 프로세스 10 MB → 79 MB). 병합만 쓰는 사용자가 이 메모리를 내지 않도록 앱 시작이 아니라 첫 비교에서 로드한다. 그래서 앱을 켠 뒤 첫 비교는 진행률 0%에서 약 0.7초 머문다(진행 이벤트는 실행기가 시작해야 나온다).
+- 버린 대안: 앱 시작 때(또는 별도 스레드에서) 미리 로드 — 비교를 안 쓰는 실행에도 68 MB를 쓴다. OCR 대상 쪽이 생길 때만 로드 — 실행기 API(`Option<&mut OcrEngine>`)를 바꿔야 하고, 측정한 병목이 아니다. 실행기마다 엔진을 새로 만들기 — 비교마다 0.7초.
+- 테스트(`src-tauri/src/compare.rs`, OCR 없이): 고르지 않은 파일 거부(이벤트 없음), 쪽 범위 오류가 `INVALID_RANGE`·경로 없음, `cancel_job` 토큰이 추출 중 비교를 멈춤, 계약 JSON 미러.
 
 ## 결과
 

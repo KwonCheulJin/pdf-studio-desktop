@@ -14,6 +14,7 @@ pnpm tauri dev                      # 개발 실행(사용자용. 에이전트�
 pnpm validate                       # lint + typecheck + test
 pnpm lint:fix / format / format:check
 pnpm fetch:pdfium                   # 버전 고정 pdfium을 src-tauri/pdfium/ 에 받는다
+pnpm fetch:ocr                      # 버전 고정 ONNX Runtime·OCR 모델을 받는다(src-tauri 빌드에 필요)
 PDFIUM_LIB_PATH=<pdfium 라이브러리 파일> cargo test -p pdf-core
 cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
 pnpm tauri build                    # Tauri 빌드

@@ -1,4 +1,7 @@
 import type {
+  CompareProgress,
+  CompareRequest,
+  CompareResult,
   MergeOutput,
   MergeProgress,
   MergeRequest,
@@ -30,6 +33,13 @@ export type MergeProgressHandler = (progress: MergeProgress) => void;
 export interface MergePdfsParams {
   request: MergeRequest;
   onProgress?: MergeProgressHandler;
+}
+
+export type CompareProgressHandler = (progress: CompareProgress) => void;
+
+export interface ComparePdfsParams {
+  request: CompareRequest;
+  onProgress?: CompareProgressHandler;
 }
 
 export interface CopyFileParams {
@@ -117,6 +127,8 @@ export interface DesktopPlatform {
   /** pdf.js 표시 전용 PDF 바이트 */
   readPdf(path: string): Promise<Uint8Array>;
   mergePdfs(params: MergePdfsParams): Promise<MergeResult>;
+  /** 두 PDF 비교. 원본은 읽기만 한다. 취소는 `cancelJob(request.jobId)` */
+  comparePdfs(params: ComparePdfsParams): Promise<CompareResult>;
   /** 이미 끝났거나 없는 작업이면 아무 일도 하지 않는다. */
   cancelJob(jobId: string): Promise<void>;
   /** 병합 미리보기 결과를 저장 다이얼로그에서 고른 경로로 복사 */

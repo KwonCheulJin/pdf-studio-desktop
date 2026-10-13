@@ -1,4 +1,7 @@
 import type {
+  CompareProgress,
+  CompareRequest,
+  CompareResult,
   ErrorCode,
   MergeProgress,
   MergeRequest,
@@ -48,6 +51,20 @@ export interface E2eMergeScript {
   failPath?: string;
 }
 
+/**
+ * `comparePdfs` 한 번의 흉내. 진행률을 차례로 보낸 뒤 `failCode`가 있으면 그 코드로 실패하고,
+ * 아니면 mock 비교(경로·쪽 범위 검사, 마지막 100% 진행률)를 거쳐 `result`(없으면 차이 없는 결과)를 돌려준다.
+ */
+export interface E2eCompareScript {
+  progress: CompareProgress[];
+  /** IPC로 온 값처럼 넘기므로 바인딩에 없는 코드도 넣을 수 있다. */
+  failCode?: string;
+  /** 실패를 일으킨 입력 파일(Rust `AppError.path`). 없으면 `null` */
+  failPath?: string;
+  /** Rust golden JSON 같은 결과. 계약 JSON과 모양이 같다(ADR 0001 §7). */
+  result?: CompareResult;
+}
+
 export interface E2eMockSeed {
   files: E2eMockFile[];
   /** 열기 다이얼로그를 열 때마다 앞에서부터 하나씩 고를 경로 목록. 다 쓰면 `files`를 모두 고른다. */
@@ -55,6 +72,8 @@ export interface E2eMockSeed {
   failures?: E2eMockFailures;
   /** `mergePdfs`를 부를 때마다 앞에서부터 하나씩 쓴다. 다 쓰면 mock 그대로 성공한다. */
   mergeScripts?: E2eMergeScript[];
+  /** `comparePdfs`를 부를 때마다 앞에서부터 하나씩 쓴다. 다 쓰면 mock 그대로 차이 없이 성공한다. */
+  compareScripts?: E2eCompareScript[];
   /** 있으면 `temp` 출력 병합 결과가 이 경로·파일 이름이 된다. */
   mergeOutput?: MockMergeOutput;
   /** 있으면 `readThirdPartyNotices`가 이 원문을 돌려준다. 없으면 리소스 없음 오류다. */
@@ -116,6 +135,15 @@ declare global {
     __E2E_HOLD_MERGE__?: Promise<void>;
     /** `__E2E_HOLD_MERGE__`를 푸는 함수. 테스트가 함께 넣는다. */
     __E2E_RELEASE_MERGE__?: () => void;
+    /**
+     * 테스트가 넣으면 비교 요청을 스크립트 진행률을 보낸 뒤 이 Promise가 풀릴 때까지 붙잡는다
+     * (진행 화면 확인용). 붙잡힌 동안 `cancelJob`이 오면 바로 `CANCELLED`로 실패한다.
+     */
+    __E2E_HOLD_COMPARE__?: Promise<void>;
+    /** `__E2E_HOLD_COMPARE__`를 푸는 함수. 테스트가 함께 넣는다. */
+    __E2E_RELEASE_COMPARE__?: () => void;
+    /** 앱이 보낸 비교 요청(`comparePdfs`)을 부른 순서대로 기록하는 곳 */
+    __E2E_MOCK_COMPARES__?: CompareRequest[];
     /** 앱이 저장 다이얼로그(`pickSavePath`)를 연 옵션을 부른 순서대로 기록하는 곳 */
     __E2E_MOCK_SAVE_DIALOGS__?: PickSavePathOptions[];
   }
@@ -173,25 +201,44 @@ function recordWrites(
   };
 }
 
+interface HoldParams {
+  jobId: string;
+  hold: Promise<void> | undefined;
+}
+
 interface InjectFailuresParams {
   platform: DesktopPlatform;
   failures: E2eMockFailures;
   mergeScripts: E2eMergeScript[];
+  compareScripts: E2eCompareScript[];
 }
 
 /**
- * 시드대로 실패·진행률을 흉내 낸다. `mergePdfs`는 스크립트의 진행률을 보낸 뒤
- * `__E2E_HOLD_MERGE__`를 기다리고, 그동안 같은 작업의 `cancelJob`이 오면
+ * 시드대로 실패·진행률을 흉내 낸다. `mergePdfs`·`comparePdfs`는 스크립트의 진행률을 보낸 뒤
+ * `__E2E_HOLD_MERGE__`·`__E2E_HOLD_COMPARE__`를 기다리고, 그동안 같은 작업의 `cancelJob`이 오면
  * Rust처럼 `CANCELLED`로 실패한다.
  */
 function injectFailures({
   platform,
   failures,
-  mergeScripts
+  mergeScripts,
+  compareScripts
 }: InjectFailuresParams): DesktopPlatform {
   const openFailures = failures.openFiles ?? {};
   const cancelledJobs = new Set<string>();
   const cancelWaiters = new Map<string, () => void>();
+
+  /** 붙잡기가 풀리거나 같은 작업이 취소될 때까지 기다린다. 취소됐으면 `CANCELLED`로 실패한다. */
+  const waitForRelease = async ({ jobId, hold }: HoldParams): Promise<void> => {
+    const cancelled = new Promise<void>((resolve) => {
+      cancelWaiters.set(jobId, resolve);
+    });
+    await Promise.race([hold, cancelled]);
+    cancelWaiters.delete(jobId);
+    if (cancelledJobs.has(jobId)) {
+      throw seededError({ code: CANCELLED_CODE, detail: jobId });
+    }
+  };
 
   const toSeededResult = (opened: OpenedFile): OpenedFile => {
     const code = openFailures[opened.sourcePath];
@@ -217,14 +264,7 @@ function injectFailures({
       for (const progress of script?.progress ?? []) {
         params.onProgress?.(progress);
       }
-      const cancelled = new Promise<void>((resolve) => {
-        cancelWaiters.set(jobId, resolve);
-      });
-      await Promise.race([window.__E2E_HOLD_MERGE__, cancelled]);
-      cancelWaiters.delete(jobId);
-      if (cancelledJobs.has(jobId)) {
-        throw seededError({ code: CANCELLED_CODE, detail: jobId });
-      }
+      await waitForRelease({ jobId, hold: window.__E2E_HOLD_MERGE__ });
       if (script?.failCode !== undefined) {
         throw seededError({
           code: script.failCode,
@@ -233,6 +273,23 @@ function injectFailures({
         });
       }
       return platform.mergePdfs(params);
+    },
+    comparePdfs: async (params) => {
+      const { jobId } = params.request;
+      const script = compareScripts.shift();
+      for (const progress of script?.progress ?? []) {
+        params.onProgress?.(progress);
+      }
+      await waitForRelease({ jobId, hold: window.__E2E_HOLD_COMPARE__ });
+      if (script?.failCode !== undefined) {
+        throw seededError({
+          code: script.failCode,
+          path: script.failPath,
+          detail: jobId
+        });
+      }
+      const result = await platform.comparePdfs(params);
+      return script?.result ?? result;
     },
     cancelJob: async (jobId) => {
       cancelledJobs.add(jobId);
@@ -263,6 +320,25 @@ function recordReads({ platform, reads }: RecordReadsParams): DesktopPlatform {
     readPdf: (path) => {
       reads.push(path);
       return platform.readPdf(path);
+    }
+  };
+}
+
+interface RecordComparesParams {
+  platform: DesktopPlatform;
+  compares: CompareRequest[];
+}
+
+/** 비교 요청(옵션 포함)을 위임 전에 기록한다. 거부된 요청도 남는다. */
+function recordCompares({
+  platform,
+  compares
+}: RecordComparesParams): DesktopPlatform {
+  return {
+    ...platform,
+    comparePdfs: (params) => {
+      compares.push(params.request);
+      return platform.comparePdfs(params);
     }
   };
 }
@@ -318,7 +394,9 @@ export function createE2ePlatform(): DesktopPlatform {
   const writes: E2eWriteCall[] = [];
   const reads: string[] = [];
   const saveDialogs: PickSavePathOptions[] = [];
+  const compares: CompareRequest[] = [];
   window.__E2E_MOCK_WRITES__ = writes;
+  window.__E2E_MOCK_COMPARES__ = compares;
   window.__E2E_MOCK_READS__ = reads;
   window.__E2E_MOCK_SAVE_DIALOGS__ = saveDialogs;
   window.__E2E_PDF_CACHE_STATS__ = getPdfCacheStats;
@@ -332,13 +410,17 @@ export function createE2ePlatform(): DesktopPlatform {
   const seededPlatform = injectFailures({
     platform: mockPlatform,
     failures: seed.failures ?? {},
-    mergeScripts: [...(seed.mergeScripts ?? [])]
+    mergeScripts: [...(seed.mergeScripts ?? [])],
+    compareScripts: [...(seed.compareScripts ?? [])]
   });
   return persistSettings(
     recordSaveDialogs({
-      platform: recordReads({
-        platform: recordWrites(seededPlatform, writes),
-        reads
+      platform: recordCompares({
+        platform: recordReads({
+          platform: recordWrites(seededPlatform, writes),
+          reads
+        }),
+        compares
       }),
       saveDialogs
     })

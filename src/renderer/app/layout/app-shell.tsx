@@ -75,6 +75,10 @@ export function AppShell() {
     () => setMode(APP_MODE.COMPARE),
     [setMode]
   );
+  const handleExitCompare = useCallback(
+    () => setMode(APP_MODE.HOME),
+    [setMode]
+  );
 
   const renderContent = () => {
     switch (mode) {
@@ -86,7 +90,7 @@ export function AppShell() {
           />
         );
       case APP_MODE.COMPARE:
-        return <ComparePage />;
+        return <ComparePage onExit={handleExitCompare} />;
       default:
         return view === MERGE_VIEW.PREVIEW ? (
           <MergedPreviewPage />

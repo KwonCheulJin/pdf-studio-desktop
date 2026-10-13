@@ -29,6 +29,7 @@ project-root/
 ├─ THIRD_PARTY_NOTICES.md      # 제3자 고지 (pnpm licenses:generate 생성물, 앱 번들에 넣는다)
 ├─ scripts/
 │  ├─ fetch-pdfium.mjs         # 버전 고정 pdfium 받기 (src-tauri/pdfium/<target>/, gitignore)
+│  ├─ fetch-ocr.mjs            # 버전 고정 ONNX Runtime·OCR 모델 받기 (src-tauri/onnxruntime/<target>/, ocr-models/, gitignore)
 │  ├─ generate-notices.mjs     # THIRD_PARTY_NOTICES.md 생성 (pnpm licenses:generate)
 │  ├─ check-licenses.mjs       # 허용 목록 밖 라이선스·낡은 고지면 실패 (pnpm licenses:check)
 │  ├─ third-party/             # 의존성 수집, 허용 목록·예외(policy.mjs), 번들 자산 고정 목록
@@ -53,6 +54,7 @@ project-root/
 │  │  ├─ contract.rs           # 경계 타입 (tauri-specta 로 TS 바인딩 생성)
 │  │  ├─ access.rs             # 허용 경로 목록, 경로 검증
 │  │  ├─ files.rs, merge.rs    # 파일 열기, 병합 처리(경로 검증 후 pdf-core 위임)
+│  │  ├─ compare.rs            # 비교 처리(경로 검증 후 실행기 위임), 추출·OCR 캐시와 OCR 엔진 상태(ADR 0001 §16)
 │  │  ├─ jobs.rs               # 작업 ID·취소 토큰
 │  │  ├─ pdf_engine.rs         # 번들 pdfium 바인딩, 엔진을 앱 상태로
 │  │  ├─ notices.rs            # 번들한 제3자 고지 읽기(리소스 폴더 고정 파일)
@@ -72,13 +74,13 @@ project-root/
    │  └─ styles/               # index.css, tokens.css, theme.css, base.css
    ├─ pages/
    │  ├─ home/                 # 첫 화면: 작업 고르기 카드(병합·비교), 카드 위 드롭
-   │  ├─ compare/              # 비교 화면(지금은 A·B 파일 슬롯, 옵션·실행은 Step 26)
+   │  ├─ compare/              # 비교 화면: 옵션(A·B 슬롯 + 실행 전 옵션) / 진행 카드 / 결과 자리(결과 화면은 Step 27)
    │  └─ merged-preview/       # 병합 결과 미리보기 화면
    ├─ widgets/
    │  └─ merge-workspace/      # 병합 작업 영역 조합
    ├─ features/                # 사용자 행동
    │  ├─ pdf-merge/            # 파일 추가·선택·회전·병합·다운로드
-   │  ├─ pdf-compare/          # 비교 세션(A·B 문서), 파일 받기(다이얼로그·드롭·슬롯 배정), ui/file-slots
+   │  ├─ pdf-compare/          # 비교 세션(A·B 문서·옵션·결과)·실행(진행률·취소), 파일 받기(다이얼로그·드롭·슬롯 배정), ui/file-slots·options-card·progress-card
    │  ├─ pdf-preview/          # 미리보기 모달
    │  ├─ theme-toggle/         # 테마 system|light|dark 선택·저장
    │  ├─ error-reporting/      # 오류 보고 켜기·끄기, 첫 실행 안내

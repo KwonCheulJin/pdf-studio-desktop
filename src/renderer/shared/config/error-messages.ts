@@ -35,6 +35,8 @@ const ERROR_MESSAGES: Record<PlatformErrorCode, string> = {
   EMPTY_SOURCE: "페이지가 없는 파일이 있어요.",
   INVALID_PAGE: "파일에 없는 페이지가 들어 있어요. 파일이 바뀌었을 수 있어요.",
   CANCELLED: "작업을 취소했어요.",
+  INVALID_RANGE:
+    "페이지 범위가 올바르지 않아요. 문서 쪽수 안에서 1,3-5처럼 써 주세요.",
   INVALID_TIFF: "TIFF 파일이 손상되었거나 형식이 올바르지 않아요.",
   UNSUPPORTED_TIFF_COMPRESSION: "지원하지 않는 압축 방식의 TIFF 파일이에요.",
   UNSUPPORTED_TIFF_FORMAT: "지원하지 않는 형식의 TIFF 파일이에요.",

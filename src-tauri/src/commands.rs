@@ -1,4 +1,4 @@
-//! Tauri 커맨드. 입력을 받아 처리 함수(`files`, `merge`)에 넘기기만 한다.
+//! Tauri 커맨드. 입력을 받아 처리 함수(`files`, `merge`, `compare`)에 넘기기만 한다.
 //! pdfium·파일 작업은 `spawn_blocking` 스레드에서 돌려 UI 스레드와 async 런타임을 막지 않는다.
 
 use std::path::PathBuf;
@@ -12,11 +12,15 @@ use tauri_plugin_dialog::{DialogExt, FilePath};
 use tauri_specta::collect_commands;
 
 use crate::access::{OPENABLE_EXTENSIONS, PDF_EXTENSION, PathAccess};
-use crate::contract::{MergeProgress, MergeRequest, MergeResult, OpenedFile, SaveDialogOptions};
+use crate::compare::CompareState;
+use crate::contract::{
+    CompareProgress, CompareRequest, CompareResult, MergeProgress, MergeRequest, MergeResult,
+    OpenedFile, SaveDialogOptions,
+};
 use crate::error::{AppError, CommandError};
 use crate::jobs::JobRegistry;
 use crate::notices::THIRD_PARTY_NOTICES_FILE;
-use crate::{files, merge, notices};
+use crate::{compare, files, merge, notices};
 
 /// 열기 다이얼로그의 형식 필터 이름. 언어와 무관한 형식 이름만 쓴다.
 const OPENABLE_FILTER_NAME: &str = "PDF, TIFF";
@@ -46,6 +50,7 @@ pub(crate) fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             open_files,
             read_pdf,
             merge_pdfs,
+            compare_pdfs,
             cancel_job,
             copy_file,
             discard_temp,
@@ -161,6 +166,33 @@ pub(crate) async fn merge_pdfs(
     .await
 }
 
+/// 두 PDF 비교. 진행률은 `on_progress`로, 취소는 `cancel_job(request.jobId)`로 한다.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn compare_pdfs(
+    app: AppHandle,
+    jobs: State<'_, JobRegistry>,
+    request: CompareRequest,
+    on_progress: Channel<CompareProgress>,
+) -> Result<CompareResult, AppError> {
+    let job = jobs.start(&request.job_id)?;
+    let cancel = job.token();
+    run_blocking(app, move |app| {
+        compare::compare(
+            engine(app)?.inner(),
+            path_access(app)?.inner(),
+            compare_state(app)?.inner(),
+            &request,
+            &cancel,
+            |progress| {
+                // 받는 창이 닫혔으면 보낼 곳이 없다. 비교는 계속한다.
+                let _ = on_progress.send(progress);
+            },
+        )
+    })
+    .await
+}
+
 /// 작업 취소. 이미 끝났거나 없는 작업이면 아무 일도 하지 않는다.
 #[tauri::command]
 #[specta::specta]
@@ -255,6 +287,13 @@ fn path_access<R: Runtime>(app: &AppHandle<R>) -> Result<State<'_, PathAccess>, 
     app.try_state::<PathAccess>().ok_or(CommandError::NotReady {
         component: "path access",
     })
+}
+
+fn compare_state<R: Runtime>(app: &AppHandle<R>) -> Result<State<'_, CompareState>, CommandError> {
+    app.try_state::<CompareState>()
+        .ok_or(CommandError::NotReady {
+            component: "compare",
+        })
 }
 
 fn local_path(file: FilePath) -> Result<PathBuf, CommandError> {

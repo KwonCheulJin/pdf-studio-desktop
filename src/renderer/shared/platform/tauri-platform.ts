@@ -10,6 +10,7 @@ import { LazyStore } from "@tauri-apps/plugin-store";
 import {
   commands,
   type AppError,
+  type CompareProgress,
   type MergeProgress
 } from "@/renderer/shared/api/bindings";
 import {
@@ -123,6 +124,13 @@ export function createTauriPlatform(): DesktopPlatform {
         channel.onmessage = onProgress;
       }
       return unwrap(commands.mergePdfs(request, channel));
+    },
+    comparePdfs: ({ request, onProgress }) => {
+      const channel = new Channel<CompareProgress>();
+      if (onProgress) {
+        channel.onmessage = onProgress;
+      }
+      return unwrap(commands.comparePdfs(request, channel));
     },
     cancelJob: (jobId) => settle(commands.cancelJob(jobId)),
     copyFile: async ({ source, destination }) => {

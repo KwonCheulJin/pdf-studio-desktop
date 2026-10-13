@@ -1,5 +1,6 @@
 mod access;
 mod commands;
+mod compare;
 mod contract;
 mod error;
 mod files;
@@ -18,6 +19,7 @@ use tauri::{App, AppHandle, DragDropEvent, Manager, RunEvent, WindowEvent};
 use tauri_plugin_window_state::StateFlags;
 
 use access::{AppDirectories, PathAccess, STALE_SESSION_AGE};
+use compare::CompareState;
 use jobs::JobRegistry;
 
 /// TIFF 변환 결과 PDF를 두는 앱 캐시 하위 폴더
@@ -52,6 +54,7 @@ pub fn run() {
                 log::warn!("stale temp sessions were not removed: {error}");
             }
             app.manage(PathAccess::new(directories));
+            app.manage(CompareState::for_app(app)?);
             Ok(())
         })
         .build(tauri::generate_context!())

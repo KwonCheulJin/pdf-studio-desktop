@@ -1,11 +1,16 @@
 import {
   OPENABLE_EXTENSIONS,
   type AppError,
+  type CompareProgress,
+  type CompareResult,
   type ErrorCode,
   type MergeResult,
   type OpenedFile,
-  type PageInfo
+  type PageInfo,
+  type PageSize,
+  type TextSource
 } from "@/renderer/shared/api/bindings";
+import { parsePageRange } from "@/renderer/shared/lib/page-range-parse";
 import {
   FILE_DROP_EVENT_TYPE,
   MERGE_OUTPUT_KIND,
@@ -64,8 +69,18 @@ const MOCK_ERROR_CODE = {
   NOT_FOUND: "NOT_FOUND",
   PATH_NOT_ALLOWED: "PATH_NOT_ALLOWED",
   UNSUPPORTED_FILE_TYPE: "UNSUPPORTED_FILE_TYPE",
-  RESOURCE_UNAVAILABLE: "RESOURCE_UNAVAILABLE"
+  RESOURCE_UNAVAILABLE: "RESOURCE_UNAVAILABLE",
+  INVALID_RANGE: "INVALID_RANGE"
 } as const satisfies Record<string, ErrorCode>;
+
+/** mock 비교의 마지막 단계와 결과 글자 출처(Rust와 같은 값) */
+const MOCK_COMPARE = {
+  LAST_STAGE: "alignPages",
+  TEXT_SOURCE: "textLayer"
+} as const satisfies {
+  LAST_STAGE: CompareProgress["stage"];
+  TEXT_SOURCE: TextSource;
+};
 
 const MOCK_DIRECTORY = {
   TEMP: "/mock/temp",
@@ -112,6 +127,69 @@ function rejectedPath({ code, path }: RejectedPathParams): AppError {
 /** Rust처럼 열려던 파일이 없으면 그 경로를 `AppError.path`에 담는다. */
 function missingFile(path: string): AppError {
   return { code: MOCK_ERROR_CODE.NOT_FOUND, message: path, path };
+}
+
+/** pdf.js `page.view`처럼 보이는 영역은 CropBox로 둔다(시드 PDF는 MediaBox 안의 CropBox만 쓴다). */
+function pageSizeOf(page: PageInfo): PageSize {
+  return { viewBox: page.cropBox, rotation: page.rotation };
+}
+
+interface MockCompareSide {
+  file: MockPdfFile;
+  /** 비교 범위(0부터) */
+  range: number[];
+}
+
+/** 문서의 모든 쪽 출처. 범위 밖은 `null`(Rust와 같다) */
+function pageSourcesOf({
+  file,
+  range
+}: MockCompareSide): (TextSource | null)[] {
+  return file.pages.map((_, page) =>
+    range.includes(page) ? MOCK_COMPARE.TEXT_SOURCE : null
+  );
+}
+
+interface CompareSideParams {
+  path: string;
+  /** 사용자 쪽 범위 문자열(비우면 전체) */
+  range: string;
+}
+
+interface MockCompareResultParams {
+  before: MockCompareSide;
+  after: MockCompareSide;
+}
+
+/**
+ * 차이 없는 결과: 두 범위를 차례로 짝짓고 남는 쪽은 A만 있는 행 → B만 있는 행으로 둔다.
+ * 실제 변경·안내가 필요한 테스트는 시드(`compareScripts`)로 결과를 준다.
+ */
+function emptyCompareResult({
+  before,
+  after
+}: MockCompareResultParams): CompareResult {
+  const paired = Math.min(before.range.length, after.range.length);
+  const pagePairs: CompareResult["pagePairs"] = [
+    ...before.range
+      .slice(0, paired)
+      .map((page, index): [number, number] => [page, after.range[index]]),
+    ...before.range.slice(paired).map((page): [number, null] => [page, null]),
+    ...after.range.slice(paired).map((page): [null, number] => [null, page])
+  ];
+  return {
+    changes: [],
+    pagePairs,
+    pageSizes: {
+      before: before.file.pages.map(pageSizeOf),
+      after: after.file.pages.map(pageSizeOf)
+    },
+    pageSources: {
+      before: pageSourcesOf(before),
+      after: pageSourcesOf(after)
+    },
+    notices: []
+  };
 }
 
 /**
@@ -169,7 +247,7 @@ export function createMockPlatform({
     return fileName;
   };
 
-  /** Rust `merge`처럼 소스는 허용 목록 안의 PDF만 받는다. */
+  /** Rust `merge`·`compare`처럼 입력은 허용 목록 안의 PDF만 받는다. */
   const ensureMergeSource = (path: string): void => {
     ensureReadable(path);
     if (extensionOf(path) !== PDF_EXTENSION) {
@@ -177,6 +255,30 @@ export function createMockPlatform({
         rejectedPath({ code: MOCK_ERROR_CODE.UNSUPPORTED_FILE_TYPE, path })
       );
     }
+  };
+
+  /** Rust `compare_pdfs`처럼 파일을 연 뒤 쪽 범위를 검사한다. 범위 오류는 경로가 없다. */
+  const openCompareSide = ({
+    path,
+    range
+  }: CompareSideParams): MockCompareSide => {
+    ensureMergeSource(path);
+    const file = filesByPath.get(path) ?? convertedFiles.get(path);
+    if (!file) {
+      throw new PlatformError(missingFile(path));
+    }
+    const parsed = parsePageRange({
+      input: range,
+      pageCount: file.pages.length
+    });
+    if (!parsed.isValid) {
+      throw new PlatformError({
+        code: MOCK_ERROR_CODE.INVALID_RANGE,
+        message: range,
+        path: null
+      });
+    }
+    return { file, range: parsed.pages };
   };
 
   const newTempOutput = (jobId: string): MockMergeOutput => {
@@ -267,6 +369,27 @@ export function createMockPlatform({
         overallPercent: PERCENT_COMPLETE
       });
       return { ...written, pageCount };
+    },
+    comparePdfs: async ({ request, onProgress }) => {
+      const before = openCompareSide({
+        path: request.before,
+        range: request.options.rangeA
+      });
+      const after = openCompareSide({
+        path: request.after,
+        range: request.options.rangeB
+      });
+      const rangeTotal = before.range.length + after.range.length;
+      onProgress?.({
+        jobId: request.jobId,
+        stage: MOCK_COMPARE.LAST_STAGE,
+        done: rangeTotal,
+        total: rangeTotal,
+        stagePercent: PERCENT_COMPLETE,
+        overallPercent: PERCENT_COMPLETE,
+        detail: null
+      });
+      return emptyCompareResult({ before, after });
     },
     cancelJob: async () => {},
     copyFile: async ({ source, destination }) => {

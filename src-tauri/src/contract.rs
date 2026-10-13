@@ -254,6 +254,374 @@ impl From<pdf_core::MergeProgress> for MergeProgress {
     }
 }
 
+// ── 비교(계획서 §6.2 6번). 결과 모양은 ADR 0001 §1·§7의 계약 JSON이고, pdf-core 모델의 미러다.
+// pdf-core 타입에는 specta를 붙일 수 없어(고아 규칙) 같은 모양을 여기 두고 `From`으로 옮긴다.
+
+#[derive(Debug, Clone, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct CompareRequest {
+    /// 프론트가 만든 작업 ID. `cancel_job`에 같은 값을 넘긴다.
+    pub(crate) job_id: String,
+    /// A(이전, 왼쪽) 문서
+    pub(crate) before: PathBuf,
+    /// B(이후, 오른쪽) 문서
+    pub(crate) after: PathBuf,
+    pub(crate) options: CompareOptions,
+}
+
+/// 비교 옵션(ADR 0001 §13). 쪽 범위는 1부터 센 사용자 표기(`"1,3-5"`, 비우면 전체)다.
+#[derive(Debug, Clone, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct CompareOptions {
+    pub(crate) range_a: String,
+    pub(crate) range_b: String,
+    pub(crate) exclude_header: bool,
+    pub(crate) exclude_footer: bool,
+    pub(crate) exclude_page_numbers: bool,
+    pub(crate) ignore_case: bool,
+}
+
+impl From<CompareOptions> for pdf_core::CompareOptions {
+    fn from(options: CompareOptions) -> Self {
+        Self {
+            range_a: options.range_a,
+            range_b: options.range_b,
+            exclude_header: options.exclude_header,
+            exclude_footer: options.exclude_footer,
+            exclude_page_numbers: options.exclude_page_numbers,
+            ignore_case: options.ignore_case,
+        }
+    }
+}
+
+/// 비교 단계. 이 순서대로 진행한다(ADR 0001 §15).
+#[derive(Debug, Clone, Copy, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum CompareStage {
+    ExtractA,
+    ExtractB,
+    Ocr,
+    Normalize,
+    Diff,
+    AlignPages,
+}
+
+/// `done`·`total`로 알 수 없는 덧붙임 정보
+#[derive(Debug, Clone, Copy, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum ProgressDetail {
+    /// 이 단계를 앞선 실행의 캐시로 바로 끝냈다.
+    Cached,
+}
+
+/// 비교 진행률. 화면에 보이는 %(단계·전체)가 바뀔 때만 온다.
+#[derive(Debug, Clone, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct CompareProgress {
+    pub(crate) job_id: String,
+    pub(crate) stage: CompareStage,
+    pub(crate) done: u32,
+    pub(crate) total: u32,
+    pub(crate) stage_percent: u8,
+    pub(crate) overall_percent: u8,
+    pub(crate) detail: Option<ProgressDetail>,
+}
+
+impl From<pdf_core::CompareProgress> for CompareProgress {
+    fn from(progress: pdf_core::CompareProgress) -> Self {
+        Self {
+            job_id: progress.job_id,
+            stage: match progress.stage {
+                pdf_core::CompareStage::ExtractA => CompareStage::ExtractA,
+                pdf_core::CompareStage::ExtractB => CompareStage::ExtractB,
+                pdf_core::CompareStage::Ocr => CompareStage::Ocr,
+                pdf_core::CompareStage::Normalize => CompareStage::Normalize,
+                pdf_core::CompareStage::Diff => CompareStage::Diff,
+                pdf_core::CompareStage::AlignPages => CompareStage::AlignPages,
+            },
+            done: progress.done,
+            total: progress.total,
+            stage_percent: progress.stage_percent,
+            overall_percent: progress.overall_percent,
+            detail: progress.detail.map(|detail| match detail {
+                pdf_core::ProgressDetail::Cached => ProgressDetail::Cached,
+            }),
+        }
+    }
+}
+
+/// 비교하는 두 문서 중 한쪽. `before`가 A(왼쪽), `after`가 B(오른쪽)다.
+#[derive(Debug, Clone, Copy, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum Side {
+    Before,
+    After,
+}
+
+/// 변경 글자를 덮는 상자(PDF 사용자 공간, ADR 0001 §2). 좌표는 유한한 값이라 JSON `null`이 되지 않는다.
+#[derive(Debug, Clone, Serialize, specta::Type)]
+pub(crate) struct TextBox {
+    /// 0부터 센 쪽 번호
+    pub(crate) page: u32,
+    #[specta(type = Number)]
+    pub(crate) x: f32,
+    #[specta(type = Number)]
+    pub(crate) y: f32,
+    #[specta(type = Number)]
+    pub(crate) w: f32,
+    #[specta(type = Number)]
+    pub(crate) h: f32,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum ChangeKind {
+    Insert,
+    Delete,
+    Replace,
+}
+
+/// 한 쪽의 글자를 어디서 얻었나
+#[derive(Debug, Clone, Copy, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum TextSource {
+    TextLayer,
+    Ocr,
+}
+
+#[derive(Debug, Clone, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ChangeSide {
+    /// 변경에 걸린 토큰을 공백 하나로 이은 원문 글자
+    pub(crate) text: String,
+    /// 텍스트 순서. 비어 있지 않다.
+    pub(crate) boxes: Vec<TextBox>,
+    /// 걸린 OCR 토큰의 가장 낮은 신뢰도(0~1, NaN 없음). OCR 토큰이 없으면 `null`
+    #[specta(type = Option<Number>)]
+    pub(crate) min_confidence: Option<f32>,
+}
+
+/// `[A 쪽, B 쪽]`(0부터). 그 문서에 해당하는 쪽이 없으면 `null`이다.
+pub(crate) type PagePair = (Option<u32>, Option<u32>);
+
+#[derive(Debug, Clone, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct Change {
+    /// 같은 입력·옵션이면 다시 실행해도 같은 키(ADR 0001 §4)
+    pub(crate) id: String,
+    pub(crate) kind: ChangeKind,
+    pub(crate) before: Option<ChangeSide>,
+    pub(crate) after: Option<ChangeSide>,
+    pub(crate) page_pair: PagePair,
+    /// "확인 필요". 차이 개수와 따로 센다(ADR 0001 §5).
+    pub(crate) needs_review: bool,
+}
+
+/// 한 쪽의 보이는 영역(CropBox ∩ MediaBox, 회전 전)과 회전
+#[derive(Debug, Clone, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PageSize {
+    pub(crate) view_box: PageBox,
+    pub(crate) rotation: Rotation,
+}
+
+/// 문서의 모든 쪽. 쪽 번호가 곧 색인이다.
+#[derive(Debug, Clone, Serialize, specta::Type)]
+pub(crate) struct PageSizes {
+    pub(crate) before: Vec<PageSize>,
+    pub(crate) after: Vec<PageSize>,
+}
+
+/// 문서의 모든 쪽. 비교 범위 밖이라 읽지 않은 쪽은 `null`이다.
+#[derive(Debug, Clone, Serialize, specta::Type)]
+pub(crate) struct PageSources {
+    pub(crate) before: Vec<Option<TextSource>>,
+    pub(crate) after: Vec<Option<TextSource>>,
+}
+
+/// OCR로 글자를 얻지 못한 이유
+#[derive(Debug, Clone, Copy, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum NoTextReason {
+    OcrUnavailable,
+    OcrFailed,
+}
+
+/// 결과와 함께 보이는 안내(ADR 0001 §6). 쪽 번호는 0부터 센 오름차순이다.
+#[derive(Debug, Clone, Serialize, specta::Type)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub(crate) enum Notice {
+    LowTextConfidence {
+        side: Side,
+        pages: Vec<u32>,
+    },
+    NoTextLayer {
+        side: Side,
+        reason: NoTextReason,
+        pages: Vec<u32>,
+    },
+    #[serde(rename_all = "camelCase")]
+    Truncated {
+        before_pages: Vec<u32>,
+        after_pages: Vec<u32>,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct CompareResult {
+    /// diff 순서
+    pub(crate) changes: Vec<Change>,
+    /// 화면 행 순서
+    pub(crate) page_pairs: Vec<PagePair>,
+    pub(crate) page_sizes: PageSizes,
+    pub(crate) page_sources: PageSources,
+    pub(crate) notices: Vec<Notice>,
+}
+
+impl From<pdf_core::Side> for Side {
+    fn from(side: pdf_core::Side) -> Self {
+        match side {
+            pdf_core::Side::Before => Self::Before,
+            pdf_core::Side::After => Self::After,
+        }
+    }
+}
+
+impl From<pdf_core::TextBox> for TextBox {
+    fn from(text_box: pdf_core::TextBox) -> Self {
+        Self {
+            page: text_box.page,
+            x: text_box.x,
+            y: text_box.y,
+            w: text_box.w,
+            h: text_box.h,
+        }
+    }
+}
+
+impl From<pdf_core::ChangeKind> for ChangeKind {
+    fn from(kind: pdf_core::ChangeKind) -> Self {
+        match kind {
+            pdf_core::ChangeKind::Insert => Self::Insert,
+            pdf_core::ChangeKind::Delete => Self::Delete,
+            pdf_core::ChangeKind::Replace => Self::Replace,
+        }
+    }
+}
+
+impl From<pdf_core::TextSource> for TextSource {
+    fn from(source: pdf_core::TextSource) -> Self {
+        match source {
+            pdf_core::TextSource::TextLayer => Self::TextLayer,
+            pdf_core::TextSource::Ocr => Self::Ocr,
+        }
+    }
+}
+
+impl From<pdf_core::ChangeSide> for ChangeSide {
+    fn from(side: pdf_core::ChangeSide) -> Self {
+        Self {
+            text: side.text,
+            boxes: side.boxes.into_iter().map(TextBox::from).collect(),
+            min_confidence: side.min_confidence,
+        }
+    }
+}
+
+impl From<pdf_core::Change> for Change {
+    fn from(change: pdf_core::Change) -> Self {
+        Self {
+            id: change.id,
+            kind: change.kind.into(),
+            before: change.before.map(ChangeSide::from),
+            after: change.after.map(ChangeSide::from),
+            page_pair: change.page_pair,
+            needs_review: change.needs_review,
+        }
+    }
+}
+
+impl From<pdf_core::PageSize> for PageSize {
+    fn from(size: pdf_core::PageSize) -> Self {
+        Self {
+            view_box: size.view_box.into(),
+            rotation: size.rotation.into(),
+        }
+    }
+}
+
+impl From<pdf_core::NoTextReason> for NoTextReason {
+    fn from(reason: pdf_core::NoTextReason) -> Self {
+        match reason {
+            pdf_core::NoTextReason::OcrUnavailable => Self::OcrUnavailable,
+            pdf_core::NoTextReason::OcrFailed => Self::OcrFailed,
+        }
+    }
+}
+
+impl From<pdf_core::Notice> for Notice {
+    fn from(notice: pdf_core::Notice) -> Self {
+        match notice {
+            pdf_core::Notice::LowTextConfidence { side, pages } => Self::LowTextConfidence {
+                side: side.into(),
+                pages,
+            },
+            pdf_core::Notice::NoTextLayer {
+                side,
+                reason,
+                pages,
+            } => Self::NoTextLayer {
+                side: side.into(),
+                reason: reason.into(),
+                pages,
+            },
+            pdf_core::Notice::Truncated {
+                before_pages,
+                after_pages,
+            } => Self::Truncated {
+                before_pages,
+                after_pages,
+            },
+        }
+    }
+}
+
+fn page_sources(sources: Vec<Option<pdf_core::TextSource>>) -> Vec<Option<TextSource>> {
+    sources
+        .into_iter()
+        .map(|source| source.map(TextSource::from))
+        .collect()
+}
+
+impl From<pdf_core::CompareResult> for CompareResult {
+    fn from(result: pdf_core::CompareResult) -> Self {
+        Self {
+            changes: result.changes.into_iter().map(Change::from).collect(),
+            page_pairs: result.page_pairs,
+            page_sizes: PageSizes {
+                before: result
+                    .page_sizes
+                    .before
+                    .into_iter()
+                    .map(PageSize::from)
+                    .collect(),
+                after: result
+                    .page_sizes
+                    .after
+                    .into_iter()
+                    .map(PageSize::from)
+                    .collect(),
+            },
+            page_sources: PageSources {
+                before: page_sources(result.page_sources.before),
+                after: page_sources(result.page_sources.after),
+            },
+            notices: result.notices.into_iter().map(Notice::from).collect(),
+        }
+    }
+}
+
 /// 파일 크기를 `u32`로 보낸다. 열 수 있는 파일은 입력 상한(512MB) 안이라 넘칠 수 없지만,
 /// 넘치면 최댓값으로 막는다.
 pub(crate) fn byte_count(value: u64) -> u32 {

@@ -5,7 +5,8 @@ import type { ValueOf } from "@/renderer/shared/types/common";
 export const APP_MODE = {
   HOME: "home",
   MERGE: "merge",
-  COMPARE: "compare"
+  COMPARE: "compare",
+  TRANSLATE: "translate"
 } as const;
 
 export type AppMode = ValueOf<typeof APP_MODE>;

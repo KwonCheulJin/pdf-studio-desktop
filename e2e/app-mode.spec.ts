@@ -10,9 +10,9 @@ import type { NativeFileDropEvent } from "../src/renderer/shared/platform";
 
 /**
  * 앱 모드와 홈(계획서 P3-1, 진행 가이드 Step 24).
- * - 첫 화면은 홈이고 카드는 "PDF 병합"·"PDF 비교" 두 장이다.
+ * - 첫 화면은 홈이고 카드는 "PDF 병합"·"PDF 비교"·"PDF 번역" 세 장이다(번역은 translate-entry.spec.ts).
  * - 카드 버튼으로 고르거나 카드 위에 놓으면 그 모드로 들어간다(병합은 여러 개, 비교는 2개까지).
- * - 병합·비교 툴바 맨 왼쪽 `[병합 | 비교]` 탭으로 바꿔도 각 모드의 상태가 남는다.
+ * - 병합·비교 툴바 맨 왼쪽 `[병합 | 비교 | 번역]` 탭으로 바꿔도 각 모드의 상태가 남는다.
  * - 병합 결과 미리보기에 임시 결과가 있으면 비교로 넘어가기 전에 확인하고, 넘어가도 결과는 남는다.
  */
 
@@ -141,13 +141,13 @@ async function dropOn(
   });
 }
 
-test("첫 화면은 홈이고 병합·비교 카드 두 장만 있다", async ({ page }) => {
+test("첫 화면은 홈이고 병합·비교·번역 카드 세 장이 있다", async ({ page }) => {
   await openHome(page, [FILE_A]);
 
   await expect(
     page.getByRole("heading", { name: "어떤 작업을 할까요?" })
   ).toBeVisible();
-  await expect(page.getByRole("main").getByRole("region")).toHaveCount(2);
+  await expect(page.getByRole("main").getByRole("region")).toHaveCount(3);
   await expect(
     homeCard(page, "PDF 병합").getByRole("button", {
       name: "파일 선택",
@@ -160,7 +160,12 @@ test("첫 화면은 홈이고 병합·비교 카드 두 장만 있다", async ({
       exact: true
     })
   ).toBeVisible();
-  await expect(page.getByText("PDF 번역")).toHaveCount(0);
+  await expect(
+    homeCard(page, "PDF 번역").getByRole("button", {
+      name: "번역할 파일 선택",
+      exact: true
+    })
+  ).toBeVisible();
   await expect(
     page.getByText(
       "원본 파일은 바뀌지 않아요. 결과는 저장할 곳을 골라 새 파일로 만들어요."

@@ -11,6 +11,8 @@ mod pdf_engine;
 mod report;
 #[cfg(test)]
 mod test_support;
+#[cfg(test)]
+mod translate_deps_spike;
 
 use std::error::Error;
 use std::path::PathBuf;

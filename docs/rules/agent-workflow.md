@@ -19,7 +19,7 @@
 
 ## CI
 
-- `.github/workflows/ci.yml`이 PR과 `main` 푸시마다 macOS·Windows·Linux에서 `pnpm validate`, `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`(pdfium 포함)를 돌린다. E2E는 macOS 잡, NSIS 설치 파일(아티팩트 `pdf-studio-windows-nsis`)은 Windows 잡이 만든다.
+- `.github/workflows/ci.yml`이 PR과 `main` 푸시마다 macOS·Windows·Linux에서 `pnpm fetch:pdfium`·`pnpm fetch:ocr`(캐시) 뒤 `pnpm validate`, `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`(pdfium·OCR 테스트 포함)를 돌린다. E2E는 macOS 잡, NSIS 설치 파일(아티팩트 `pdf-studio-windows-nsis`)은 Windows 잡이 만든다.
 
 ## 품질 게이트
 

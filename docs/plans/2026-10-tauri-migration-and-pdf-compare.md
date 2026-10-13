@@ -604,7 +604,7 @@ pdfium 스파이크(P1-0)처럼 연결 작업(P2-4a) 전에 끝까지 검증한�
 | 숫자 토큰 조용한 오인식 | 0건 | 0 / 0 | 0 / 0 | 0 / 0 | 통과 |
 | 쪽당 처리 시간 | ≤ 2초 | 평균 0.89초·최대 1.16초 | 최대 1.20초 | 최대 1.22초 | 통과 |
 | 번들 증가량 | ≤ 60MB | macOS 57.5MB, Windows 34.2MB, Linux 42.7MB(1차와 같다) | | | 통과 |
-| 플랫폼 간 결과 | Mac·Windows 같음 | 미측정 | | | 미확인(CI가 `fetch:ocr`를 하지 않는다) |
+| 플랫폼 간 결과 | Mac·Windows 같음 | 미측정 | | | 미확인. Step 26부터 CI 세 OS가 OCR 테스트(golden 포함)를 돌린다. 글자열을 OS끼리 맞대는 비교는 아직 없다 |
 | 서명된 `.app`에서 로드 | codesign 통과 후 추론 | 1차 측정의 확인(아래). 그 뒤 바뀐 것은 렌더 해상도 상수뿐이라 로드·서명 경로는 같다 | | | 통과 |
 
 - 참고(이전 정의로 센 값): 시드 3의 200dpi는 토큰 전체 기준으로 98.48%(65/66)·조용한 오인식 1건이다(끝 마침표 누락). 새 정의에서는 끝 `.`을 빼고 보며, 비교에서는 확인 필요로 분류된다.
@@ -647,7 +647,7 @@ pdfium 스파이크(P1-0)처럼 연결 작업(P2-4a) 전에 끝까지 검증한�
 | 숫자 토큰 조용한 오인식 | 0건 | 300dpi 0건, 200dpi 1건(`8,900원이다.`의 끝 마침표 누락, 최소 신뢰도 0.987) | **실패** |
 | 쪽당 처리 시간 | ≤ 2초 | 픽스처 평균 0.76초·최대 0.98초. 로컬 실제 스캔 96쪽 평균 1.10초·최대 1.47초(다른 빌드가 돌던 부하 상태) | 통과 |
 | 번들 증가량 | ≤ 60MB | macOS 57.5MB(서명 후 dylib 39.14MB + 모델 18.36MB, 실제 `.app` 86.05MiB), Windows 34.2MB(dll 15.83MB), Linux 42.7MB(so 24.30MB) | 통과(macOS 여유 2.5MB) |
-| 플랫폼 간 결과 | Mac·Windows 같은 글자열 | 미측정 | 미확인(CI가 `fetch:ocr`를 하지 않는다) |
+| 플랫폼 간 결과 | Mac·Windows 같은 글자열 | 미측정 | 미확인(Step 26부터 CI 세 OS가 OCR 테스트를 돌린다. OS끼리 맞대는 비교는 아직 없다) |
 | 서명된 `.app`에서 로드 | codesign 통과 후 추론 | `codesign --verify --deep --strict` valid. 창 숨김 실행 로그: `ONNX Runtime loaded from …/Contents/Frameworks/libonnxruntime.dylib (models …/Contents/Resources/ocr-models)`, `45 lines in 997 ms` | 통과 |
 
 같은 문서를 노이즈 시드·기울기만 바꿔 다시 만든 픽스처(레포 밖) 3벌 × 렌더 해상도 2개로 흔들림을 쟀다. 「핵심」은 토큰 끝 `.`·`,`를 뺀 숫자 토큰 기준(참고값)이다.
@@ -684,7 +684,8 @@ pdfium 스파이크(P1-0)처럼 연결 작업(P2-4a) 전에 끝까지 검증한�
 앱 번들 설정(스파이크에서 확인한 값. 확인 뒤 앱 코드·설정은 되돌렸고 P2-4a에서 넣는다): `bundle.macOS.frameworks`에 `onnxruntime/aarch64-apple-darwin/libonnxruntime.dylib`, `bundle.resources`에 `ocr-models/<파일>` → `ocr-models/<파일>` 세 개. 런타임 폴더는 pdfium과 같은 `Contents/Frameworks`, 모델 폴더는 `resource_dir()/ocr-models`. 기존 `com.apple.security.cs.disable-library-validation`으로 ad-hoc 서명 dylib가 로드된다.
 
 앱 번들 연결(Step 26, 2026-10-13): 위 값을 `src-tauri/tauri.conf.json`에 넣었다 — `bundle.macOS.frameworks`에 `onnxruntime/aarch64-apple-darwin/libonnxruntime.dylib`(pdfium과 같은 `Contents/Frameworks`), `bundle.resources`에 `ocr-models/` 세 파일. 앱은 OCR 엔진을 첫 비교에서 로드하고 실패하면 OCR 없이 비교한다([ADR 0001](../adr/0001-compare-result-model.md) §16).
-- 런타임·모델이 없는 환경: tauri-build가 `cargo build`·`clippy`·`test` 때도 리소스·프레임워크 파일을 복사하므로 파일이 없으면 빌드가 멈춘다(`pnpm tauri build`도 같다). 그래서 **CI의 모든 잡은 `pnpm fetch:pdfium` 옆에 `pnpm fetch:ocr`을 돌린다**(P4-1에 이미 적힌 대로, 캐시 키는 `scripts/fetch-ocr.mjs` 해시). OCR 없이 출시되는 일을 막는 장치로 둔다(파일이 없어도 빌드되게 하는 별도 설정 파일은 출시 빌드에서 빠뜨릴 수 있어 버렸다). Windows·Linux는 ONNX Runtime 라이브러리를 리소스 폴더 바로 아래(`onnxruntime.dll`/`libonnxruntime.so`)에 두어야 앱이 찾는다(`pdf_engine::bundled_library_dir`) — pdfium처럼 CI의 `--config`로 `bundle.resources`에 더한다(예: `"onnxruntime/x86_64-pc-windows-msvc/onnxruntime.dll": "onnxruntime.dll"`, `fetch:ocr --target`으로 받은 폴더).
+- 런타임·모델이 없는 환경: tauri-build가 `cargo build`·`clippy`·`test` 때도 리소스·프레임워크 파일을 복사하므로 파일이 없으면 빌드가 멈춘다(`pnpm tauri build`도 같다). 그래서 **CI의 모든 잡은 `pnpm fetch:pdfium` 옆에 `pnpm fetch:ocr`을 돌린다**(`.github/workflows/ci.yml`, 캐시 키는 OS·아키텍처 + `scripts/fetch-ocr.mjs` 해시, 러너에 맞는 타깃은 스크립트가 고른다). OCR 없이 출시되는 일을 막는 장치로 둔다(파일이 없어도 빌드되게 하는 별도 설정 파일은 출시 빌드에서 빠뜨릴 수 있어 버렸다). Windows·Linux는 ONNX Runtime 라이브러리를 리소스 폴더 바로 아래(`onnxruntime.dll`/`libonnxruntime.so`)에 두어야 앱이 찾는다(`pdf_engine::bundled_library_dir`) — pdfium처럼 CI의 `--config`로 `bundle.resources`에 더한다. Windows NSIS 잡은 `"onnxruntime/x86_64-pc-windows-msvc/onnxruntime.dll": "onnxruntime.dll"`을 넣는다. Linux 번들은 CI가 아직 만들지 않는다(만들 때 `libonnxruntime.so`를 같은 방식으로).
+- CI OCR 테스트: 세 OS 잡이 `ONNXRUNTIME_LIB_PATH`·`OCR_MODEL_DIR`을 넣어 OCR 테스트(`tests/ocr.rs`, `compare_ocr.rs`, `compare_runner.rs`의 스캔 쪽)를 돌린다. 로컬 debug(M3 Pro)에서 세 파일 약 74초(`compare_ocr` 49초, `compare_runner` 16초, `ocr` 9초)라 CI 러너에서는 몇 분 늘 것으로 본다. x86(AVX) 커널은 ARM과 부동소수 결과가 조금 달라 신뢰도 기준(0.80·0.95) 근처 토큰의 확인 필요나 글자가 바뀌면 golden이 깨질 수 있다 — 그러면 그것이 플랫폼 간 차이의 첫 측정이다.
 - 측정(`pnpm tauri build --bundles app`, aarch64-apple-darwin, ad-hoc 서명, `codesign --verify --deep --strict` 통과): `.app` 87.70 MiB 중 OCR 몫은 `libonnxruntime.dylib` 37.3 MiB + `ocr-models/` 17.5 MiB = 54.8 MiB(57.5 MB, 스파이크 측정과 같다). 실행 파일 23.2 MiB, `libpdfium.dylib` 7.4 MiB.
 
 **P2-4a OCR 연결 (M)**
@@ -824,11 +825,11 @@ A의 변경 상자와 B의 대응 상자를 거터를 가로지르는 곡선으�
   - `macos-latest`(aarch64-apple-darwin, 필요하면 `universal-apple-darwin`)
   - `windows-latest`
   - `ubuntu-22.04`(`libwebkit2gtk-4.1-dev` 등)
-- 각 잡에서 `scripts/fetch-pdfium.mjs`와 `scripts/fetch-ocr.mjs`(P2-2a 이후)를 실행한다(버전 고정, 캐시).
+- 각 잡에서 `scripts/fetch-pdfium.mjs`와 `scripts/fetch-ocr.mjs`를 실행한다(버전 고정, 캐시). `fetch:ocr`은 Step 26부터 필수다(tauri-build가 OCR 모델·macOS ONNX Runtime dylib를 복사한다, §6.4 배포). 잡마다 `ONNXRUNTIME_LIB_PATH`·`OCR_MODEL_DIR`을 넣어 OCR 테스트도 돈다.
 - `Swatinem/rust-cache`, pnpm 캐시, `NODE_AUTH_TOKEN`(GitHub Packages)을 유지한다.
 - PR에서는 `pnpm validate` + `cargo fmt --check` + `cargo clippy -D warnings` + `cargo test`를 실행한다.
 - E2E(`pnpm test:e2e`)는 macOS 잡에서만 돈다. Tauri macOS 웹뷰와 엔진이 같고, 한글 CID 픽스처가 쓰는 시스템 한글 글꼴이 이미 있다.
-- Windows 설치 파일은 **NSIS**(`bundle.targets`에 `nsis`) 하나로 한다. 사용자 단위 설치라 관리자 권한이 필요 없다. CI의 Windows 잡이 `pnpm tauri build`로 만들어 아티팩트로 올린다. `pdfium.dll`은 `--config`로 `bundle.resources`에 넣어 설치 폴더(`resource_dir`)에 둔다. macOS `.dmg`는 PR마다 만들지 않는다(P4-2 릴리스에서).
+- Windows 설치 파일은 **NSIS**(`bundle.targets`에 `nsis`) 하나로 한다. 사용자 단위 설치라 관리자 권한이 필요 없다. CI의 Windows 잡이 `pnpm tauri build`로 만들어 아티팩트로 올린다. `pdfium.dll`·`onnxruntime.dll`은 `--config`로 `bundle.resources`에 넣어 설치 폴더(`resource_dir`)에 둔다. macOS `.dmg`는 PR마다 만들지 않는다(P4-2 릴리스에서).
 
 ### P4-2 릴리스 흐름 정리 (T1)
 - 기존 Electron용 워크플로(`build.yml`, `release.yml`, `auto-version.yml`)는 Step 1에서 모두 제거했다. 여기서 새로 만든다: `pnpm release:*` → 태그 푸시 → `release.yml`이 tauri-action으로 Draft Release를 만들고 아티팩트를 업로드한다.

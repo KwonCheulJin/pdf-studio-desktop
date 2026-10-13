@@ -10,7 +10,7 @@
   - 좌표 golden 픽스처는 글꼴을 임베드한다(OS 글꼴 대체로 tight box가 달라짐).
   - 시간에 따라 달라지는 동작(diff 시간 제한)은 이미 지난 제한(`Duration::ZERO`)으로 결정적으로 확인한다. 실제 시간을 재서 단언하는 테스트는 두지 않고, 측정값은 ADR·상수 주석에 남긴다.
   - 해시처럼 규칙으로 계산하는 값(`Change.id`)은 기대값을 테스트 대상 코드가 아닌 다른 구현(Python `hashlib` 등)으로 구해 리터럴로 둔다.
-- OCR 비교 테스트(`crates/pdf-core/tests/compare_ocr.rs`, 실행기의 스캔 쪽 테스트 `compare_runner.rs`)는 `tests/ocr.rs`처럼 `ONNXRUNTIME_LIB_PATH`·`OCR_MODEL_DIR`이 없으면 건너뛴다(런타임 없이 도는 `OcrUnavailable` 테스트만 남는다). OCR golden(`ocr-edit.changes.json`)은 변경의 종류·글자·확인 필요만 담는다(상자·신뢰도는 OCR 실행 환경에 따라 조금 흔들릴 수 있어 빼고, 상자는 허용 오차 테스트로 따로 본다). debug 빌드에서 OCR 테스트 파일 하나가 약 1분 걸린다. 신뢰도·확인 필요·NFKC 강제 규칙은 pdfium·OCR 없이 글자를 직접 만든 문서로 확인한다(`compare_review.rs`). OCR 픽스처는 `generate_ocr_fixtures.py`로 다시 만든다.
+- OCR 비교 테스트(`crates/pdf-core/tests/compare_ocr.rs`, 실행기의 스캔 쪽 테스트 `compare_runner.rs`)는 `tests/ocr.rs`처럼 `ONNXRUNTIME_LIB_PATH`·`OCR_MODEL_DIR`이 없으면 건너뛴다(런타임 없이 도는 `OcrUnavailable` 테스트만 남는다). OCR golden(`ocr-edit.changes.json`)은 변경의 종류·글자·확인 필요만 담는다(상자·신뢰도는 OCR 실행 환경에 따라 조금 흔들릴 수 있어 빼고, 상자는 허용 오차 테스트로 따로 본다). debug 빌드에서 OCR 테스트 파일 하나가 약 1분 걸린다. CI는 세 OS 잡 모두 두 값을 넣어 OCR 테스트를 돌린다(`.github/workflows/ci.yml`). 신뢰도·확인 필요·NFKC 강제 규칙은 pdfium·OCR 없이 글자를 직접 만든 문서로 확인한다(`compare_review.rs`). OCR 픽스처는 `generate_ocr_fixtures.py`로 다시 만든다.
 - **프론트는 새 단위 테스트(Vitest)를 쓰지 않는다.** 검증은 Playwright E2E로 한다: Vite dev 서버 + `mock-platform` + WebKit 엔진 헤드리스(창이 뜨지 않는다). 어댑터(`tauri-platform.ts`)에도 단위 테스트를 따로 두지 않고 계약 타입과 typecheck로 형태를 맞추고 동작은 E2E로 확인한다.
 - 기존 프론트 Vitest(특성 테스트 포함)는 리팩터링 중 동작 고정용으로 유지한다. 대상 코드를 다시 쓰거나 지우는 Step에서 같은 동작을 E2E가 확인하게 되면 그 테스트도 함께 지운다.
 - 공개 인터페이스로 테스트한다. 구현 세부(private 함수, 내부 상태)를 테스트하지 않는다.

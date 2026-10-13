@@ -48,7 +48,8 @@ interface ExpandedPageCardProps {
  * - 스택 효과: 첫 페이지만 (isStacked prop)
  * - 퀵 액션: Collapse (첫 페이지만), 회전, 삭제
  * - 삭제된 페이지: 제자리에 흐리게(점선 테두리) + "삭제됨" 배지 + 복원 버튼
- * - 푸터: 파일명 + 단일 페이지 번호
+ * - 체크박스는 골랐거나 마우스·포커스일 때 보인다
+ * - 푸터: "파일명 · p. 쪽" 한 줄
  */
 export function ExpandedPageCard({
   fileId,
@@ -146,26 +147,25 @@ export function ExpandedPageCard({
     <div data-testid="page-card" className="group flex h-full w-full flex-col">
       {/* 카드 본문 - 스택 효과 포함, flex-1로 남은 공간 채우기 */}
       <div className="relative flex-1">
-        {/* 스택 효과 (펼침 상태의 첫 페이지만) - Adobe thumbnailBorder 스타일 */}
+        {/* 스택 효과 (펼침 상태의 첫 페이지만) - 뒤에 깔린 종이 */}
         {isStacked && (
-          <div className="border-border bg-card absolute -top-1.5 right-1.5 bottom-1.5 -left-1.5 rounded-xs border" />
+          <div className="border-border bg-paper absolute -top-1.5 right-1.5 bottom-1.5 -left-1.5 rounded-xs border" />
         )}
 
-        {/* 썸네일 영역 - 절대 좌표 기반으로 h-full 사용 */}
+        {/* 썸네일 영역 - 종이. 테두리 2px: 삭제 점선 > 선택 primary > 파일 그룹 색 */}
         <div
           className={cn(
-            "bg-card relative h-full w-full cursor-grab rounded-xs border p-3 transition-all hover:shadow-lg",
-            isSelected
-              ? "border-primary ring-primary/30 ring-2"
-              : "border-border",
+            "bg-paper relative h-full w-full cursor-grab rounded-xs border-2 border-transparent transition-all hover:shadow-lg",
+            !page.isDeleted && "shadow-paper",
             groupColor && !isSelected && !page.isDeleted && groupColor,
-            page.isDeleted && "border-muted-foreground border-dashed"
+            isSelected && !page.isDeleted && "border-primary",
+            page.isDeleted && "border-input border-dashed"
           )}
         >
-          {/* 선택 체크박스 */}
+          {/* 선택 체크박스 (고르면 늘, 아니면 마우스·포커스일 때) */}
           <div
             className={cn(
-              "bg-media-scrim absolute top-2 left-2 z-10 flex cursor-default items-center justify-center rounded-xs p-2 transition-opacity",
+              "absolute top-2 left-2 z-20 flex cursor-default transition-opacity",
               isSelected
                 ? "opacity-100"
                 : "opacity-0 group-focus-within:opacity-100 group-hover:opacity-100"
@@ -177,13 +177,13 @@ export function ExpandedPageCard({
               onCheckedChange={handleCheckboxChange}
               onClick={(e) => e.stopPropagation()}
               aria-label={`${fileName} ${pageNumber}쪽 선택`}
-              className="border-media-foreground/50 size-5"
+              className="bg-paper size-4.5"
             />
           </div>
 
           {/* 퀵 액션 버튼 (우상단) - Collapse, 미리보기, 회전, 삭제. 삭제된 페이지는 접기만 */}
           {(showCollapseButton || !page.isDeleted) && (
-            <div className="bg-media-scrim pointer-events-none absolute top-2 right-2 z-10 flex cursor-default flex-col gap-1 rounded-md p-1 opacity-0 transition-opacity group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100">
+            <div className="border-border bg-card pointer-events-none absolute top-2 right-2 z-20 flex cursor-default flex-col gap-0.5 rounded-md border p-1 opacity-0 shadow-sm transition-opacity group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100">
               {showCollapseButton && (
                 <Tooltip content="접기">
                   <Button
@@ -191,7 +191,6 @@ export function ExpandedPageCard({
                     size="icon-sm"
                     onClick={handleCollapse}
                     aria-label="접기"
-                    className="rounded-full"
                   >
                     <ChevronsLeftRight size={16} />
                   </Button>
@@ -205,7 +204,6 @@ export function ExpandedPageCard({
                       size="icon-sm"
                       onClick={handlePreview}
                       aria-label="미리보기"
-                      className="rounded-full"
                     >
                       <ZoomIn size={16} />
                     </Button>
@@ -216,7 +214,6 @@ export function ExpandedPageCard({
                       size="icon-sm"
                       onClick={handleRotateCcw}
                       aria-label="반시계 방향 회전"
-                      className="rounded-full"
                     >
                       <RotateCcw size={16} />
                     </Button>
@@ -227,7 +224,6 @@ export function ExpandedPageCard({
                       size="icon-sm"
                       onClick={handleRotateCw}
                       aria-label="시계 방향 회전"
-                      className="rounded-full"
                     >
                       <RotateCw size={16} />
                     </Button>
@@ -238,7 +234,6 @@ export function ExpandedPageCard({
                       size="icon-sm"
                       onClick={handleDelete}
                       aria-label="페이지 삭제"
-                      className="rounded-full"
                     >
                       <Trash2 size={16} />
                     </Button>
@@ -251,15 +246,15 @@ export function ExpandedPageCard({
           {/* 삭제된 페이지: 배지 + 복원 버튼 (썸네일만 흐리게, 버튼은 그대로) */}
           {page.isDeleted && (
             <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2">
-              <span className="bg-destructive text-destructive-foreground rounded px-2 py-0.5 text-xs font-medium">
+              <span className="bg-muted text-muted-foreground rounded-full px-2 text-xs/5 font-medium">
                 삭제됨
               </span>
               <Button
-                variant="secondary"
+                variant="outline"
                 size="sm"
                 onClick={handleRestore}
                 aria-label="페이지 복원"
-                className="pointer-events-auto"
+                className="border-primary bg-card text-primary hover:bg-accent hover:text-accent-foreground pointer-events-auto h-7.5 gap-1.5 rounded-md text-[13px] font-medium"
               >
                 <Undo2 size={14} />
                 복원
@@ -267,16 +262,16 @@ export function ExpandedPageCard({
             </div>
           )}
 
-          {/* 썸네일 이미지 - 고정 크기 컨테이너 */}
+          {/* 썸네일 이미지 - 회전해도 종이 안에 들도록 정사각형 상자 */}
           <div
             className={cn(
-              "relative flex h-full w-full items-center justify-center overflow-hidden rounded",
-              page.isDeleted && "opacity-40"
+              "relative flex h-full w-full items-center justify-center overflow-hidden rounded-xs",
+              page.isDeleted && "opacity-35"
             )}
           >
             <div
               ref={thumbnailRef}
-              className="bg-muted flex items-center justify-center overflow-hidden rounded"
+              className="flex items-center justify-center overflow-hidden"
               style={
                 imageSize ? { width: imageSize, height: imageSize } : undefined
               }
@@ -296,16 +291,14 @@ export function ExpandedPageCard({
         </div>
       </div>
 
-      {/* 푸터 (파일명 + 단일 페이지 번호) */}
-      <div className="mt-3 flex flex-col gap-0.5 text-center">
-        <p
-          className="text-foreground truncate text-sm font-medium"
-          title={fileName}
-        >
-          {fileName}
-        </p>
-        <p className="text-muted-foreground text-xs">{pageNumber}</p>
-      </div>
+      {/* 푸터 (파일명 · p. 쪽) - 이름이 길면 이름만 줄인다. 높이는 문서 카드 푸터와 같게(52px) 두어 종이 높이를 맞춘다 */}
+      <p
+        className="text-muted-foreground mt-2.5 flex h-10.5 justify-center font-mono text-[11px]/3.5 font-medium"
+        title={fileName}
+      >
+        <span className="min-w-0 truncate">{fileName}</span>
+        <span className="shrink-0 whitespace-pre"> · p. {pageNumber}</span>
+      </p>
     </div>
   );
 }

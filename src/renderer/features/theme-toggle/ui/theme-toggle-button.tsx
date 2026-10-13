@@ -29,11 +29,11 @@ export function ThemeToggleButton() {
       <Button
         variant="ghost"
         size="icon"
-        className="h-8 w-8"
+        className="text-muted-foreground h-8 w-8 rounded-md"
         onClick={() => setMode(next)}
         aria-label={`테마: ${THEME_MODE_LABEL[mode]}`}
       >
-        <Icon size={16} />
+        <Icon size={18} />
       </Button>
     </Tooltip>
   );

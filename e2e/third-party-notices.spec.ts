@@ -12,7 +12,7 @@ import type { E2eMockSeed } from "../src/renderer/app/providers/e2e-platform";
 const NOTICES_PATH = path.join(__dirname, "..", "THIRD_PARTY_NOTICES.md");
 const NOTICES_TITLE = "오픈소스 라이선스";
 const RESOURCE_UNAVAILABLE_MESSAGE =
-  "앱에 함께 들어 있는 파일을 읽지 못했습니다. 앱을 다시 설치해 주세요.";
+  "앱에 함께 들어 있는 파일을 읽지 못했어요. 앱을 다시 설치해 주세요.";
 
 async function seed(page: Page, thirdPartyNotices?: string): Promise<void> {
   const initialSeed: E2eMockSeed = { files: [], thirdPartyNotices };

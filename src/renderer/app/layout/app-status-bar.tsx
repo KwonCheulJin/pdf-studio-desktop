@@ -3,6 +3,7 @@ import {
   MERGE_STATUS,
   useMergeFiles,
   useTotalActivePages,
+  useTotalDeletedPages,
   useMergeStatus
 } from "@/renderer/entities/merge-plan";
 import { APP_STATUS } from "@/renderer/shared/constants";
@@ -11,6 +12,8 @@ export function AppStatusBar() {
   const files = useMergeFiles();
   // 삭제된(복원 대기) 페이지는 병합되지 않으므로 세지 않는다.
   const totalPages = useTotalActivePages();
+  // 삭제 표시된 페이지는 복원할 수 있으므로 따로 보인다(시안 6 "(삭제 2)").
+  const deletedPages = useTotalDeletedPages();
   const status = useMergeStatus();
 
   const statusText = (() => {
@@ -32,6 +35,9 @@ export function AppStatusBar() {
         전체 파일: {files.length}
         <span className="mx-2">|</span>
         전체 페이지: {totalPages}
+        {deletedPages > 0 && (
+          <span className="text-xs"> (삭제 {deletedPages})</span>
+        )}
       </p>
       <div className="text-muted-foreground flex items-center gap-3 text-sm">
         <span>상태: {statusText}</span>

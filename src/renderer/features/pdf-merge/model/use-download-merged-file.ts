@@ -28,7 +28,7 @@ export function useDownloadMergedFile() {
       return { success: true };
     } catch (error) {
       notifyFailure({
-        title: "병합 결과를 저장하지 못했습니다.",
+        title: "병합 결과를 저장하지 못했어요.",
         error: toPlatformError(error),
         context: `병합 결과 저장 실패: ${document.path}`
       });

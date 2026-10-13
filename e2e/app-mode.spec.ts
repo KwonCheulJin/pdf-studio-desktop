@@ -76,7 +76,7 @@ function compareDocuments(page: Page): Locator {
 }
 
 function selectionLabel(page: Page): Locator {
-  return page.getByText(/^\d+개 (페이지|파일) 선택됨$/);
+  return page.getByText(/^\d+개 (페이지|파일) 선택( \(삭제됨 \d+\))?$/);
 }
 
 function unsavedResultDialog(page: Page): Locator {
@@ -239,7 +239,7 @@ test("모드 탭으로 오가도 병합 파일·선택과 비교 세션이 그�
   await page
     .getByRole("button", { name: "bravo.pdf 문서", exact: true })
     .click();
-  await expect(selectionLabel(page)).toHaveText("1개 파일 선택됨");
+  await expect(selectionLabel(page)).toHaveText("1개 파일 선택");
 
   // 임시 결과가 없으면 확인 없이 넘어가고, 비교 세션은 남아 있다.
   await modeTab(page, "비교").click();
@@ -250,7 +250,7 @@ test("모드 탭으로 오가도 병합 파일·선택과 비교 세션이 그�
   await modeTab(page, "병합").click();
   await expect(documentCards(page)).toHaveCount(3);
   await expect(page.locator("footer")).toContainText("전체 파일: 3");
-  await expect(selectionLabel(page)).toHaveText("1개 파일 선택됨");
+  await expect(selectionLabel(page)).toHaveText("1개 파일 선택");
 });
 
 test("전체 삭제한 빈 병합 화면에도 모드 탭이 있고 놓은 파일을 받는다", async ({

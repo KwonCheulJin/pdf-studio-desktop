@@ -7,6 +7,7 @@ mod info;
 mod merge;
 mod ocr;
 mod output;
+mod paragraphs;
 mod tiff;
 
 pub use compare::{
@@ -35,4 +36,8 @@ pub use ocr::{
     OcrEngine, OcrError, OcrLine, Quad, render_page_for_ocr,
 };
 pub use output::{SaveError, copy_atomically};
+pub use paragraphs::{
+    PageParagraphs, Paragraph, ParagraphError, ParagraphPage, SCAN_IMAGE_MAX_EDGE_PX,
+    extract_paragraphs, render_scan_page,
+};
 pub use tiff::{MAX_TIFF_PAGE_PIXELS, TiffConversion, TiffConversionError, convert_tiff};

@@ -1,0 +1,50 @@
+[
+  {
+    "page": 0,
+    "size": {
+      "viewBox": {
+        "left": 0.0,
+        "bottom": 0.0,
+        "right": 595.0,
+        "top": 842.0
+      },
+      "rotation": 0
+    },
+    "content": {
+      "kind": "text",
+      "paragraphs": [
+        {"number":1,"text":"雲端記事本使用條款","bounds":{"page":0,"x":225.848,"y":788.656,"w":142.688,"h":15.088013},"fontSize":16.0,"heading":true},
+        {"number":2,"text":"本服務是一項虛構的雲端筆記服務，使用者可以在多台裝置之間同步筆記內容。","bounds":{"page":0,"x":60.231,"y":713.92,"w":193.27,"h":45.551025},"fontSize":11.0,"heading":false},
+        {"number":3,"text":"使用本服務前，請先閱讀並同意本條款的全部內容。","bounds":{"page":0,"x":60.352,"y":678.72,"w":197.197,"h":27.962036},"fontSize":11.0,"heading":false},
+        {"number":4,"text":"我們會依照法律規定保護使用者的個人資料，不會出售給第三方。","bounds":{"page":0,"x":60.473,"y":643.49805,"w":196.72403,"h":27.961975},"fontSize":11.0,"heading":false},
+        {"number":5,"text":"使用者應妥善保管帳號與密碼，因保管不當造成的損失由使用者自行負擔。","bounds":{"page":0,"x":315.473,"y":731.45404,"w":197.087,"h":28.148987},"fontSize":11.0,"heading":false},
+        {"number":6,"text":"本條款如有修改，將在網站上公告，公告後繼續使用即視為同意。","bounds":{"page":0,"x":315.407,"y":696.232,"w":193.094,"h":27.961975},"fontSize":11.0,"heading":false},
+        {"number":7,"text":"第三條 本條款依虛構地區的法律解釋。","bounds":{"page":0,"x":315.495,"y":678.698,"w":185.17401,"h":10.372986},"fontSize":11.0,"heading":false}
+      ]
+    }
+  },
+  {
+    "page": 1,
+    "size": {
+      "viewBox": {
+        "left": 0.0,
+        "bottom": 0.0,
+        "right": 595.0,
+        "top": 842.0
+      },
+      "rotation": 0
+    },
+    "content": {
+      "kind": "text",
+      "paragraphs": [
+        {"number":1,"text":"雲端記事本使用條款","bounds":{"page":1,"x":225.848,"y":788.656,"w":142.688,"h":15.088013},"fontSize":16.0,"heading":true},
+        {"number":2,"text":"本服務是一項虛構的雲端筆記服務，使用者可以在多台裝置之間同步筆記內容。","bounds":{"page":1,"x":60.231,"y":713.92,"w":193.27,"h":45.551025},"fontSize":11.0,"heading":false},
+        {"number":3,"text":"使用本服務前，請先閱讀並同意本條款的全部內容。","bounds":{"page":1,"x":60.352,"y":678.72,"w":197.197,"h":27.962036},"fontSize":11.0,"heading":false},
+        {"number":4,"text":"我們會依照法律規定保護使用者的個人資料，不會出售給第三方。","bounds":{"page":1,"x":60.473,"y":643.49805,"w":196.72403,"h":27.961975},"fontSize":11.0,"heading":false},
+        {"number":5,"text":"使用者應妥善保管帳號與密碼，因保管不當造成的損失由使用者自行負擔。","bounds":{"page":1,"x":315.473,"y":731.45404,"w":197.087,"h":28.148987},"fontSize":11.0,"heading":false},
+        {"number":6,"text":"本條款如有修改，將在網站上公告，公告後繼續使用即視為同意。","bounds":{"page":1,"x":315.407,"y":696.232,"w":193.094,"h":27.961975},"fontSize":11.0,"heading":false},
+        {"number":7,"text":"第三條 本條款依虛構地區的法律解釋。","bounds":{"page":1,"x":315.495,"y":678.698,"w":185.17401,"h":10.372986},"fontSize":11.0,"heading":false}
+      ]
+    }
+  }
+]

@@ -42,6 +42,7 @@ project-root/
 │  │  ├─ document.rs           # 문서 열기, 에러 타입
 │  │  ├─ info.rs               # 페이지 수·크기·회전 정규화
 │  │  ├─ compare.rs, compare/  # PDF 비교(결과 모델·추출·토큰화·diff·앵커 anchors.rs·리포트 내보내기 규칙은 ADR 0001, 연결선 끝·모양 connectors.rs는 계획서 §7.1)
+│  │  ├─ paragraphs.rs, paragraphs/ # 번역용 문단 추출(줄·단·문단, 목록 머리)과 스캔 쪽 그림(ADR 0002 §2)
 │  │  ├─ ocr/                  # 스캔 쪽 OCR(렌더·검출·인식, 런타임 경로, 디스크 캐시). 비교 연결은 compare/pipeline.rs(ADR 0001 §11)
 │  │  ├─ merge.rs, merge/      # 병합(회전 절대값), 진행률
 │  │  ├─ tiff.rs, tiff/        # TIFF → PDF (CCITT 포함)

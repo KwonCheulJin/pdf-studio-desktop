@@ -17,6 +17,10 @@
 - 구현·수정·테스트 실행은 `delegated-execution`으로 executor 서브에이전트에 맡긴다. executor는 Jev 라우터(`jev.py route`, 이 프로젝트는 on)가 고른 것을 쓴다. 위임 프롬프트 맨 앞에 `task-spec`(targets는 worktree 절대경로, verify 명령)을 넣는다.
 - 메인 세션은 계획, 위임, 게이트 보고서 확인(`gate.py report`), 커밋·PR·병합, worktree 정리(`git worktree remove`)만 한다.
 
+## CI
+
+- `.github/workflows/ci.yml`이 PR과 `main` 푸시마다 macOS·Windows·Linux에서 `pnpm validate`, `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`(pdfium 포함)를 돌린다. E2E는 macOS 잡, NSIS 설치 파일(아티팩트 `pdf-studio-windows-nsis`)은 Windows 잡이 만든다.
+
 ## 품질 게이트
 
 - 설정은 `.claude/quality-gate.json`이다. 고친 파일의 eslint, 전체 typecheck, 관련 테스트를 돌린다.

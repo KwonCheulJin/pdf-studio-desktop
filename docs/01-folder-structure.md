@@ -62,6 +62,7 @@ project-root/
 │  ├─ capabilities/            # main 창 권한
 │  ├─ icons/
 │  ├─ Entitlements.plist
+│  ├─ windows-app-manifest.xml # Windows 앱·테스트 exe 매니페스트 (build.rs가 링커로 넣는다)
 │  └─ tauri.conf.json
 │
 └─ src/renderer/               # 화면: React 19 + FSD

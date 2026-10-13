@@ -7,6 +7,7 @@
 - Rust 핵심 코어는 **Red → Green → Refactor.** 실패하는 테스트를 먼저 쓰고, 통과시키는 최소 코드를 쓰고, 그다음 정리한다. 버그는 재현 테스트부터 쓴다.
 - 비교 엔진·연결선 묶기는 golden JSON 픽스처로 Rust에서 검증한다.
   - golden은 `crates/pdf-core/tests/golden/`에 둔다. 픽스처나 규칙을 바꾸면 `UPDATE_GOLDEN=1 PDFIUM_LIB_PATH=<라이브러리 파일> cargo test -p pdf-core --test <테스트 파일>`로 다시 쓰고, 바뀐 값을 눈으로 확인한 뒤 E2E까지 통과시킨다. 비교 픽스처는 `crates/pdf-core/tests/fixtures/generate_compare_fixtures.py`로 만든다(한글 글꼴을 `node_modules`의 OFL 글꼴에서 읽으므로 `pnpm install` 뒤에 돌린다).
+  - 좌표 golden 픽스처는 글꼴을 임베드한다(OS 글꼴 대체로 tight box가 달라짐).
   - 시간에 따라 달라지는 동작(diff 시간 제한)은 이미 지난 제한(`Duration::ZERO`)으로 결정적으로 확인한다. 실제 시간을 재서 단언하는 테스트는 두지 않고, 측정값은 ADR·상수 주석에 남긴다.
   - 해시처럼 규칙으로 계산하는 값(`Change.id`)은 기대값을 테스트 대상 코드가 아닌 다른 구현(Python `hashlib` 등)으로 구해 리터럴로 둔다.
 - OCR 비교 테스트(`crates/pdf-core/tests/compare_ocr.rs`, 실행기의 스캔 쪽 테스트 `compare_runner.rs`)는 `tests/ocr.rs`처럼 `ONNXRUNTIME_LIB_PATH`·`OCR_MODEL_DIR`이 없으면 건너뛴다(런타임 없이 도는 `OcrUnavailable` 테스트만 남는다). OCR golden(`ocr-edit.changes.json`)은 변경의 종류·글자·확인 필요만 담는다(상자·신뢰도는 OCR 실행 환경에 따라 조금 흔들릴 수 있어 빼고, 상자는 허용 오차 테스트로 따로 본다). debug 빌드에서 OCR 테스트 파일 하나가 약 1분 걸린다. 신뢰도·확인 필요·NFKC 강제 규칙은 pdfium·OCR 없이 글자를 직접 만든 문서로 확인한다(`compare_review.rs`). OCR 픽스처는 `generate_ocr_fixtures.py`로 다시 만든다.

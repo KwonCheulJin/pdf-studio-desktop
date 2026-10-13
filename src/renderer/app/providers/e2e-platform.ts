@@ -142,6 +142,13 @@ declare global {
     __E2E_HOLD_COMPARE__?: Promise<void>;
     /** `__E2E_HOLD_COMPARE__`를 푸는 함수. 테스트가 함께 넣는다. */
     __E2E_RELEASE_COMPARE__?: () => void;
+    /**
+     * 테스트가 넣으면 `readPdf`가 이 Promise가 풀릴 때까지 바이트를 돌려주지 않는다
+     * (쪽을 받기 전 스켈레톤 확인용).
+     */
+    __E2E_HOLD_READ_PDF__?: Promise<void>;
+    /** `__E2E_HOLD_READ_PDF__`를 푸는 함수. 테스트가 함께 넣는다. */
+    __E2E_RELEASE_READ_PDF__?: () => void;
     /** 앱이 보낸 비교 요청(`comparePdfs`)을 부른 순서대로 기록하는 곳 */
     __E2E_MOCK_COMPARES__?: CompareRequest[];
     /** 앱이 저장 다이얼로그(`pickSavePath`)를 연 옵션을 부른 순서대로 기록하는 곳 */
@@ -313,12 +320,13 @@ interface RecordReadsParams {
   reads: string[];
 }
 
-/** `readPdf` 호출 경로를 위임 전에 기록한다. */
+/** `readPdf` 호출 경로를 위임 전에 기록하고, `__E2E_HOLD_READ_PDF__`가 있으면 풀릴 때까지 기다린다. */
 function recordReads({ platform, reads }: RecordReadsParams): DesktopPlatform {
   return {
     ...platform,
-    readPdf: (path) => {
+    readPdf: async (path) => {
       reads.push(path);
+      await window.__E2E_HOLD_READ_PDF__;
       return platform.readPdf(path);
     }
   };

@@ -74,19 +74,21 @@ project-root/
    │  └─ styles/               # index.css, tokens.css, theme.css, base.css
    ├─ pages/
    │  ├─ home/                 # 첫 화면: 작업 고르기 카드(병합·비교), 카드 위 드롭
-   │  ├─ compare/              # 비교 화면: 옵션(A·B 슬롯 + 실행 전 옵션) / 진행 카드 / 결과 자리(결과 화면은 Step 27)
+   │  ├─ compare/              # 비교 화면: 옵션(A·B 슬롯 + 실행 전 옵션) / 진행 카드 / 결과 화면(툴바·안내 띠·목록 | 페이지 영역)
    │  └─ merged-preview/       # 병합 결과 미리보기 화면
    ├─ widgets/
-   │  └─ merge-workspace/      # 병합 작업 영역 조합
+   │  ├─ merge-workspace/      # 병합 작업 영역 조합
+   │  └─ compare-viewer/       # 비교 결과 페이지 영역: 쪽 쌍 행 가상화(virtuoso), pdf.js 쪽 + SVG 하이라이트, 미니맵, 배율
    ├─ features/                # 사용자 행동
    │  ├─ pdf-merge/            # 파일 추가·선택·회전·병합·다운로드
-   │  ├─ pdf-compare/          # 비교 세션(A·B 문서·옵션·결과)·실행(진행률·취소), 파일 받기(다이얼로그·드롭·슬롯 배정), ui/file-slots·options-card·progress-card
+   │  ├─ pdf-compare/          # 비교 세션(A·B 문서·옵션·결과·고른 변경·필터·보기 방식)·실행(진행률·취소), 파일 받기, ui/file-slots·options-card·progress-card·결과 머리·종류 칩·이전/다음·차이 목록·안내 띠
    │  ├─ pdf-preview/          # 미리보기 모달
    │  ├─ theme-toggle/         # 테마 system|light|dark 선택·저장
    │  ├─ error-reporting/      # 오류 보고 켜기·끄기, 첫 실행 안내
    │  └─ third-party-notices/  # 앱 정보: 상태 바에서 제3자 고지 대화상자 열기
    ├─ entities/                # 읽기·표시
-   │  └─ merge-plan/           # 병합 대상 문서·페이지 상태(merge-store), 진행 오버레이
+   │  ├─ merge-plan/           # 병합 대상 문서·페이지 상태(merge-store), 진행 오버레이
+   │  └─ comparison/           # 비교 결과 타입(바인딩 재수출)·선택자(필터·개수·쪽별 묶기·이동·안내 문구), 하이라이트 상자·견본·배지
    └─ shared/                  # 도메인을 모른다
       ├─ api/bindings.ts       # tauri-specta 생성물 (손으로 고치지 않는다)
       ├─ platform/             # DesktopPlatform 인터페이스, tauri·mock 구현
@@ -103,7 +105,7 @@ project-root/
 
 - `docs/06-design-system.md §3`: `app/styles/fonts.css`, 토큰 이름 상수
   `shared/config/theme.ts`(`shared/constants/group-colors.ts`를 옮긴다)
-- 계획서 §7 FSD 배치(Phase 3): 비교 화면 슬라이스(`entities/comparison` 등)
+- 계획서 §7 FSD 배치(Phase 3): 내보내기(`features/compare-export`, Step 29)
 - `e2e/`: 첫 Playwright E2E를 넣는 Step에서 만든다
 
 ## 레이어별 역할 요약

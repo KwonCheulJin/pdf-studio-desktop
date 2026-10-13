@@ -19,7 +19,7 @@ import type { NativeFileDropEvent } from "../src/renderer/shared/platform";
  * 비교 실행 전 옵션과 진행 화면(계획서 P3-3·P3-3a, 진행 가이드 Step 26, 시안 3 아래·9).
  * - 페이지 범위는 A·B 따로 검사하고, 틀리면 빨간 테두리·이유 문구와 실행 버튼 막기
  * - 비교 대상(글자·대소문자), 반복 줄 제외, 요약 배지, "기본값으로", 카드 접기
- * - 실행하면 진행 카드(전체 %·6개 작업 행), 끝나면 결과 자리표시, 취소하면 옵션 화면
+ * - 실행하면 진행 카드(전체 %·6개 작업 행), 끝나면 결과 화면(자세한 확인은 compare-result.spec.ts), 취소하면 옵션 화면
  * - 다른 모드로 가도 작업은 계속되고 상태바에 "비교 중 N%"
  *
  * 진행률은 시드(`compareScripts`)의 손으로 셈한 `CompareProgress`(Rust 실행기와 같은 공식,
@@ -291,6 +291,13 @@ function stageBar(page: Page, label: string): Locator {
   return page.getByRole("progressbar", { name: `${label} 진행률` });
 }
 
+/** 결과 화면 제목 "A → B" */
+function resultHeading(page: Page): Locator {
+  return page.getByRole("heading", {
+    name: `${FILE_V1.displayName} → ${FILE_V2.displayName}`
+  });
+}
+
 function compareStatus(page: Page, text: string): Locator {
   return page.getByRole("status").filter({ hasText: text });
 }
@@ -443,7 +450,7 @@ test("비교 대상·반복 줄 제외는 요약 배지에 보이고, 기본값�
   await expect(rangeInput(page, "A")).toBeVisible();
 });
 
-test("실행하면 진행 카드에 전체 %와 작업별 진행이 보이고, 끝나면 결과 자리로 넘어간다", async ({
+test("실행하면 진행 카드에 전체 %와 작업별 진행이 보이고, 끝나면 결과 화면으로 넘어간다", async ({
   page
 }) => {
   await openComparePair(page, {
@@ -503,11 +510,10 @@ test("실행하면 진행 카드에 전체 %와 작업별 진행이 보이고, �
 
   await releaseCompare(page);
 
-  const result = page.getByRole("region", { name: "비교를 마쳤어요" });
-  await expect(result).toBeVisible();
-  await expect(result.getByText("차이 6개 · 확인 필요 1개")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "새 비교" })).toBeVisible();
-  await expect(compareStatus(page, "상태: 준비")).toBeVisible();
+  await expect(resultHeading(page)).toBeVisible();
+  // 확인 필요는 차이 개수에 넣지 않는다(ADR 0001 §5).
+  await expect(statusBar(page)).toContainText(/차이 6건\s*\|\s*확인 필요 1건/);
+  await expect(compareStatus(page, "상태: 완료")).toBeVisible();
 
   const requests = await readCompareRequests(page);
   expect(requests).toHaveLength(1);
@@ -525,7 +531,9 @@ test("실행하면 진행 카드에 전체 %와 작업별 진행이 보이고, �
   });
 
   // 옵션으로 돌아가면 고른 옵션이 그대로다.
-  await result.getByRole("button", { name: "옵션으로 돌아가기" }).click();
+  await page.getByRole("button", { name: "옵션으로 돌아가기" }).click();
+  await expect(page.getByRole("heading", { name: "새 비교" })).toBeVisible();
+  await expect(compareStatus(page, "상태: 준비")).toBeVisible();
   await expect(rangeInput(page, "B")).toHaveValue("1-5");
   await expect(
     optionsCard(page).getByRole("checkbox", { name: "머리말" })
@@ -592,11 +600,11 @@ test("진행 중 병합 모드로 가도 작업은 계속되고 상태바에 비
   await expect(compareStatus(page, "비교 중")).toHaveCount(0);
 
   await modeTab(page, "비교").click();
-  await expect(
-    page.getByRole("region", { name: "비교를 마쳤어요" })
-  ).toBeVisible();
+  await expect(resultHeading(page)).toBeVisible();
   // 시드 결과가 없으면 mock은 차이 없는 결과를 돌려준다.
-  await expect(page.getByText("차이 0개 · 확인 필요 0개")).toBeVisible();
+  await expect(
+    page.getByRole("complementary", { name: "차이 목록" })
+  ).toContainText("차이가 없어요");
 });
 
 test("비교가 실패하면 문제 파일 이름과 코드 문구를 알리고 옵션 화면으로 돌아간다", async ({

@@ -1,0 +1,71 @@
+[
+  {
+    "page": 0,
+    "size": {
+      "viewBox": {
+        "left": 0.0,
+        "bottom": 0.0,
+        "right": 595.0,
+        "top": 842.0
+      },
+      "rotation": 0
+    },
+    "content": {
+      "kind": "text",
+      "paragraphs": [
+        {"number":1,"text":"云记事本服务说明","bounds":{"page":0,"x":229.008,"y":768.452,"w":141.69598,"h":16.919983},"fontSize":18.0,"heading":true},
+        {"number":2,"text":"云记事本是一款虚构的笔记软件，本文用它说明文档段落的提取规则。用户可以在电脑和手机上创建笔记，并通过网络在多台设备之间同步内容。本文出现的名称、数字和地址都是虚构的，仅供测试使用。","bounds":{"page":0,"x":72.384,"y":693.528,"w":387.78,"h":49.992004},"fontSize":12.0,"heading":false},
+        {"number":3,"text":"软件目前支持的操作系统包括 Windows 和 macOS，后续版本计划加入更多平台。","bounds":{"page":0,"x":72.312,"y":655.12805,"w":233.04,"h":30.767944},"fontSize":12.0,"heading":false},
+        {"number":4,"text":"安装前请先阅读本说明。","bounds":{"page":0,"x":96.828,"y":636.168,"w":123.336,"h":11.328003},"fontSize":12.0,"heading":false},
+        {"number":5,"text":"如果在使用过程中遇到问题，可以通过设置页面中的反馈入口提交日志，我们会在三个工作日内回复。","bounds":{"page":0,"x":72.492,"y":597.816,"w":399.468,"h":30.528015},"fontSize":12.0,"heading":false},
+        {"number":6,"text":"第一章 安装步骤","bounds":{"page":0,"x":72.644,"y":578.42395,"w":99.73601,"h":13.314026},"fontSize":14.0,"heading":true},
+        {"number":7,"text":"1. 从示例网站下载安装包，并保存到本地文件夹。","bounds":{"page":0,"x":73.056,"y":555.92804,"w":255.79199,"h":11.59198},"fontSize":12.0,"heading":false},
+        {"number":8,"text":"2. 双击安装包，按照屏幕提示完成安装。安装过程中请不要关闭电脑，否则可能需要重新安装。","bounds":{"page":0,"x":72.48,"y":517.792,"w":364.16397,"h":30.552002},"fontSize":12.0,"heading":false},
+        {"number":9,"text":"（3）首次启动时登录账号，选择需要同步的文件夹。","bounds":{"page":0,"x":80.34,"y":498.328,"w":266.484,"h":11.700012},"fontSize":12.0,"heading":false},
+        {"number":10,"text":"② 如需离线使用，请在设置中开启本地缓存。","bounds":{"page":0,"x":72.408,"y":479.128,"w":234.444,"h":11.5920105},"fontSize":12.0,"heading":false},
+        {"number":11,"text":"第五条 本软件的全部权利归虚构的示例公司所有。","bounds":{"page":0,"x":72.552,"y":460.19202,"w":258.3,"h":11.376007},"fontSize":12.0,"heading":false},
+        {"number":12,"text":"一、本说明自发布之日起生效。","bounds":{"page":0,"x":72.528,"y":440.956,"w":159.636,"h":11.339996},"fontSize":12.0,"heading":false},
+        {"number":13,"text":"• 本说明中的示例仅用于测试。","bounds":{"page":0,"x":76.728,"y":421.76797,"w":158.12401,"h":11.3160095},"fontSize":12.0,"heading":false},
+        {"number":14,"text":"注意：请定期备份重要笔记。云端同步不能代替本地备份，删除的笔记会在回收站中保留三十天。","bounds":{"page":0,"x":72.504,"y":373.44,"w":394.764,"h":30.503998},"fontSize":12.0,"heading":false},
+        {"number":15,"text":"如有其他问题，请发送邮件至 support@example.com。","bounds":{"page":0,"x":72.564,"y":342.46402,"w":293.7,"h":13.019989},"fontSize":12.0,"heading":false}
+      ]
+    }
+  },
+  {
+    "page": 1,
+    "size": {
+      "viewBox": {
+        "left": 0.0,
+        "bottom": 0.0,
+        "right": 595.0,
+        "top": 842.0
+      },
+      "rotation": 0
+    },
+    "content": {
+      "kind": "scan"
+    }
+  },
+  {
+    "page": 2,
+    "size": {
+      "viewBox": {
+        "left": 0.0,
+        "bottom": 0.0,
+        "right": 595.0,
+        "top": 842.0
+      },
+      "rotation": 90
+    },
+    "content": {
+      "kind": "text",
+      "paragraphs": [
+        {"number":1,"text":"附录 常见问题","bounds":{"page":2,"x":68.044,"y":73.162,"w":13.090004,"h":85.45601},"fontSize":14.0,"heading":true},
+        {"number":2,"text":"问：同步失败时应该怎么办？","bounds":{"page":2,"x":92.068,"y":97.116,"w":11.363998,"h":148.416},"fontSize":12.0,"heading":false},
+        {"number":3,"text":"答：请先检查网络连接，然后在设置页面中点击“立即同步”。如果仍然失败，请重新登录账号。","bounds":{"page":2,"x":111.208,"y":72.504,"w":30.864006,"h":407.016},"fontSize":12.0,"heading":false},
+        {"number":4,"text":"问：一个账号可以在几台设备上使用？","bounds":{"page":2,"x":149.716,"y":97.116,"w":11.304001,"h":196.41599},"fontSize":12.0,"heading":false},
+        {"number":5,"text":"答：每个账号最多可以在五台设备上同时使用。","bounds":{"page":2,"x":168.892,"y":96.444,"w":11.328003,"h":243.72},"fontSize":12.0,"heading":false}
+      ]
+    }
+  }
+]

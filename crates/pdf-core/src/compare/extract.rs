@@ -72,7 +72,7 @@ pub fn extract_text_layer(
 }
 
 /// [`extract_text_layer`]와 같다. 이미 pdfium 잠금 세션을 쥔 호출자(`read_document_text`)가 쓴다.
-pub(super) fn read_text_layer(
+pub(crate) fn read_text_layer(
     pdfium: &Pdfium,
     path: &Path,
 ) -> Result<Vec<ExtractedPage>, DocumentError> {

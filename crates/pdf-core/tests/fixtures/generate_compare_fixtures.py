@@ -434,7 +434,8 @@ class TrueTypeFont:
         hmtx = self.tables["hmtx"]
         if glyph < metric_count:
             return struct.unpack(">Hh", hmtx[glyph * 4 : glyph * 4 + 4])
-        (advance,) = struct.unpack(">H", hmtx[(metric_count - 1) * 4 : metric_count * 4])
+        # 마지막 longHorMetric의 advanceWidth(앞 2바이트)를 그대로 쓴다.
+        (advance,) = struct.unpack(">H", hmtx[(metric_count - 1) * 4 : (metric_count - 1) * 4 + 2])
         at = metric_count * 4 + (glyph - metric_count) * 2
         (left_side_bearing,) = struct.unpack(">h", hmtx[at : at + 2])
         return advance, left_side_bearing

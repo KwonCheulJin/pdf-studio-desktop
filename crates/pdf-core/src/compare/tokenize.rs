@@ -31,10 +31,10 @@ pub const LOW_TEXT_CONFIDENCE_RATIO: f32 = 0.1;
 
 /// pdfium이 줄 끝 하이픈(앞 글자가 문자인 `-`·U+00AD)을 다음 줄과 이을 때 하이픈 자리에 내는
 /// 값(`FPDFText_IsHyphen`인 글자). 상자는 하이픈 글리프이고 뒤에 줄바꿈 글자를 내지 않는다.
-const PDFIUM_LINE_END_HYPHEN: char = '\u{2}';
+pub(crate) const PDFIUM_LINE_END_HYPHEN: char = '\u{2}';
 /// 줄 끝에서 다음 줄과 잇는 하이픈(하이픈-마이너스, U+2010 HYPHEN)
-const HYPHENS: [char; 2] = ['-', '\u{2010}'];
-const HYPHEN: char = '-';
+pub(crate) const HYPHENS: [char; 2] = ['-', '\u{2010}'];
+pub(crate) const HYPHEN: char = '-';
 const LINE_BREAKS: [char; 2] = ['\r', '\n'];
 /// 사용 영역(PUA): BMP, 15·16 평면
 const PRIVATE_USE_RANGES: [RangeInclusive<char>; 3] = [
@@ -284,7 +284,7 @@ fn starts_cluster(ch: char) -> bool {
 }
 
 /// 두 상자를 덮는 상자. 쪽은 `first` 쪽이다(클러스터·같은 줄 상자처럼 같은 쪽 상자만 합친다).
-pub(super) fn union(first: TextBox, second: TextBox) -> TextBox {
+pub(crate) fn union(first: TextBox, second: TextBox) -> TextBox {
     let (left, bottom) = (first.x.min(second.x), first.y.min(second.y));
     let right = (first.x + first.w).max(second.x + second.w);
     let top = (first.y + first.h).max(second.y + second.h);

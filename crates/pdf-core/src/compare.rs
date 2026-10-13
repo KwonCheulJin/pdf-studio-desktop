@@ -18,6 +18,8 @@ mod tokenize;
 pub use anchors::ComparedPages;
 pub use connectors::{Connector, ConnectorEnd, ConnectorShape, connectors};
 pub use diff::{DIFF_TIME_LIMIT, TokenDiff, diff_tokens};
+pub(crate) use diff::{SAME_LINE_MIN_OVERLAP, continues_line};
+pub(crate) use extract::read_text_layer;
 pub use extract::{ExtractedChar, ExtractedPage, Glyph, OCR_MIN_TEXT_CHARS, extract_text_layer};
 pub use model::{
     Change, ChangeKind, CompareResult, NoTextReason, Notice, PagePair, PageSize, PageSizes,
@@ -27,6 +29,7 @@ pub use options::{
     CompareOptions, CompareOptionsError, HEADER_FOOTER_BAND_PT, LineExclusions, exclude_lines,
     parse_page_range, select_pages,
 };
+pub(crate) use options::{page_numbers, to_display};
 pub use pages::pair_pages;
 pub use pipeline::{
     CompareError, DocumentText, OcrFailure, TextComparison, compare_texts, read_document_text,
@@ -40,6 +43,8 @@ pub use review::{OCR_MIN_CONFIDENCE, OCR_MIN_CONFIDENCE_NUMERIC};
 pub use runner::{
     CompareProgress, CompareRequest, CompareStage, ExtractionCache, ProgressDetail, compare_pdfs,
 };
+pub(crate) use runner::{FileKey, ReadText};
+pub(crate) use tokenize::{HYPHEN, HYPHENS, PDFIUM_LINE_END_HYPHEN, union};
 pub use tokenize::{
     LOW_TEXT_CONFIDENCE_RATIO, NormalizeOptions, Token, UnicodeForm, has_low_text_confidence,
     tokenize,

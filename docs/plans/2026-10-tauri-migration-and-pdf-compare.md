@@ -264,7 +264,7 @@ Phase 6  PDF 번역·설정 (가칭, Phase 3 뒤)
 4. 검증: Step 9에서 만든 실제 앱(`src-tauri`, `crates/pdf-core`) 안에서(pdfium은 `cargo add -p pdf-core pdfium-render --features thread_safe`) PDF 1장 렌더 → `pnpm tauri build` → **ad-hoc 서명된 `.app`에서 실행** → `codesign --verify --deep --strict`가 통과한다.
 - `thread_safe` 기능을 켠다. pdfium은 스레드 안전하지 않으므로 모든 호출을 **전용 작업 스레드 하나(큐)** 로 직렬화한다.
 - 정적 링크(`static` 기능)는 pdfium을 직접 빌드해야 하므로 이번 범위에서 제외한다.
-- **완료 기준:** Mac `.app`과 CI의 Windows 빌드에서 pdfium이 로드되고 렌더된다.
+- **완료 기준:** Mac `.app`과 CI의 Windows 빌드에서 pdfium이 로드되고 렌더된다. (확인됨(CI): Windows·Linux에서 pdfium 로드 `cargo test` 통과, Windows NSIS 설치 파일 생성. 설치한 앱 실행은 미확인)
 
 ### P1-1 스캐폴드 (S)
 - 키트로 만든다.
@@ -376,7 +376,7 @@ Phase 6  PDF 번역·설정 (가칭, Phase 3 뒤)
 - [ ] 회전(비파괴), 전체/선택 병합(진행률·UI 비차단·취소), 미리보기, 저장, 임시파일 정리
 - [x] 모든 실패가 토스트나 오버레이로 보인다(B12)
 - [ ] 테마(시스템 추종 + 수동), 버전 표시, 에러 스냅샷 전송
-- [ ] macOS, Windows, Linux에서 실행 (Windows/Linux는 CI 아티팩트로 확인)
+- [ ] macOS, Windows, Linux에서 실행 (Windows/Linux는 CI 아티팩트로 확인. 확인됨(CI): Windows NSIS 설치 파일 생성, Windows·Linux `cargo test`. 설치한 앱 실행은 미확인)
 
 ---
 
@@ -602,7 +602,7 @@ pdfium 스파이크(P1-0)처럼 연결 작업(P2-4a) 전에 끝까지 검증한�
 | 숫자 토큰 조용한 오인식 | 0건 | 0 / 0 | 0 / 0 | 0 / 0 | 통과 |
 | 쪽당 처리 시간 | ≤ 2초 | 평균 0.89초·최대 1.16초 | 최대 1.20초 | 최대 1.22초 | 통과 |
 | 번들 증가량 | ≤ 60MB | macOS 57.5MB, Windows 34.2MB, Linux 42.7MB(1차와 같다) | | | 통과 |
-| 플랫폼 간 결과 | Mac·Windows 같음 | 미측정 | | | Step 30 CI로 미룸 |
+| 플랫폼 간 결과 | Mac·Windows 같음 | 미측정 | | | 미확인(CI가 `fetch:ocr`를 하지 않는다) |
 | 서명된 `.app`에서 로드 | codesign 통과 후 추론 | 1차 측정의 확인(아래). 그 뒤 바뀐 것은 렌더 해상도 상수뿐이라 로드·서명 경로는 같다 | | | 통과 |
 
 - 참고(이전 정의로 센 값): 시드 3의 200dpi는 토큰 전체 기준으로 98.48%(65/66)·조용한 오인식 1건이다(끝 마침표 누락). 새 정의에서는 끝 `.`을 빼고 보며, 비교에서는 확인 필요로 분류된다.
@@ -645,7 +645,7 @@ pdfium 스파이크(P1-0)처럼 연결 작업(P2-4a) 전에 끝까지 검증한�
 | 숫자 토큰 조용한 오인식 | 0건 | 300dpi 0건, 200dpi 1건(`8,900원이다.`의 끝 마침표 누락, 최소 신뢰도 0.987) | **실패** |
 | 쪽당 처리 시간 | ≤ 2초 | 픽스처 평균 0.76초·최대 0.98초. 로컬 실제 스캔 96쪽 평균 1.10초·최대 1.47초(다른 빌드가 돌던 부하 상태) | 통과 |
 | 번들 증가량 | ≤ 60MB | macOS 57.5MB(서명 후 dylib 39.14MB + 모델 18.36MB, 실제 `.app` 86.05MiB), Windows 34.2MB(dll 15.83MB), Linux 42.7MB(so 24.30MB) | 통과(macOS 여유 2.5MB) |
-| 플랫폼 간 결과 | Mac·Windows 같은 글자열 | 미측정 | Step 30 CI로 미룸 |
+| 플랫폼 간 결과 | Mac·Windows 같은 글자열 | 미측정 | 미확인(CI가 `fetch:ocr`를 하지 않는다) |
 | 서명된 `.app`에서 로드 | codesign 통과 후 추론 | `codesign --verify --deep --strict` valid. 창 숨김 실행 로그: `ONNX Runtime loaded from …/Contents/Frameworks/libonnxruntime.dylib (models …/Contents/Resources/ocr-models)`, `45 lines in 997 ms` | 통과 |
 
 같은 문서를 노이즈 시드·기울기만 바꿔 다시 만든 픽스처(레포 밖) 3벌 × 렌더 해상도 2개로 흔들림을 쟀다. 「핵심」은 토큰 끝 `.`·`,`를 뺀 숫자 토큰 기준(참고값)이다.
@@ -814,14 +814,15 @@ A의 변경 상자와 B의 대응 상자를 거터를 가로지르는 곡선으�
 ## 8. Phase 4: 빌드, 배포, 서명
 
 ### P4-1 CI
-- `tauri-apps/tauri-action` 매트릭스
+- `.github/workflows/ci.yml` 매트릭스(PR·`main` 푸시). 릴리스용 `tauri-apps/tauri-action`은 P4-2에서 쓴다.
   - `macos-latest`(aarch64-apple-darwin, 필요하면 `universal-apple-darwin`)
   - `windows-latest`
   - `ubuntu-22.04`(`libwebkit2gtk-4.1-dev` 등)
 - 각 잡에서 `scripts/fetch-pdfium.mjs`와 `scripts/fetch-ocr.mjs`(P2-2a 이후)를 실행한다(버전 고정, 캐시).
 - `Swatinem/rust-cache`, pnpm 캐시, `NODE_AUTH_TOKEN`(GitHub Packages)을 유지한다.
 - PR에서는 `pnpm validate` + `cargo fmt --check` + `cargo clippy -D warnings` + `cargo test`를 실행한다.
-- Windows 설치 파일은 **NSIS**(`bundle.targets`에 `nsis`) 하나로 한다. 사용자 단위 설치라 관리자 권한이 필요 없다.
+- E2E(`pnpm test:e2e`)는 macOS 잡에서만 돈다. Tauri macOS 웹뷰와 엔진이 같고, 한글 CID 픽스처가 쓰는 시스템 한글 글꼴이 이미 있다.
+- Windows 설치 파일은 **NSIS**(`bundle.targets`에 `nsis`) 하나로 한다. 사용자 단위 설치라 관리자 권한이 필요 없다. CI의 Windows 잡이 `pnpm tauri build`로 만들어 아티팩트로 올린다. `pdfium.dll`은 `--config`로 `bundle.resources`에 넣어 설치 폴더(`resource_dir`)에 둔다. macOS `.dmg`는 PR마다 만들지 않는다(P4-2 릴리스에서).
 
 ### P4-2 릴리스 흐름 정리 (T1)
 - 기존 Electron용 워크플로(`build.yml`, `release.yml`, `auto-version.yml`)는 Step 1에서 모두 제거했다. 여기서 새로 만든다: `pnpm release:*` → 태그 푸시 → `release.yml`이 tauri-action으로 Draft Release를 만들고 아티팩트를 업로드한다.
@@ -841,7 +842,7 @@ A의 변경 상자와 B의 대응 상자를 거터를 가로지르는 곡선으�
 - 루트에 `LICENSE`(MIT) 파일을 둔다.
 - `THIRD_PARTY_NOTICES.md`를 만들어 앱과 함께 번들한다: pdfium(BSD-3/Apache-2.0), pdf.js(Apache-2.0), IBM Plex(OFL), ONNX Runtime(MIT), PaddleOCR 모델(Apache-2.0), Rust·npm 의존성. CI에서 §1.2 허용 목록 밖 라이선스가 들어오면 실패시킨다.
 - 생성 도구는 새로 설치하지 않고 기본 명령으로 한다(2026-10-13 변경, 원래 `cargo-about`·`license-checker`류): `pnpm licenses:generate`(`scripts/generate-notices.mjs`)가 Rust는 `cargo metadata`(워크스페이스 멤버의 normal 의존성만, dev·build 의존성 제외, 모든 타깃), npm은 `pnpm licenses list --json --prod`로 모으고 패키지 폴더의 LICENSE·NOTICE 원문을 싣는다. 번들 바이너리·자산(pdfium, ONNX Runtime, OCR 모델, 글꼴, pdf.js 자산)은 `scripts/third-party/bundled.mjs`의 고정 목록이다. pdfium 원문은 `src-tauri/pdfium/aarch64-apple-darwin/`에서 읽으므로 그 타깃을 받아 둔다.
-- `pnpm licenses:check`(`scripts/check-licenses.mjs`)는 허용 목록·예외(§1.2) 밖 라이선스가 있거나 커밋한 고지가 지금 의존성으로 만든 것과 다르면 0이 아닌 코드로 끝난다. CI 연결은 Step 30(P4-1) PR이 병합된 뒤 한다: `node scripts/fetch-pdfium.mjs --target aarch64-apple-darwin && pnpm licenses:check`.
+- `pnpm licenses:check`(`scripts/check-licenses.mjs`)는 허용 목록·예외(§1.2) 밖 라이선스가 있거나 커밋한 고지가 지금 의존성으로 만든 것과 다르면 0이 아닌 코드로 끝난다. CI는 arm64 macOS 잡에서 `pnpm fetch:pdfium`(aarch64-apple-darwin을 받는다) 뒤 `pnpm licenses:check`를 돈다(Step 30 PR에서 연결).
 - 앱 정보: 상태 바 버전 옆 "오픈소스 라이선스"가 번들한 고지(`bundle.resources`)를 Rust 커맨드 `read_third_party_notices`로 읽어 대화상자로 보여 준다. 저장소 `LICENSE`도 함께 번들한다.
 
 ---

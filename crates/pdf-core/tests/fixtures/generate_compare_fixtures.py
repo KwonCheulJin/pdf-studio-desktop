@@ -2,8 +2,9 @@
 """비교 엔진 글자 추출(Step 17) 픽스처를 이 폴더에 다시 만든다. 표준 라이브러리만 쓰고,
 같은 입력이면 항상 같은 바이트를 만든다(타임스탬프 없음).
 
-- text-geometry.pdf: Helvetica(표준 14 글꼴, 임베드하지 않는다) 글자를 상자·회전이 다른 쪽에 둔다.
-  글자 좌표는 `GEOMETRY_PAGES`에 적은 절대 사용자 공간 좌표다(CropBox 원점을 빼지 않는다).
+- text-geometry.pdf: 라틴 글자를 상자·회전이 다른 쪽에 둔다. 글자 좌표는 `GEOMETRY_PAGES`에 적은
+  절대 사용자 공간 좌표다(CropBox 원점을 빼지 않는다). 글자 상자를 golden으로 고정하므로 글꼴은
+  korean-text.pdf와 같은 방식으로 임베드한다(표준 14 글꼴은 OS마다 대체 글꼴이 달라 상자가 달라진다).
 - rotation-order.pdf: 같은 세 줄을 /Rotate 0·90·180·270 쪽과, 글자를 돌려 그리고 /Rotate로
   바로 세운 쪽에 둔다. 추출한 글자 순서가 회전과 상관없이 같아야 한다.
 - korean-text.pdf: IBM Plex Sans KR(SIL OFL 1.1) 중 쓰는 글자만 남긴 TrueType을 Type0 +
@@ -307,7 +308,9 @@ HELVETICA = {3: b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"}
 
 
 def text_geometry_pdf() -> bytes:
-    return build_document(GEOMETRY_PAGES, HELVETICA, pdf_literal)
+    # 한글 글꼴 서브셋이 라틴 글자도 담는다.
+    font = korean_font(GEOMETRY_PAGES)
+    return build_document(GEOMETRY_PAGES, font.objects, font.encode)
 
 
 def rotation_order_pdf() -> bytes:

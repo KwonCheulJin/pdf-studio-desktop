@@ -10,8 +10,9 @@
 //! - 스캔 쪽: 옵션이 켜졌으면 열린 텍스트 묶음을 닫고 쪽 하나를 묶음 하나로 낸다. 꺼졌으면 건너뛴다
 //!   (텍스트 묶음을 닫지 않는다).
 //!
-//! 비율 상수는 공식 토크나이저를 쓰지 않는 추정 시작값이다(동의 전에 문서를 보내지 않으려고
-//! `count_tokens`를 쓰지 않는다, Q12). Step 48에서 사용자가 실제 번역한 `usage`와 맞춰 고친다.
+//! 비율 상수는 공식 토크나이저를 쓰지 않는 추정이다(동의 전에 문서를 보내지 않으려고 `count_tokens`를
+//! 쓰지 않는다, Q12). 고정 부담과 항목당 출력은 2026-10-13 실측(텍스트 쪽)으로 보정했고, 비율 상수와 스캔 쪽
+//! 상수는 실측 근거가 아직 없는 시작값이다(Step 48).
 
 use std::collections::BTreeSet;
 use std::ops::Range;
@@ -27,11 +28,16 @@ use crate::source::{ScanImage, SourcePage, SourcePageContent, SourceParagraph};
 /// 응답이 잘리거나 검증에 실패해 나눠 다시 보낼 때 버리는 양을 작게 둔다. 측정 후 조정한다.
 const CHUNK_INPUT_TOKEN_BUDGET: u64 = 2_500;
 
-/// 묶음마다 붙는 고정 입력: system 프롬프트(Step 39 문구 380자, 이 파일의 글 토큰 식으로 273) + 출력
-/// 스키마(structured outputs가 system에 덧붙이는 스키마 설명, 스키마 JSON이 이 식으로 123이라 약 150으로
-/// 잡음) + user 틀(원문 언어 줄·태그·끝 지시, 이 식으로 49)과 여유. 항목마다 붙는 JSON 틀
-/// (`{"id":"n","text":""}`, 이 식으로 18)은 세지 않는다. Step 48에서 `usage`로 고친다.
-const CHUNK_OVERHEAD_TOKENS: u64 = 600;
+/// 묶음마다 붙는 고정 입력: system 프롬프트 + 출력 스키마(structured outputs가 system에 덧붙이는 스키마
+/// 설명) + user 틀(원문 언어 줄·태그·끝 지시). 항목마다 붙는 JSON 틀(`{"id":"n","text":""}`)은 세지 않는다.
+///
+/// 근거는 실제 API 실측이다(2026-10-13, 사용자 키, `live_translation`). 묶음 하나(Haiku, 쪽 1)에서 입력
+/// 실제 `usage` / 600 시절 예상은 중국어 문단 15개 1,375 / 1,131(부족 244), 영어 문단 12개 1,145 / 857(부족
+/// 288)이고, 같은 중국어 입력을 Sonnet으로 보내도 1,375로 같다(입력은 모델과 무관). 고정 부담은 글 토큰 예상이
+/// 맞다고 보고 600 + 244~288 = 844~888이다. 여기에 PROMPT_VERSION 2에서 system에 더한 규칙 둘(중국어 순서
+/// 번호·전각 문장부호, 한국어 약 80글자, 전각 부호가 글자당 여러 토큰이 될 수 있어 최대 약 120토큰으로 봄)을
+/// 더하면 최대 1,008이라 100 단위로 올림해 1,100으로 잡았다(예상이 실제보다 작지 않게).
+const CHUNK_OVERHEAD_TOKENS: u64 = 1_100;
 
 /// 한자 하나. Claude 토크나이저는 CJK 글자를 1토큰 남짓으로 나누고(공개 측정 범위 약 1.0~1.5),
 /// 최근 토크나이저가 같은 글에 토큰을 더 쓰는 쪽이라 위쪽으로 잡았다(예상 요금이 실제보다 작지
@@ -52,6 +58,13 @@ const OUTPUT_TOKENS_PER_INPUT_TOKEN_ZH: PerMille = PerMille(1_500);
 
 /// 영어 → 한국어 출력/입력 비율. 영어 낱말 하나(1.4토큰)가 한국어로 약 2.5~3음절이라 약 2배다.
 const OUTPUT_TOKENS_PER_INPUT_TOKEN_EN: PerMille = PerMille(2_000);
+
+/// 텍스트 항목(문단 또는 긴 문단의 조각) 하나마다 더하는 출력 고정 토큰: 응답 JSON 틀
+/// (`{"id":"n","text":"…"}`)과 한국어 쪽이 원문보다 토큰을 더 쓰는 몫. 실측(2026-10-13, Haiku 쪽 1)에서
+/// 비율 식만의 출력 예상 대비 실제 `usage`는 중국어 15문단 797 → 947(부족 150, 문단당 10), 영어 12문단
+/// 514 → 622(부족 108, 문단당 9), Sonnet 중국어 797 → 955(부족 158, 문단당 10.5)이다. 비율 상수는 측정
+/// 근거가 없어 그대로 두고 문단당 부족의 올림 끝(11)에 1을 더한 12로 잡았다.
+const OUTPUT_TOKENS_PER_ITEM: u64 = 12;
 
 /// 그림 토큰 = ⌈가로 / 28⌉ × ⌈세로 / 28⌉(공식 문서 `build-with-claude/vision`, ADR 0002 §15)
 const IMAGE_TOKEN_PATCH_PX: u32 = 28;
@@ -174,8 +187,13 @@ pub fn estimate_text_items(
         .sum();
     ChunkEstimate {
         input_tokens: saturate(CHUNK_OVERHEAD_TOKENS + terms + text),
-        output_tokens: saturate(output_rate(language).of_ceil(text)),
+        output_tokens: saturate(text_output_tokens(output_rate(language), text, items.len())),
     }
+}
+
+/// 텍스트 묶음의 출력 예상 = 글 토큰 × 원문 언어 비율 + 항목 수 × `OUTPUT_TOKENS_PER_ITEM`
+fn text_output_tokens(rate: PerMille, text_tokens: u64, items: usize) -> u64 {
+    rate.of_ceil(text_tokens) + items as u64 * OUTPUT_TOKENS_PER_ITEM
 }
 
 /// 원문 언어별 출력/입력 비율
@@ -311,7 +329,11 @@ impl<'a> ChunkBuilder<'a> {
             input_tokens: saturate(
                 CHUNK_OVERHEAD_TOKENS + self.glossary_tokens(&open.terms) + open.text_tokens,
             ),
-            output_tokens: saturate(self.output_rate.of_ceil(open.text_tokens)),
+            output_tokens: saturate(text_output_tokens(
+                self.output_rate,
+                open.text_tokens,
+                open.items.len(),
+            )),
         };
         let glossary = open
             .terms

@@ -39,7 +39,7 @@ fn paragraph_key_is_page_number_and_length_prefixed_text_hash() {
     );
 }
 
-/// 필드 ①~⑥(파일 해시, `zh`, 모델 ID, 정렬한 용어집, 스캔 `1`, `PROMPT_VERSION` `1`). 용어집은 넘긴
+/// 필드 ①~⑥(파일 해시, `zh`, 모델 ID, 정렬한 용어집, 스캔 `1`, `PROMPT_VERSION` `2`). 용어집은 넘긴
 /// 순서와 상관없이 코드 포인트 순(`甲方` U+7532 < `设备` U+8BBE)으로 넣는다.
 #[test]
 fn record_key_hashes_all_options_with_the_glossary_sorted() {
@@ -48,11 +48,11 @@ fn record_key_hashes_all_options_with_the_glossary_sorted() {
 
     assert_eq!(
         options(&glossary, true, true).record_key(),
-        "e45eba021dd59c59d6e00608421a4e0e"
+        "a09b292b0dce1f83e07ed4f8e4b3b1c7"
     );
     assert_eq!(
         options(&reversed, true, true).record_key(),
-        "e45eba021dd59c59d6e00608421a4e0e"
+        "a09b292b0dce1f83e07ed4f8e4b3b1c7"
     );
 }
 
@@ -63,10 +63,10 @@ fn scan_option_is_off_in_the_record_key_when_the_document_has_no_scan_pages() {
 
     assert_eq!(
         options(&glossary, false, true).record_key(),
-        "f46d2e564c8043dd5363b467a677b351"
+        "2a11a7ef895c3c711c9455499859c02b"
     );
     assert_eq!(
         options(&glossary, true, false).record_key(),
-        "f46d2e564c8043dd5363b467a677b351"
+        "2a11a7ef895c3c711c9455499859c02b"
     );
 }

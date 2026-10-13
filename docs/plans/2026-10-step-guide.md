@@ -276,7 +276,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 | 30 | P4-1 CI 매트릭스 | PR에서 `pnpm validate` + `cargo fmt --check` + `cargo clippy -D warnings` + `cargo test`, Windows는 NSIS 설치 파일 | [x] |
 | 31 | P4-2 릴리스 흐름 | 태그 푸시로 Draft Release(기존 워크플로는 Step 1에서 제거됨). `pnpm release:*`는 커밋·태그까지, 푸시와 실제 태그 빌드·Draft Release 확인은 사용자 몫(병합 후 `workflow_dispatch`로 빌드만 먼저 확인) | [x] |
 | 32 | P4-3 서명 | ad-hoc 서명 `.app`과 `libpdfium.dylib`·ONNX Runtime dylib가 같은 identity, `codesign --verify --deep --strict` 통과(`scripts/verify-macos-signature.mjs`, 로컬 `.app`에서 확인. 다운로드한 앱의 Gatekeeper 동작은 사용자 확인) | [x] |
-| 33 | P4-4 자동 업데이트(선택) | `pnpm tauri add updater`, 키는 `pnpm tauri signer generate`로 생성(개인 키는 시크릿에만), `latest.json` 생성, 업데이트 동작 | [ ] |
+| 33 | P4-4 자동 업데이트(선택) | `pnpm tauri add updater`, 키는 `pnpm tauri signer generate`로 생성(개인 키는 시크릿에만), `latest.json` 생성, 업데이트 동작(E2E mock으로 확인. 실제 업데이트는 이 기능이 든 릴리스와 그다음 릴리스 사이에서 사용자가 확인) | [x] |
 | 34 | P4-5 라이선스와 고지 | `LICENSE`, `THIRD_PARTY_NOTICES.md` 번들, 허용 목록 밖 라이선스면 CI 실패, 앱 정보에서 고지 열림. 검사는 `pnpm licenses:check`이고, CI는 macOS 잡에서 `pnpm fetch:pdfium` 뒤 돈다(Step 30 PR에서 연결) | [x] |
 
 ---

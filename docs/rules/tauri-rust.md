@@ -18,6 +18,7 @@
 - **상태:** 공유 상태는 `app.manage()` + `State<'_, T>`로만. 전역 `static mut` 금지
 - **CSP:** `tauri.conf.json > app.security.csp` 한 곳에서 관리한다(`index.html`에 meta CSP를 두지 않는다). 외부 스크립트를 로드하지 않는다. `withGlobalTauri`를 켜지 않는다. Tauri는 이 CSP를 빌드 자산의 HTML 응답에만 붙이므로 `tauri dev`(Vite 개발 서버)와 브라우저 E2E에는 적용되지 않는다 — CSP를 바꾸면 창 숨김 release 빌드로 확인한다. 바깥 연결은 오류 보고용 Firestore(`connect-src`) 하나뿐이다.
 - **경로·플랫폼:** TS는 `@tauri-apps/api/path`, Rust는 `PathBuf`만. 문자열로 `/`·`\`를 다루지 않는다. 단축키는 `isMac ? metaKey : ctrlKey`
+- **자동 업데이트(계획서 P4-4):** `plugins.updater`에 공개 키(`pubkey`)·`endpoints`(GitHub Releases `latest.json`)·`requireSignedVersion: true`를 둔다. `bundle.createUpdaterArtifacts`는 `tauri.conf.json`에 두지 않는다 — 켜 두면 서명 키가 없는 로컬·CI 빌드가 실패하므로 release.yml이 `--config`로만 켠다. 개인 키는 레포에 넣지 않는다(리포 시크릿과 로컬 `~/.tauri/pdfstudio.key`). updater는 `native-tls`(OS TLS)로 쓴다 — 기본 `rustls-tls`는 허용 목록 밖 `webpki-root-certs`(CDLA-Permissive-2.0)를 끌어온다.
 - **버전:** `tauri.conf.json`의 `version`은 `../package.json`을 가리킨다(단일 소스). <!-- docs-path-check: ignore -->
 - **Windows 앱 매니페스트:** `src-tauri/build.rs`가 Windows MSVC 타깃에서 `src-tauri/windows-app-manifest.xml`(Common Controls v6)을 링커로 모든 링크 대상(앱 exe·테스트 exe)에 넣고 tauri-build 기본 매니페스트는 끈다. 테스트 exe에 매니페스트가 없으면 `TaskDialogIndirect`를 못 찾아 `STATUS_ENTRYPOINT_NOT_FOUND`(0xc0000139)로 뜨지 않는다(tauri-apps/tauri#13419). 매니페스트를 바꿀 때는 이 파일을 고친다
 - **pdfium:** 라이브러리 경로 결정은 `pdf-core` 한 곳에서. 개발·테스트는 `PDFIUM_LIB_PATH` 환경변수를 우선한다.

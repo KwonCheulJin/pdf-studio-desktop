@@ -19,12 +19,13 @@ import { parsePageRange } from "@/renderer/shared/lib/page-range-parse";
 import {
   FILE_DROP_EVENT_TYPE,
   MERGE_OUTPUT_KIND,
+  type AppUpdate,
   type DesktopPlatform,
   type FileDropHandler,
   type SettingValue
 } from "./desktop-platform";
 import { toFileDropEvent, type NativeFileDropEvent } from "./native-file-drop";
-import { PlatformError } from "./platform-error";
+import { PLATFORM_ERROR_CODE, PlatformError } from "./platform-error";
 
 /** 가짜 파일 하나. `bytes`가 없으면 `readPdf`가 `NOT_FOUND`로 실패한다. */
 export interface MockPdfFile {
@@ -41,6 +42,15 @@ export interface MockPdfFile {
    * Rust의 앱 캐시 폴더처럼 고르지 않아도 읽을 수 있고, 바이트는 `bytes`를 쓴다.
    */
   convertedPath?: string;
+}
+
+/** 업데이트 서버가 알릴 새 버전과 받을 때 보낼 진행률 */
+export interface MockUpdate {
+  version: string;
+  /** 서버가 알려 준 전체 크기. `null`이면 크기를 모를 때다. */
+  totalBytes: number | null;
+  /** 받을 때 차례로 보낼 조각 크기(바이트). 진행률은 누계로 보낸다. */
+  chunkBytes: number[];
 }
 
 /** 병합 결과를 쓸 임시 경로와 그 파일 이름(`MergeResult`의 같은 필드) */
@@ -63,6 +73,8 @@ export interface MockPlatformOptions {
    * 다 쓰면(또는 없으면) `/mock/exports`를 고른다.
    */
   directoryPicks?: (string | null)[];
+  /** 있으면 `checkForUpdate`가 이 새 버전을 알린다. 없으면 최신 버전일 때처럼 `null` */
+  update?: MockUpdate;
 }
 
 export interface MockPlatform extends DesktopPlatform {
@@ -135,6 +147,35 @@ const THIRD_PARTY_NOTICES_FILE = "THIRD_PARTY_NOTICES.md";
 const EXTENSION_SEPARATOR = ".";
 const PDF_EXTENSION = "pdf";
 const MERGED_FILE_PREFIX = "merged-";
+
+/** 받기 전에 설치하면 업데이터 플러그인처럼 실패한다. */
+function createMockUpdate({
+  version,
+  totalBytes,
+  chunkBytes
+}: MockUpdate): AppUpdate {
+  let isDownloaded = false;
+  return {
+    version,
+    download: async (onProgress) => {
+      let downloadedBytes = 0;
+      for (const chunk of chunkBytes) {
+        downloadedBytes += chunk;
+        onProgress({ downloadedBytes, totalBytes });
+      }
+      isDownloaded = true;
+    },
+    installAndRestart: async () => {
+      if (!isDownloaded) {
+        throw new PlatformError({
+          code: PLATFORM_ERROR_CODE.IPC_FAILED,
+          message: `update ${version} was not downloaded`,
+          path: null
+        });
+      }
+    }
+  };
+}
 
 function extensionOf(path: string): string {
   return path.slice(path.lastIndexOf(EXTENSION_SEPARATOR) + 1).toLowerCase();
@@ -320,7 +361,8 @@ export function createMockPlatform({
   dialogPicks = [],
   mergeOutput,
   thirdPartyNotices,
-  directoryPicks = []
+  directoryPicks = [],
+  update
 }: MockPlatformOptions = {}): MockPlatform {
   const filesByPath = new Map(files.map((file) => [file.path, file]));
   const convertedFiles = new Map(
@@ -646,6 +688,8 @@ export function createMockPlatform({
       }
       return thirdPartyNotices;
     },
+    checkForUpdate: async () =>
+      update === undefined ? null : createMockUpdate(update),
     simulateFileDrop: (event) => {
       if (event.type === FILE_DROP_EVENT_TYPE.DROP) {
         for (const path of event.paths) {

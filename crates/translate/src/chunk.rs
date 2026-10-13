@@ -27,9 +27,10 @@ use crate::source::{ScanImage, SourcePage, SourcePageContent, SourceParagraph};
 /// 응답이 잘리거나 검증에 실패해 나눠 다시 보낼 때 버리는 양을 작게 둔다. 측정 후 조정한다.
 const CHUNK_INPUT_TOKEN_BUDGET: u64 = 2_500;
 
-/// 묶음마다 붙는 고정 입력: system 프롬프트(규칙 7개, 한국어 약 300자 ≈ 300토큰) + 출력 스키마
-/// (structured outputs가 system에 덧붙이는 스키마 설명, 약 150토큰) + user 틀(원문 언어 줄, 태그,
-/// 항목 JSON 키, 약 150토큰). 문구는 Step 39가 쓰므로 추정값이고 Step 48에서 `usage`로 고친다.
+/// 묶음마다 붙는 고정 입력: system 프롬프트(Step 39 문구 380자, 이 파일의 글 토큰 식으로 273) + 출력
+/// 스키마(structured outputs가 system에 덧붙이는 스키마 설명, 스키마 JSON이 이 식으로 123이라 약 150으로
+/// 잡음) + user 틀(원문 언어 줄·태그·끝 지시, 이 식으로 49)과 여유. 항목마다 붙는 JSON 틀
+/// (`{"id":"n","text":""}`, 이 식으로 18)은 세지 않는다. Step 48에서 `usage`로 고친다.
 const CHUNK_OVERHEAD_TOKENS: u64 = 600;
 
 /// 한자 하나. Claude 토크나이저는 CJK 글자를 1토큰 남짓으로 나누고(공개 측정 범위 약 1.0~1.5),

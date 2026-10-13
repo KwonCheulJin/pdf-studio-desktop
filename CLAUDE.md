@@ -7,7 +7,7 @@
 
 PDF Studio Desktop — PDF 병합·편집·TIFF 변환 데스크톱 앱. **Electron에서 Tauri v2로 옮겼고(Electron 코드는 Step 14에서 제거)**, 남은 마이그레이션 Step과 PDF 비교 기능을 진행 중이다.
 - 계획서: `docs/plans/2026-10-tauri-migration-and-pdf-compare.md` / 진행 순서: `docs/plans/2026-10-step-guide.md`
-- 구조: Tauri v2 셸(`src-tauri`) + Rust `crates/pdf-core`(pdfium) 처리 + 렌더러 `src/renderer`(Vite + React 19 + TypeScript + Tailwind CSS 4, pdf.js 표시) + pnpm. 폴더 지도는 `docs/01-folder-structure.md`
+- 구조: Tauri v2 셸(`src-tauri`) + Rust `crates/pdf-core`(pdfium) 처리 + `crates/translate`(번역 규칙·Messages API 클라이언트, pdf-core·Tauri 모름) + 렌더러 `src/renderer`(Vite + React 19 + TypeScript + Tailwind CSS 4, pdf.js 표시) + pnpm. 폴더 지도는 `docs/01-folder-structure.md`
 
 ```bash
 pnpm tauri dev                      # 개발 실행(사용자용. 에이전트는 실행하지 않는다 — 작업 원칙 참고)

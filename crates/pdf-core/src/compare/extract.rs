@@ -14,7 +14,7 @@
 use std::path::Path;
 
 use pdfium_render::prelude::{
-    PdfDocument, PdfPage, PdfPageRenderRotation, PdfPageTextChar, PdfRect, PdfiumError,
+    PdfDocument, PdfPage, PdfPageRenderRotation, PdfPageTextChar, PdfRect, Pdfium, PdfiumError,
 };
 use serde::Serialize;
 
@@ -68,7 +68,15 @@ pub fn extract_text_layer(
     engine: &PdfEngine,
     path: &Path,
 ) -> Result<Vec<ExtractedPage>, DocumentError> {
-    let document = open_document(engine.pdfium(), path)?;
+    read_text_layer(&engine.session(), path)
+}
+
+/// [`extract_text_layer`]와 같다. 이미 pdfium 잠금 세션을 쥔 호출자(`read_document_text`)가 쓴다.
+pub(super) fn read_text_layer(
+    pdfium: &Pdfium,
+    path: &Path,
+) -> Result<Vec<ExtractedPage>, DocumentError> {
+    let document = open_document(pdfium, path)?;
     extract_pages(&document, path).collect()
 }
 

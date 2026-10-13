@@ -37,7 +37,7 @@ project-root/
 │
 ├─ crates/pdf-core/            # 도메인: Tauri 의존 없음
 │  ├─ src/
-│  │  ├─ engine.rs             # pdfium 라이브러리 경로 결정(PDFIUM_LIB_PATH 우선)과 바인딩
+│  │  ├─ engine.rs             # pdfium 라이브러리 경로 결정(PDFIUM_LIB_PATH 우선)과 바인딩, pdfium 프로세스 잠금(PdfiumSession, ADR 0001 §15)
 │  │  ├─ document.rs           # 문서 열기, 에러 타입
 │  │  ├─ info.rs               # 페이지 수·크기·회전 정규화
 │  │  ├─ compare.rs, compare/  # PDF 비교(결과 모델·추출·토큰화·diff·리포트 내보내기 규칙은 ADR 0001, 연결선 묶기 connectors.rs는 계획서 §7.1)
@@ -45,7 +45,7 @@ project-root/
 │  │  ├─ merge.rs, merge/      # 병합(회전 절대값), 진행률
 │  │  ├─ tiff.rs, tiff/        # TIFF → PDF (CCITT 포함)
 │  │  └─ output.rs             # 원자적 쓰기(임시 파일 + rename)
-│  └─ tests/                   # 통합 테스트, fixtures/(생성 스크립트 포함), golden/(비교 엔진 기대 JSON)
+│  └─ tests/                   # 통합 테스트, fixtures/(생성 스크립트 포함), golden/(비교 엔진 기대 JSON), pdfium_concurrency.rs(동시 호출 재현)
 │
 ├─ src-tauri/                  # 어댑터: Tauri 셸
 │  ├─ src/
@@ -55,6 +55,7 @@ project-root/
 │  │  ├─ access.rs             # 허용 경로 목록, 경로 검증
 │  │  ├─ files.rs, merge.rs    # 파일 열기, 병합 처리(경로 검증 후 pdf-core 위임)
 │  │  ├─ compare.rs            # 비교 처리(경로 검증 후 실행기 위임), 추출·OCR 캐시와 OCR 엔진 상태(ADR 0001 §16)
+│  │  ├─ report.rs             # 리포트 내보내기·미리보기(경로 검증·내보내기 폴더 새 이름 후 pdf-core 위임, ADR 0001 §17)
 │  │  ├─ jobs.rs               # 작업 ID·취소 토큰
 │  │  ├─ pdf_engine.rs         # 번들 pdfium 바인딩, 엔진을 앱 상태로
 │  │  ├─ notices.rs            # 번들한 제3자 고지 읽기(리소스 폴더 고정 파일)
@@ -82,6 +83,7 @@ project-root/
    ├─ features/                # 사용자 행동
    │  ├─ pdf-merge/            # 파일 추가·선택·회전·병합·다운로드
    │  ├─ pdf-compare/          # 비교 세션(A·B 문서·옵션·결과·고른 변경·필터·보기 방식·연결선 표시)·실행(진행률·취소), 파일 받기, 연결선 묶음·호버, ui/file-slots·options-card·progress-card·결과 머리·종류 칩·연결선 체크박스·이전/다음·차이 목록·안내 띠
+   │  ├─ compare-export/       # 결과 내보내기 모달(시안 5): 받을 파일·비교 PDF 옵션, 저장 폴더(이 실행 동안 기억)·만들 이름, 미리보기(오래된 응답 버림), 내보내기 실행·취소·토스트
    │  ├─ pdf-preview/          # 미리보기 모달
    │  ├─ theme-toggle/         # 테마 system|light|dark 선택·저장
    │  ├─ error-reporting/      # 오류 보고 켜기·끄기, 첫 실행 안내
@@ -105,7 +107,6 @@ project-root/
 
 - `docs/06-design-system.md §3`: `app/styles/fonts.css`, 토큰 이름 상수
   `shared/config/theme.ts`(`shared/constants/group-colors.ts`를 옮긴다)
-- 계획서 §7 FSD 배치(Phase 3): 내보내기(`features/compare-export`, Step 29)
 - `e2e/`: 첫 Playwright E2E를 넣는 Step에서 만든다
 
 ## 레이어별 역할 요약

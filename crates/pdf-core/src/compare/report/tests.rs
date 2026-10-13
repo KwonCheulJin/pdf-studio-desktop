@@ -6,8 +6,8 @@
 use std::fs;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use std::sync::atomic::AtomicBool;
-use std::sync::{Mutex, MutexGuard, OnceLock, PoisonError};
 
 use pdfium_render::prelude::{
     PdfColor, PdfDocument, PdfPage, PdfPageAnnotationCommon, PdfPageAnnotationType,
@@ -60,16 +60,6 @@ fn engine() -> &'static PdfEngine {
         // 번들 폴더는 없는 경로를 준다: 환경변수 경로로 바인딩돼야 통과한다.
         PdfEngine::bind(Path::new("/nonexistent/pdfium")).expect("bind pdfium")
     })
-}
-
-/// 이 모듈의 테스트를 하나씩 돌린다. pdfium-render 0.9.4의 `thread_safe` 바인딩은 일부 함수
-/// (`FPDFPageObj_SetStrokeColor`·`GetStrokeColor`·`FPDFPath_BezierTo`·`FPDF_NewXObjectFromPage` 등)를
-/// 프로세스 잠금 없이 부른다. 두 테스트가 동시에 장을 그리면 pdfium의 공유 색공간 참조 수가 깨져
-/// `CPDF_Color::GetColorRef`에서 죽는다(연결선 테스트를 더한 뒤 병렬 실행 20번 중 7번 재현). 테스트가
-/// 실패해 잠금이 오염돼도 다음 테스트는 돈다.
-fn pdfium_serialized() -> MutexGuard<'static, ()> {
-    static PDFIUM_TESTS: Mutex<()> = Mutex::new(());
-    PDFIUM_TESTS.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 fn fixture(name: &str) -> PathBuf {
@@ -162,11 +152,13 @@ fn compare_files(before: &Path, after: &Path) -> CompareResult {
     result_from(&before_pages, &after_pages, diff.changes, page_pairs)
 }
 
-fn open_output(path: &Path) -> PdfDocument<'static> {
-    engine()
-        .pdfium()
-        .load_pdf_from_file(path, None)
-        .expect("open output")
+/// 만든 PDF를 pdfium 잠금 세션 안에서 열어 `inspect`에 넘긴다. 세션을 쥔 동안 pdf-core 공개 함수를
+/// 부르면 같은 잠금을 다시 잡아 멈추므로, 추출·렌더는 `inspect` 밖에서 한다. 테스트끼리 병렬로 돌아도
+/// pdfium 호출은 이 잠금으로 줄 선다(ADR 0001 §15 "pdfium 잠금").
+fn inspect_output<T>(path: &Path, inspect: impl FnOnce(&PdfDocument) -> T) -> T {
+    let pdfium = engine().session();
+    let document = pdfium.load_pdf_from_file(path, None).expect("open output");
+    inspect(&document)
 }
 
 fn rgb(color: PdfColor) -> (u8, u8, u8) {
@@ -232,7 +224,6 @@ fn union(first: PageBox, second: PageBox) -> PageBox {
 /// 장에 그린 상자 두 개(A·B)가 각각 출력 장에서 pdfium이 다시 뽑은 그 낱말 글자들을 덮는다.
 #[test]
 fn boxes_cover_the_same_glyphs_on_rotated_and_offset_pages() {
-    let _pdfium = pdfium_serialized();
     let directory = TestDir::new("geometry");
     let source = copy_fixture("text-geometry.pdf", &directory);
     let pages = extract_text_layer(engine(), &source).expect("extract");
@@ -298,52 +289,55 @@ fn boxes_cover_the_same_glyphs_on_rotated_and_offset_pages() {
     .expect("export");
 
     assert_eq!(report.sheet_count as usize, rows.len());
-    let document = open_output(&output);
     let sheet_chars = extract_text_layer(engine(), &output).expect("extract output");
-    for change in &result.changes {
-        let page = change.page_pair.0.expect("before page");
-        let sheet = document.pages().get(page as i32).expect("sheet");
-        let boxes: Vec<DrawnRect> = drawn_rects(&sheet)
-            .into_iter()
-            .filter(|rect| rect.stroke == rgb(CHANGE_STROKE))
-            .collect();
-        assert_eq!(boxes.len(), 2, "page {page}: one box on A and one on B");
-        let word: String = change.before.as_ref().expect("before").text.clone();
-        for drawn in &boxes {
-            // 변경은 점선, 확인 필요는 채우지 않는다.
-            assert!(drawn.dashed, "page {page}: replace boxes are dashed");
-            assert_eq!(drawn.filled, !change.needs_review, "page {page}");
-            let covered: Vec<_> = sheet_chars[page as usize]
-                .chars
-                .iter()
-                .filter(|extracted| !extracted.ch.is_whitespace())
-                .filter_map(|extracted| Some((extracted.ch, page_box(&extracted.glyph?.bounds))))
-                .filter(|(_, glyph)| {
-                    let center = (
-                        (glyph.left + glyph.right) / 2.0,
-                        (glyph.bottom + glyph.top) / 2.0,
-                    );
-                    center.0 > drawn.bounds.left
-                        && center.0 < drawn.bounds.right
-                        && center.1 > drawn.bounds.bottom
-                        && center.1 < drawn.bounds.top
-                })
+    inspect_output(&output, |document| {
+        for change in &result.changes {
+            let page = change.page_pair.0.expect("before page");
+            let sheet = document.pages().get(page as i32).expect("sheet");
+            let boxes: Vec<DrawnRect> = drawn_rects(&sheet)
+                .into_iter()
+                .filter(|rect| rect.stroke == rgb(CHANGE_STROKE))
                 .collect();
-            let text: String = covered.iter().map(|(ch, _)| *ch).collect();
-            assert_eq!(text, word, "page {page}: box {:?}", drawn.bounds);
-            let glyphs = covered
-                .iter()
-                .map(|(_, glyph)| *glyph)
-                .reduce(union)
-                .expect("covered glyphs");
-            assert!(
-                contains(drawn.bounds, glyphs, 0.0)
-                    && contains(glyphs, drawn.bounds, SHEET_TOLERANCE_PT),
-                "page {page}: box {:?} does not fit glyphs {glyphs:?}",
-                drawn.bounds
-            );
+            assert_eq!(boxes.len(), 2, "page {page}: one box on A and one on B");
+            let word: String = change.before.as_ref().expect("before").text.clone();
+            for drawn in &boxes {
+                // 변경은 점선, 확인 필요는 채우지 않는다.
+                assert!(drawn.dashed, "page {page}: replace boxes are dashed");
+                assert_eq!(drawn.filled, !change.needs_review, "page {page}");
+                let covered: Vec<_> = sheet_chars[page as usize]
+                    .chars
+                    .iter()
+                    .filter(|extracted| !extracted.ch.is_whitespace())
+                    .filter_map(|extracted| {
+                        Some((extracted.ch, page_box(&extracted.glyph?.bounds)))
+                    })
+                    .filter(|(_, glyph)| {
+                        let center = (
+                            (glyph.left + glyph.right) / 2.0,
+                            (glyph.bottom + glyph.top) / 2.0,
+                        );
+                        center.0 > drawn.bounds.left
+                            && center.0 < drawn.bounds.right
+                            && center.1 > drawn.bounds.bottom
+                            && center.1 < drawn.bounds.top
+                    })
+                    .collect();
+                let text: String = covered.iter().map(|(ch, _)| *ch).collect();
+                assert_eq!(text, word, "page {page}: box {:?}", drawn.bounds);
+                let glyphs = covered
+                    .iter()
+                    .map(|(_, glyph)| *glyph)
+                    .reduce(union)
+                    .expect("covered glyphs");
+                assert!(
+                    contains(drawn.bounds, glyphs, 0.0)
+                        && contains(glyphs, drawn.bounds, SHEET_TOLERANCE_PT),
+                    "page {page}: box {:?} does not fit glyphs {glyphs:?}",
+                    drawn.bounds
+                );
+            }
         }
-    }
+    });
 }
 
 /// 출력 장 하나에 놓인 원본 글자(공백 제외, 정렬). 장마다 어느 쪽이 놓였는지 알아보는 데 쓴다.
@@ -386,7 +380,6 @@ fn row_has_visible_box(result: &CompareResult, row: PagePair, hidden: &[ChangeKi
 /// 출력 장의 글자로 알아본다.
 #[test]
 fn sheets_follow_layout_and_changed_page_filters() {
-    let _pdfium = pdfium_serialized();
     let directory = TestDir::new("sheets");
     let before = copy_fixture("pages-base.pdf", &directory);
     let after = copy_fixture("pages-insert.pdf", &directory);
@@ -510,7 +503,6 @@ fn sheets_follow_layout_and_changed_page_filters() {
 /// 내용은 변경 전후 글자이고 원본 B는 바뀌지 않는다. 숨긴 종류는 달지 않는다.
 #[test]
 fn annotated_pdf_marks_after_copy_and_keeps_source() {
-    let _pdfium = pdfium_serialized();
     let directory = TestDir::new("annotated");
     let before = copy_fixture("diff-base.pdf", &directory);
     let after = copy_fixture("diff-edit.pdf", &directory);
@@ -539,27 +531,28 @@ fn annotated_pdf_marks_after_copy_and_keeps_source() {
     .expect("export");
 
     assert_eq!(fs::read(&after).expect("read source"), source_bytes);
-    let document = open_output(&output);
-    let source_document = open_output(&after);
-    assert_eq!(document.pages().len(), source_document.pages().len());
-
-    let mut found: Vec<(u32, PdfPageAnnotationType, PageBox, String)> = Vec::new();
-    for (page_index, page) in document.pages().iter().enumerate() {
-        for annotation in page.annotations().iter() {
-            let rect = annotation.bounds().expect("annotation rect");
-            found.push((
-                page_index as u32,
-                annotation.annotation_type(),
-                PageBox {
-                    left: rect.left().value,
-                    bottom: rect.bottom().value,
-                    right: rect.right().value,
-                    top: rect.top().value,
-                },
-                annotation.contents().unwrap_or_default(),
-            ));
+    let source_page_count = inspect_output(&after, |document| document.pages().len());
+    let (page_count, found) = inspect_output(&output, |document| {
+        let mut found: Vec<(u32, PdfPageAnnotationType, PageBox, String)> = Vec::new();
+        for (page_index, page) in document.pages().iter().enumerate() {
+            for annotation in page.annotations().iter() {
+                let rect = annotation.bounds().expect("annotation rect");
+                found.push((
+                    page_index as u32,
+                    annotation.annotation_type(),
+                    PageBox {
+                        left: rect.left().value,
+                        bottom: rect.bottom().value,
+                        right: rect.right().value,
+                        top: rect.top().value,
+                    },
+                    annotation.contents().unwrap_or_default(),
+                ));
+            }
         }
-    }
+        (document.pages().len(), found)
+    });
+    assert_eq!(page_count, source_page_count);
     assert_eq!(report.annotation_count as usize, found.len());
 
     let mut expected_count = 0;
@@ -659,7 +652,6 @@ fn annotated_pdf_marks_after_copy_and_keeps_source() {
 /// 출력 경로가 비교한 파일이면(`..`로 돌아간 경로 포함) 쓰지 않고 거부한다.
 #[test]
 fn refuses_to_overwrite_compared_files() {
-    let _pdfium = pdfium_serialized();
     let directory = TestDir::new("overwrite");
     let before = copy_fixture("diff-base.pdf", &directory);
     let after = copy_fixture("diff-edit.pdf", &directory);
@@ -704,7 +696,6 @@ fn refuses_to_overwrite_compared_files() {
 /// 취소가 켜져 있으면 저장하지 않고 `Cancelled`를 돌려주며 출력·임시 파일이 남지 않는다.
 #[test]
 fn cancelled_export_leaves_no_files() {
-    let _pdfium = pdfium_serialized();
     let directory = TestDir::new("cancel");
     let before = copy_fixture("diff-base.pdf", &directory);
     let after = copy_fixture("diff-edit.pdf", &directory);
@@ -742,7 +733,6 @@ fn cancelled_export_leaves_no_files() {
 /// 그림에 색(회색이 아닌 화소)이 생긴다.
 #[test]
 fn preview_renders_first_sheets_as_png() {
-    let _pdfium = pdfium_serialized();
     let directory = TestDir::new("preview");
     let before = copy_fixture("pages-base.pdf", &directory);
     let after = copy_fixture("pages-insert.pdf", &directory);
@@ -827,7 +817,6 @@ fn mapped_center(placement: &Placement, bounds: &TextBox) -> f32 {
 /// 쪽 행 포함). 색 상자를 빼거나 한쪽 배치면 연결선도 없고, 변경(`Replace`)을 숨기면 이을 변경이 없다.
 #[test]
 fn compare_pdf_draws_one_connector_per_stem() {
-    let _pdfium = pdfium_serialized();
     let directory = TestDir::new("connectors");
     let before = copy_fixture("connectors-a.pdf", &directory);
     let after = copy_fixture("connectors-b.pdf", &directory);
@@ -849,22 +838,28 @@ fn compare_pdf_draws_one_connector_per_stem() {
             &AtomicBool::new(false),
         )
         .expect("export");
-        open_output(&output)
+        // 장마다 그린 연결선
+        inspect_output(&output, |document| {
+            document
+                .pages()
+                .iter()
+                .map(|sheet| drawn_connectors(&sheet))
+                .collect::<Vec<_>>()
+        })
     };
 
-    let document = export("connectors.pdf", &CompareReportOptions::default());
+    let sheets = export("connectors.pdf", &CompareReportOptions::default());
+    assert_eq!(sheets.len(), rows.len());
     let (Some(before_slot), Some(after_slot)) = slots(ReportLayout::SideBySide) else {
         panic!("side by side has two slots");
     };
-    for (index, row) in rows.iter().enumerate() {
-        let sheet = document.pages().get(index as i32).expect("sheet");
-        let connectors = drawn_connectors(&sheet);
+    for (row, connectors) in rows.iter().zip(&sheets) {
         assert_eq!(connectors.len(), row.stems.len(), "row {:?}", row.pages);
         let before_placement =
             Placement::fit(&result.page_sizes.before[row.pages.0 as usize], before_slot);
         let after_placement =
             Placement::fit(&result.page_sizes.after[row.pages.1 as usize], after_slot);
-        for (stem, (start, end)) in row.stems.iter().zip(&connectors) {
+        for (stem, (start, end)) in row.stems.iter().zip(connectors) {
             let message = format!("row {:?} stem {:?}", row.pages, stem.change_ids);
             assert!(
                 (start.0 - before_placement.frame().right).abs() < 0.01,
@@ -908,9 +903,8 @@ fn compare_pdf_draws_one_connector_per_stem() {
             },
         ),
     ] {
-        let document = export(name, &options);
-        for sheet in document.pages().iter() {
-            assert!(drawn_connectors(&sheet).is_empty(), "{name}");
+        for connectors in export(name, &options) {
+            assert!(connectors.is_empty(), "{name}");
         }
     }
 }
@@ -919,7 +913,6 @@ fn compare_pdf_draws_one_connector_per_stem() {
 /// 않는다. 변경마다 따로 묶이도록 B 쪽 순서를 A와 거꾸로 둔다(순위가 앞 변경 + 1이 아니다).
 #[test]
 fn compare_pdf_omits_connectors_over_the_sheet_limit() {
-    let _pdfium = pdfium_serialized();
     const BOX_STEP_PT: f32 = 15.0;
     const BOX_HEIGHT_PT: f32 = 5.0;
     const TOP_PT: f32 = 800.0;
@@ -965,9 +958,9 @@ fn compare_pdf_omits_connectors_over_the_sheet_limit() {
             &AtomicBool::new(false),
         )
         .expect("export");
-        let document = open_output(&output);
-        let sheet = document.pages().get(0).expect("sheet");
-        drawn_connectors(&sheet).len()
+        inspect_output(&output, |document| {
+            drawn_connectors(&document.pages().get(0).expect("sheet")).len()
+        })
     };
 
     assert_eq!(connector_count(MAX_SHEET_CONNECTORS), MAX_SHEET_CONNECTORS);

@@ -163,15 +163,8 @@ pub fn export_compare_pdf(
         return Err(ReportError::EmptyReport);
     }
 
-    let document = compose::compose(
-        engine.pdfium(),
-        result,
-        sources,
-        options,
-        &marks,
-        &sheets,
-        cancel,
-    )?;
+    let pdfium = engine.session();
+    let document = compose::compose(&pdfium, result, sources, options, &marks, &sheets, cancel)?;
     ensure_not_cancelled(cancel)?;
     save_atomically(&document, output_path)?;
     Ok(CompareReport {
@@ -191,8 +184,9 @@ pub fn export_annotated_pdf(
 ) -> Result<AnnotatedReport, ReportError> {
     ensure_not_source(output_path, &[after_path])?;
     ensure_output_directory(output_path)?;
+    let pdfium = engine.session();
     let (document, annotation_count) =
-        annotate::annotate(engine.pdfium(), result, after_path, hidden_kinds, cancel)?;
+        annotate::annotate(&pdfium, result, after_path, hidden_kinds, cancel)?;
     ensure_not_cancelled(cancel)?;
     save_atomically(&document, output_path)?;
     Ok(AnnotatedReport { annotation_count })
@@ -215,8 +209,9 @@ pub fn preview_compare_report(
     }
     let shown = usize::try_from(max_sheets).map_or(sheets.len(), |max| max.min(sheets.len()));
     let never_cancelled = AtomicBool::new(false);
+    let pdfium = engine.session();
     let document = compose::compose(
-        engine.pdfium(),
+        &pdfium,
         result,
         sources,
         options,

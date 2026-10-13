@@ -3,9 +3,12 @@ import type {
   CompareRequest,
   CompareResult,
   ErrorCode,
+  ExportAnnotatedPdfRequest,
+  ExportComparePdfRequest,
   MergeProgress,
   MergeRequest,
-  OpenedFile
+  OpenedFile,
+  PreviewCompareReportRequest
 } from "@/renderer/shared/api/bindings";
 import {
   getPdfCacheStats,
@@ -78,6 +81,8 @@ export interface E2eMockSeed {
   mergeOutput?: MockMergeOutput;
   /** 있으면 `readThirdPartyNotices`가 이 원문을 돌려준다. 없으면 리소스 없음 오류다. */
   thirdPartyNotices?: string;
+  /** 폴더 다이얼로그를 열 때마다 앞에서부터 하나씩 고를 폴더(`null`은 취소). 다 쓰면 `/mock/exports` */
+  directoryPicks?: (string | null)[];
 }
 
 /** 작업 취소를 Rust처럼 알리는 코드 */
@@ -88,7 +93,9 @@ export const E2E_WRITE_METHOD = {
   MERGE_PDFS: "mergePdfs",
   CANCEL_JOB: "cancelJob",
   COPY_FILE: "copyFile",
-  DISCARD_TEMP: "discardTemp"
+  DISCARD_TEMP: "discardTemp",
+  EXPORT_COMPARE_PDF: "exportComparePdf",
+  EXPORT_ANNOTATED_PDF: "exportAnnotatedPdf"
 } as const;
 
 interface MergePdfsCall {
@@ -110,11 +117,23 @@ interface DiscardTempCall {
   path: string;
 }
 
+interface ExportComparePdfCall {
+  method: typeof E2E_WRITE_METHOD.EXPORT_COMPARE_PDF;
+  request: ExportComparePdfRequest;
+}
+
+interface ExportAnnotatedPdfCall {
+  method: typeof E2E_WRITE_METHOD.EXPORT_ANNOTATED_PDF;
+  request: ExportAnnotatedPdfRequest;
+}
+
 export type E2eWriteCall =
   | MergePdfsCall
   | CancelJobCall
   | CopyFileCall
-  | DiscardTempCall;
+  | DiscardTempCall
+  | ExportComparePdfCall
+  | ExportAnnotatedPdfCall;
 
 declare global {
   interface Window {
@@ -153,6 +172,22 @@ declare global {
     __E2E_MOCK_COMPARES__?: CompareRequest[];
     /** 앱이 저장 다이얼로그(`pickSavePath`)를 연 옵션을 부른 순서대로 기록하는 곳 */
     __E2E_MOCK_SAVE_DIALOGS__?: PickSavePathOptions[];
+    /** 앱이 보낸 리포트 미리보기 요청(`previewCompareReport`)을 부른 순서대로 기록하는 곳 */
+    __E2E_MOCK_PREVIEWS__?: PreviewCompareReportRequest[];
+    /** 응답(성공·실패)을 돌려준 미리보기 요청 수. 늦게 온 응답을 앱이 받은 뒤를 기다릴 때 쓴다. */
+    __E2E_MOCK_PREVIEWS_SETTLED__?: number;
+    /**
+     * 테스트가 넣으면 그 뒤에 온 미리보기 요청을 이 Promise가 풀릴 때까지 붙잡는다(요청할 때의 값을 본다).
+     * 오래된 응답이 나중에 와도 새 응답을 덮지 않는지 확인한다.
+     */
+    __E2E_HOLD_PREVIEW__?: Promise<void>;
+    /** `__E2E_HOLD_PREVIEW__`를 푸는 함수. 테스트가 함께 넣는다. */
+    __E2E_RELEASE_PREVIEW__?: () => void;
+    /**
+     * 테스트가 넣으면 내보내기 요청을 이 Promise가 풀릴 때까지 붙잡는다(내보내는 중 화면 확인용).
+     * 붙잡힌 동안 같은 작업 ID로 `cancelJob`이 오면 바로 `CANCELLED`로 실패한다.
+     */
+    __E2E_HOLD_EXPORT__?: Promise<void>;
   }
 }
 
@@ -204,6 +239,14 @@ function recordWrites(
     discardTemp: (path) => {
       writes.push({ method: E2E_WRITE_METHOD.DISCARD_TEMP, path });
       return platform.discardTemp(path);
+    },
+    exportComparePdf: (request) => {
+      writes.push({ method: E2E_WRITE_METHOD.EXPORT_COMPARE_PDF, request });
+      return platform.exportComparePdf(request);
+    },
+    exportAnnotatedPdf: (request) => {
+      writes.push({ method: E2E_WRITE_METHOD.EXPORT_ANNOTATED_PDF, request });
+      return platform.exportAnnotatedPdf(request);
     }
   };
 }
@@ -298,6 +341,24 @@ function injectFailures({
       const result = await platform.comparePdfs(params);
       return script?.result ?? result;
     },
+    previewCompareReport: async (request) => {
+      await window.__E2E_HOLD_PREVIEW__;
+      return platform.previewCompareReport(request);
+    },
+    exportComparePdf: async (request) => {
+      await waitForRelease({
+        jobId: request.jobId,
+        hold: window.__E2E_HOLD_EXPORT__
+      });
+      return platform.exportComparePdf(request);
+    },
+    exportAnnotatedPdf: async (request) => {
+      await waitForRelease({
+        jobId: request.jobId,
+        hold: window.__E2E_HOLD_EXPORT__
+      });
+      return platform.exportAnnotatedPdf(request);
+    },
     cancelJob: async (jobId) => {
       cancelledJobs.add(jobId);
       cancelWaiters.get(jobId)?.();
@@ -347,6 +408,30 @@ function recordCompares({
     comparePdfs: (params) => {
       compares.push(params.request);
       return platform.comparePdfs(params);
+    }
+  };
+}
+
+interface RecordPreviewsParams {
+  platform: DesktopPlatform;
+  previews: PreviewCompareReportRequest[];
+}
+
+/** 리포트 미리보기 요청(옵션 포함)을 위임 전에 기록하고, 응답이 오면 그 수를 센다. 거부된 요청도 남는다. */
+function recordPreviews({
+  platform,
+  previews
+}: RecordPreviewsParams): DesktopPlatform {
+  return {
+    ...platform,
+    previewCompareReport: async (request) => {
+      previews.push(request);
+      try {
+        return await platform.previewCompareReport(request);
+      } finally {
+        window.__E2E_MOCK_PREVIEWS_SETTLED__ =
+          (window.__E2E_MOCK_PREVIEWS_SETTLED__ ?? 0) + 1;
+      }
     }
   };
 }
@@ -403,7 +488,9 @@ export function createE2ePlatform(): DesktopPlatform {
   const reads: string[] = [];
   const saveDialogs: PickSavePathOptions[] = [];
   const compares: CompareRequest[] = [];
+  const previews: PreviewCompareReportRequest[] = [];
   window.__E2E_MOCK_WRITES__ = writes;
+  window.__E2E_MOCK_PREVIEWS__ = previews;
   window.__E2E_MOCK_COMPARES__ = compares;
   window.__E2E_MOCK_READS__ = reads;
   window.__E2E_MOCK_SAVE_DIALOGS__ = saveDialogs;
@@ -412,7 +499,8 @@ export function createE2ePlatform(): DesktopPlatform {
     files: seed.files.map(toMockFile),
     dialogPicks: seed.dialogPicks,
     mergeOutput: seed.mergeOutput,
-    thirdPartyNotices: seed.thirdPartyNotices
+    thirdPartyNotices: seed.thirdPartyNotices,
+    directoryPicks: seed.directoryPicks
   });
   window.__E2E_FILE_DROP__ = mockPlatform.simulateFileDrop;
   const seededPlatform = injectFailures({
@@ -423,12 +511,15 @@ export function createE2ePlatform(): DesktopPlatform {
   });
   return persistSettings(
     recordSaveDialogs({
-      platform: recordCompares({
-        platform: recordReads({
-          platform: recordWrites(seededPlatform, writes),
-          reads
+      platform: recordPreviews({
+        platform: recordCompares({
+          platform: recordReads({
+            platform: recordWrites(seededPlatform, writes),
+            reads
+          }),
+          compares
         }),
-        compares
+        previews
       }),
       saveDialogs
     })

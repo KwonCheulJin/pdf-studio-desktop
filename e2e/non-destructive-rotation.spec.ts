@@ -171,6 +171,9 @@ function writeTarget(call: E2eWriteCall): string | null {
       return call.destination;
     case "discardTemp":
       return call.path;
+    case "exportComparePdf":
+    case "exportAnnotatedPdf":
+      return `${call.request.output.directory}/${call.request.output.fileName}`;
     case "cancelJob":
       return null;
   }

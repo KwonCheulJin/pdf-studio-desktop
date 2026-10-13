@@ -66,7 +66,8 @@ pub struct PdfInfo {
 }
 
 pub fn read_pdf_info(engine: &PdfEngine, path: &Path) -> Result<PdfInfo, DocumentError> {
-    let document = open_document(engine.pdfium(), path)?;
+    let pdfium = engine.session();
+    let document = open_document(&pdfium, path)?;
     let to_error = |source: PdfiumError| DocumentError::Pdfium {
         path: path.to_path_buf(),
         source,

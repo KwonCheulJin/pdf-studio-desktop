@@ -7,6 +7,8 @@
 //!   옵션만 바꾼 재실행에서는 추출·OCR을 하지 않고 그 단계를 바로 100%로 알린다. OCR 결과는 디스크
 //!   캐시([`OcrCache`])에도 쓴다.
 //! - 취소는 단계를 시작할 때마다, 추출·OCR은 쪽마다 확인한다.
+//! - 비교 하나가 pdfium 잠금 세션을 처음부터 끝까지 쥐고, OCR 추론·파일 해시만 잠금 밖에서 돈다
+//!   (ADR 0001 §15 "pdfium 잠금").
 
 mod cache;
 mod progress;
@@ -15,7 +17,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-use pdfium_render::prelude::{PdfDocument, Pdfium};
+use pdfium_render::prelude::PdfDocument;
 
 use self::cache::{FileKey, ReadText};
 use self::progress::ProgressReporter;
@@ -33,7 +35,7 @@ use super::pipeline::{
 };
 use super::tokenize::has_low_text_confidence;
 use crate::document::open_document;
-use crate::engine::PdfEngine;
+use crate::engine::{PdfEngine, PdfiumSession};
 use crate::ocr::{FileDigest, OcrCache, OcrEngine};
 
 pub use self::cache::ExtractionCache;
@@ -68,8 +70,9 @@ pub fn compare_pdfs(
     cancel: &AtomicBool,
     on_progress: impl FnMut(CompareProgress),
 ) -> Result<CompareResult, CompareError> {
+    let pdfium = engine.session();
     let context = Context {
-        pdfium: engine.pdfium(),
+        pdfium: &pdfium,
         ocr_cache,
         extraction_cache,
         cancel,
@@ -145,7 +148,8 @@ pub fn compare_pdfs(
 
 /// 단계 함수들이 함께 쓰는 실행 환경
 struct Context<'a> {
-    pdfium: &'a Pdfium,
+    /// 이 비교가 쥔 pdfium 잠금 세션. 문서는 이 세션으로 연다.
+    pdfium: &'a PdfiumSession<'a>,
     ocr_cache: Option<&'a OcrCache>,
     extraction_cache: &'a ExtractionCache,
     cancel: &'a AtomicBool,
@@ -262,7 +266,7 @@ impl<'a> Document<'a> {
             .is_some_and(Option::is_some)
     }
 
-    fn opened(&mut self, pdfium: &'a Pdfium) -> Result<&PdfDocument<'a>, CompareError> {
+    fn opened(&mut self, pdfium: &'a PdfiumSession<'a>) -> Result<&PdfDocument<'a>, CompareError> {
         Ok(match &mut self.document {
             Some(document) => document,
             slot @ None => slot.insert(open_document(pdfium, self.path)?),
@@ -375,7 +379,13 @@ fn read_scanned_pages<'a>(
         digests[index] = context
             .ocr_cache
             .filter(|_| !missing.is_empty())
-            .and_then(|_| FileDigest::of_file(document.path).ok());
+            .and_then(|_| {
+                // 큰 스캔 파일은 수백 ms라 pdfium 잠금 밖에서 센다.
+                context
+                    .pdfium
+                    .unlocked(|| FileDigest::of_file(document.path))
+                    .ok()
+            });
         for page in missing {
             let cached = context
                 .ocr_cache
@@ -414,6 +424,7 @@ fn read_scanned_pages<'a>(
             let size = document.page(page).map(|extracted| extracted.size);
             let result = match (ocr.as_deref_mut(), size) {
                 (Some(ocr), Some(size)) => recognize_and_store(
+                    context.pdfium,
                     document.opened(context.pdfium)?,
                     path,
                     page,

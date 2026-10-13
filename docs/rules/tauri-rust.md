@@ -21,6 +21,7 @@
 - **버전:** `tauri.conf.json`의 `version`은 `../package.json`을 가리킨다(단일 소스). <!-- docs-path-check: ignore -->
 - **Windows 앱 매니페스트:** `src-tauri/build.rs`가 Windows MSVC 타깃에서 `src-tauri/windows-app-manifest.xml`(Common Controls v6)을 링커로 모든 링크 대상(앱 exe·테스트 exe)에 넣고 tauri-build 기본 매니페스트는 끈다. 테스트 exe에 매니페스트가 없으면 `TaskDialogIndirect`를 못 찾아 `STATUS_ENTRYPOINT_NOT_FOUND`(0xc0000139)로 뜨지 않는다(tauri-apps/tauri#13419). 매니페스트를 바꿀 때는 이 파일을 고친다
 - **pdfium:** 라이브러리 경로 결정은 `pdf-core` 한 곳에서. 개발·테스트는 `PDFIUM_LIB_PATH` 환경변수를 우선한다.
+- **pdfium 잠금:** pdfium은 스레드 안전하지 않고 pdfium-render `thread_safe`는 함수 182개를 잠그지 않는다. pdfium을 쓰는 `pdf-core` 공개 함수는 시작할 때 `engine.session()`(프로세스 잠금)을 잡고, 문서는 그 세션이 빌려 주는 `&Pdfium`으로만 연다(세션보다 오래 살 수 없다). pdfium을 부르지 않는 긴 일(OCR 추론, 파일 해시)은 `session.unlocked(..)`로 잠금 밖에서 돌린다. 세션을 쥔 채 다른 공개 함수를 부르지 않는다(같은 스레드가 다시 잡으면 멈춘다) — crate 안의 `&Pdfium`을 받는 함수를 쓴다. ADR 0001 §15
 - **ONNX Runtime·OCR 모델:** 경로 결정은 `pdf-core`(`ocr/runtime.rs`) 한 곳에서. 개발·테스트는 `ONNXRUNTIME_LIB_PATH`·`OCR_MODEL_DIR`을 우선한다.
 
 ## pdfium 준비와 Rust 테스트

@@ -79,8 +79,8 @@ impl From<Rotation> for pdf_core::PageRotation {
 
 /// 페이지 상자. PDF 사용자 공간 좌표(pt, 원점은 왼쪽 아래)이며 회전 전 값이다.
 /// 좌표·크기는 pdfium이 돌려준 유한한 값이라 JSON `null`(NaN·무한대)이 되지 않는다.
-/// 그래서 TS 타입을 `number | null`이 아닌 `number`로 내보낸다.
-#[derive(Debug, Clone, Serialize, specta::Type)]
+/// 그래서 TS 타입을 `number | null`이 아닌 `number`로 내보낸다. 비교 결과의 쪽 크기로 다시 받기도 한다.
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub(crate) struct PageBox {
     #[specta(type = Number)]
     pub(crate) left: f32,
@@ -256,6 +256,7 @@ impl From<pdf_core::MergeProgress> for MergeProgress {
 
 // ── 비교(계획서 §6.2 6번). 결과 모양은 ADR 0001 §1·§7의 계약 JSON이고, pdf-core 모델의 미러다.
 // pdf-core 타입에는 specta를 붙일 수 없어(고아 규칙) 같은 모양을 여기 두고 `From`으로 옮긴다.
+// 결과는 리포트 내보내기 요청으로 다시 받으므로(ADR 0001 §17) 양쪽으로 옮긴다.
 
 #[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -351,7 +352,7 @@ impl From<pdf_core::CompareProgress> for CompareProgress {
 }
 
 /// 비교하는 두 문서 중 한쪽. `before`가 A(왼쪽), `after`가 B(오른쪽)다.
-#[derive(Debug, Clone, Copy, Serialize, specta::Type)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub(crate) enum Side {
     Before,
@@ -359,7 +360,7 @@ pub(crate) enum Side {
 }
 
 /// 변경 글자를 덮는 상자(PDF 사용자 공간, ADR 0001 §2). 좌표는 유한한 값이라 JSON `null`이 되지 않는다.
-#[derive(Debug, Clone, Serialize, specta::Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub(crate) struct TextBox {
     /// 0부터 센 쪽 번호
     pub(crate) page: u32,
@@ -373,7 +374,7 @@ pub(crate) struct TextBox {
     pub(crate) h: f32,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, specta::Type)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub(crate) enum ChangeKind {
     Insert,
@@ -382,14 +383,14 @@ pub(crate) enum ChangeKind {
 }
 
 /// 한 쪽의 글자를 어디서 얻었나
-#[derive(Debug, Clone, Copy, Serialize, specta::Type)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub(crate) enum TextSource {
     TextLayer,
     Ocr,
 }
 
-#[derive(Debug, Clone, Serialize, specta::Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ChangeSide {
     /// 변경에 걸린 토큰을 공백 하나로 이은 원문 글자
@@ -404,7 +405,7 @@ pub(crate) struct ChangeSide {
 /// `[A 쪽, B 쪽]`(0부터). 그 문서에 해당하는 쪽이 없으면 `null`이다.
 pub(crate) type PagePair = (Option<u32>, Option<u32>);
 
-#[derive(Debug, Clone, Serialize, specta::Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Change {
     /// 같은 입력·옵션이면 다시 실행해도 같은 키(ADR 0001 §4)
@@ -418,7 +419,7 @@ pub(crate) struct Change {
 }
 
 /// 한 쪽의 보이는 영역(CropBox ∩ MediaBox, 회전 전)과 회전
-#[derive(Debug, Clone, Serialize, specta::Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PageSize {
     pub(crate) view_box: PageBox,
@@ -426,21 +427,21 @@ pub(crate) struct PageSize {
 }
 
 /// 문서의 모든 쪽. 쪽 번호가 곧 색인이다.
-#[derive(Debug, Clone, Serialize, specta::Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub(crate) struct PageSizes {
     pub(crate) before: Vec<PageSize>,
     pub(crate) after: Vec<PageSize>,
 }
 
 /// 문서의 모든 쪽. 비교 범위 밖이라 읽지 않은 쪽은 `null`이다.
-#[derive(Debug, Clone, Serialize, specta::Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub(crate) struct PageSources {
     pub(crate) before: Vec<Option<TextSource>>,
     pub(crate) after: Vec<Option<TextSource>>,
 }
 
 /// OCR로 글자를 얻지 못한 이유
-#[derive(Debug, Clone, Copy, Serialize, specta::Type)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub(crate) enum NoTextReason {
     OcrUnavailable,
@@ -448,7 +449,7 @@ pub(crate) enum NoTextReason {
 }
 
 /// 결과와 함께 보이는 안내(ADR 0001 §6). 쪽 번호는 0부터 센 오름차순이다.
-#[derive(Debug, Clone, Serialize, specta::Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub(crate) enum Notice {
     LowTextConfidence {
@@ -467,7 +468,7 @@ pub(crate) enum Notice {
     },
 }
 
-#[derive(Debug, Clone, Serialize, specta::Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct CompareResult {
     /// diff 순서
@@ -620,6 +621,295 @@ impl From<pdf_core::CompareResult> for CompareResult {
             notices: result.notices.into_iter().map(Notice::from).collect(),
         }
     }
+}
+
+// 리포트 내보내기 요청으로 돌아온 결과를 pdf-core 모델로 옮긴다(위 `From`의 반대 방향).
+
+impl From<PageBox> for pdf_core::PageBox {
+    fn from(page_box: PageBox) -> Self {
+        Self {
+            left: page_box.left,
+            bottom: page_box.bottom,
+            right: page_box.right,
+            top: page_box.top,
+        }
+    }
+}
+
+impl From<Side> for pdf_core::Side {
+    fn from(side: Side) -> Self {
+        match side {
+            Side::Before => Self::Before,
+            Side::After => Self::After,
+        }
+    }
+}
+
+impl From<TextBox> for pdf_core::TextBox {
+    fn from(text_box: TextBox) -> Self {
+        Self {
+            page: text_box.page,
+            x: text_box.x,
+            y: text_box.y,
+            w: text_box.w,
+            h: text_box.h,
+        }
+    }
+}
+
+impl From<ChangeKind> for pdf_core::ChangeKind {
+    fn from(kind: ChangeKind) -> Self {
+        match kind {
+            ChangeKind::Insert => Self::Insert,
+            ChangeKind::Delete => Self::Delete,
+            ChangeKind::Replace => Self::Replace,
+        }
+    }
+}
+
+impl From<TextSource> for pdf_core::TextSource {
+    fn from(source: TextSource) -> Self {
+        match source {
+            TextSource::TextLayer => Self::TextLayer,
+            TextSource::Ocr => Self::Ocr,
+        }
+    }
+}
+
+impl From<ChangeSide> for pdf_core::ChangeSide {
+    fn from(side: ChangeSide) -> Self {
+        Self {
+            text: side.text,
+            boxes: side
+                .boxes
+                .into_iter()
+                .map(pdf_core::TextBox::from)
+                .collect(),
+            min_confidence: side.min_confidence,
+        }
+    }
+}
+
+impl From<Change> for pdf_core::Change {
+    fn from(change: Change) -> Self {
+        Self {
+            id: change.id,
+            kind: change.kind.into(),
+            before: change.before.map(pdf_core::ChangeSide::from),
+            after: change.after.map(pdf_core::ChangeSide::from),
+            page_pair: change.page_pair,
+            needs_review: change.needs_review,
+        }
+    }
+}
+
+impl From<PageSize> for pdf_core::PageSize {
+    fn from(size: PageSize) -> Self {
+        Self {
+            view_box: size.view_box.into(),
+            rotation: size.rotation.into(),
+        }
+    }
+}
+
+impl From<NoTextReason> for pdf_core::NoTextReason {
+    fn from(reason: NoTextReason) -> Self {
+        match reason {
+            NoTextReason::OcrUnavailable => Self::OcrUnavailable,
+            NoTextReason::OcrFailed => Self::OcrFailed,
+        }
+    }
+}
+
+impl From<Notice> for pdf_core::Notice {
+    fn from(notice: Notice) -> Self {
+        match notice {
+            Notice::LowTextConfidence { side, pages } => Self::LowTextConfidence {
+                side: side.into(),
+                pages,
+            },
+            Notice::NoTextLayer {
+                side,
+                reason,
+                pages,
+            } => Self::NoTextLayer {
+                side: side.into(),
+                reason: reason.into(),
+                pages,
+            },
+            Notice::Truncated {
+                before_pages,
+                after_pages,
+            } => Self::Truncated {
+                before_pages,
+                after_pages,
+            },
+        }
+    }
+}
+
+fn core_page_sources(sources: Vec<Option<TextSource>>) -> Vec<Option<pdf_core::TextSource>> {
+    sources
+        .into_iter()
+        .map(|source| source.map(pdf_core::TextSource::from))
+        .collect()
+}
+
+impl From<CompareResult> for pdf_core::CompareResult {
+    fn from(result: CompareResult) -> Self {
+        Self {
+            changes: result
+                .changes
+                .into_iter()
+                .map(pdf_core::Change::from)
+                .collect(),
+            page_pairs: result.page_pairs,
+            page_sizes: pdf_core::PageSizes {
+                before: result
+                    .page_sizes
+                    .before
+                    .into_iter()
+                    .map(pdf_core::PageSize::from)
+                    .collect(),
+                after: result
+                    .page_sizes
+                    .after
+                    .into_iter()
+                    .map(pdf_core::PageSize::from)
+                    .collect(),
+            },
+            page_sources: pdf_core::PageSources {
+                before: core_page_sources(result.page_sources.before),
+                after: core_page_sources(result.page_sources.after),
+            },
+            notices: result
+                .notices
+                .into_iter()
+                .map(pdf_core::Notice::from)
+                .collect(),
+        }
+    }
+}
+
+// ── 리포트 내보내기(계획서 P3-5, ADR 0001 §14·§17). 결과는 비교 커맨드가 돌려준 계약 JSON을 프론트가
+// 그대로 다시 보낸다.
+
+/// 비교 PDF 한 장에 쪽을 놓는 방식(화면의 `A·B 나란히 | A만 | B만`)
+#[derive(Debug, Clone, Copy, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum ReportLayout {
+    SideBySide,
+    AOnly,
+    BOnly,
+}
+
+/// 비교 PDF 옵션(ADR 0001 §14). 연결선은 따로 고르지 않는다(나란히 + 색 상자일 때 그린다).
+#[derive(Debug, Clone, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct CompareReportOptions {
+    pub(crate) layout: ReportLayout,
+    /// 그 장에 보이는 쪽에 (숨기지 않은) 변경 상자가 있는 장만 넣는다.
+    pub(crate) changed_pages_only: bool,
+    /// 변경 상자를 색 사각형으로 그린다.
+    pub(crate) draw_boxes: bool,
+    /// 화면 필터에서 끈 종류. 이 종류의 변경은 그리지 않고 차이 있는 쪽 판정에도 쓰지 않는다.
+    pub(crate) hidden_kinds: Vec<ChangeKind>,
+}
+
+impl From<CompareReportOptions> for pdf_core::CompareReportOptions {
+    fn from(options: CompareReportOptions) -> Self {
+        Self {
+            layout: match options.layout {
+                ReportLayout::SideBySide => pdf_core::ReportLayout::SideBySide,
+                ReportLayout::AOnly => pdf_core::ReportLayout::AOnly,
+                ReportLayout::BOnly => pdf_core::ReportLayout::BOnly,
+            },
+            changed_pages_only: options.changed_pages_only,
+            draw_boxes: options.draw_boxes,
+            hidden_kinds: core_kinds(options.hidden_kinds),
+        }
+    }
+}
+
+pub(crate) fn core_kinds(kinds: Vec<ChangeKind>) -> Vec<pdf_core::ChangeKind> {
+    kinds.into_iter().map(pdf_core::ChangeKind::from).collect()
+}
+
+/// 내보낼 파일을 둘 곳: 폴더 다이얼로그(`pick_save_directory`)에서 고른 폴더와 그 안에 만들 이름.
+/// 같은 이름의 파일이 있으면 덮어쓰지 않고 `이름 (2).pdf`처럼 번호를 붙인다.
+#[derive(Debug, Clone, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ExportOutput {
+    pub(crate) directory: PathBuf,
+    /// 확장자(`.pdf`)까지 포함한 파일 이름 하나. 경로 구분자는 받지 않는다.
+    pub(crate) file_name: String,
+}
+
+#[derive(Debug, Clone, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ExportComparePdfRequest {
+    /// 프론트가 만든 작업 ID. `cancel_job`에 같은 값을 넘긴다.
+    pub(crate) job_id: String,
+    /// 비교 커맨드가 돌려준 결과 그대로
+    pub(crate) result: CompareResult,
+    /// 결과를 만든 A(이전) 문서
+    pub(crate) before: PathBuf,
+    /// 결과를 만든 B(이후) 문서
+    pub(crate) after: PathBuf,
+    pub(crate) options: CompareReportOptions,
+    pub(crate) output: ExportOutput,
+}
+
+/// B 문서 사본에 차이를 주석으로 단 PDF
+#[derive(Debug, Clone, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ExportAnnotatedPdfRequest {
+    /// 프론트가 만든 작업 ID. `cancel_job`에 같은 값을 넘긴다.
+    pub(crate) job_id: String,
+    pub(crate) result: CompareResult,
+    /// 결과를 만든 B(이후) 문서. 이 사본에 주석을 단다.
+    pub(crate) after: PathBuf,
+    /// 화면 필터에서 끈 종류. 이 종류의 변경은 달지 않는다.
+    pub(crate) hidden_kinds: Vec<ChangeKind>,
+    pub(crate) output: ExportOutput,
+}
+
+#[derive(Debug, Clone, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PreviewCompareReportRequest {
+    pub(crate) result: CompareResult,
+    pub(crate) before: PathBuf,
+    pub(crate) after: PathBuf,
+    pub(crate) options: CompareReportOptions,
+    /// 그림 너비(px). Rust가 1 ~ 2400으로 자른다.
+    pub(crate) width_px: u32,
+}
+
+/// 내보낸 파일 하나
+#[derive(Debug, Clone, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ExportedFile {
+    pub(crate) output_path: PathBuf,
+    /// 실제로 만든 이름(같은 이름이 있었으면 번호가 붙는다). 프론트가 경로 문자열을 나누지 않게 한다.
+    pub(crate) file_name: String,
+}
+
+/// 비교 PDF 미리보기: 첫 장부터 몇 장의 그림과 내보낼 때의 전체 장 수
+#[derive(Debug, Clone, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ReportPreview {
+    /// 같은 옵션으로 내보낼 때의 전체 장 수(그린 장 수가 아니다)
+    pub(crate) sheet_count: u32,
+    /// 첫 장부터 차례로, 장마다 PNG를 base64로 쓴 문자열(`data:image/png;base64,` 뒤에 그대로 붙인다)
+    pub(crate) images: Vec<String>,
+}
+
+/// 폴더 다이얼로그 옵션
+#[derive(Debug, Clone, Default, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SaveDirectoryDialogOptions {
+    /// 다이얼로그가 처음 보일 폴더
+    pub(crate) default_directory: Option<PathBuf>,
 }
 
 /// 파일 크기를 `u32`로 보낸다. 열 수 있는 파일은 입력 상한(512MB) 안이라 넘칠 수 없지만,

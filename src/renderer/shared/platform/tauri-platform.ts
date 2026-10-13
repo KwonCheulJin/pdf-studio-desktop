@@ -114,6 +114,12 @@ export function createTauriPlatform(): DesktopPlatform {
       );
       return unwrap(commands.pickSavePath({ defaultPath }));
     },
+    pickSaveDirectory: async ({ defaultDirectory }) =>
+      unwrap(
+        commands.pickSaveDirectory({
+          defaultDirectory: defaultDirectory ?? (await settle(documentDir()))
+        })
+      ),
     openFiles: (paths) => unwrap(commands.openFiles(paths)),
     fileStem: fileStemOf,
     readPdf: async (path) =>
@@ -132,6 +138,11 @@ export function createTauriPlatform(): DesktopPlatform {
       }
       return unwrap(commands.comparePdfs(request, channel));
     },
+    previewCompareReport: (request) =>
+      unwrap(commands.previewCompareReport(request)),
+    exportComparePdf: (request) => unwrap(commands.exportComparePdf(request)),
+    exportAnnotatedPdf: (request) =>
+      unwrap(commands.exportAnnotatedPdf(request)),
     cancelJob: (jobId) => settle(commands.cancelJob(jobId)),
     copyFile: async ({ source, destination }) => {
       await unwrap(commands.copyFile(source, destination));

@@ -1,5 +1,6 @@
 //! 허용 경로 목록(D13). 파일 커맨드는 사용자가 다이얼로그로 고르거나 창에 드롭한 경로와
 //! 앱이 만든 폴더(이 실행의 병합 임시 세션 폴더, TIFF 변환 결과 폴더) 안의 경로만 받는다.
+//! 내보내기는 폴더 다이얼로그에서 고른 폴더 바로 안에 새 파일만 만든다(있는 파일을 덮지 않는다).
 //!
 //! 모든 경로는 `canonicalize`한 뒤 비교한다. 심볼릭 링크와 `..`이 풀리므로
 //! 폴더 밖을 가리키는 링크는 폴더 밖 경로로 판정된다.
@@ -7,7 +8,7 @@
 use std::collections::HashSet;
 use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -30,6 +31,11 @@ const TEMP_OUTPUT_PREFIX: &str = "merged-";
 const SESSION_DIRECTORY_PREFIX: &str = "session-";
 /// 이보다 오래 손대지 않은 다른 세션 폴더는 앱 시작 때 지운다(종료 정리를 못 한 실행의 흔적).
 pub(crate) const STALE_SESSION_AGE: Duration = Duration::from_secs(24 * 60 * 60);
+
+/// 내보낼 이름이 이미 있을 때 붙여 볼 번호의 끝(`이름 (2).pdf` ~ `이름 (999).pdf`). 다 차면 쓰지 않는다.
+const MAX_EXPORT_NAME_NUMBER: u32 = 999;
+/// 같은 이름이 있을 때 둘째부터 붙이는 번호의 시작
+const FIRST_DUPLICATE_NUMBER: u32 = 2;
 
 /// 앱이 만들고 관리하는 폴더. 모두 canonical 경로다.
 #[derive(Debug, Clone)]
@@ -120,6 +126,8 @@ pub(crate) struct PathAccess {
     opened: Mutex<HashSet<PathBuf>>,
     /// 저장 다이얼로그에서 고른 파일(정규화). 쓰기만 허용한다.
     save_targets: Mutex<HashSet<PathBuf>>,
+    /// 폴더 다이얼로그에서 고른 내보내기 폴더(canonical). 그 바로 안에 새 PDF만 만든다.
+    save_directories: Mutex<HashSet<PathBuf>>,
     /// 같은 프로세스 안에서 임시 결과 이름이 겹치지 않게 하는 일련번호
     sequence: AtomicU64,
 }
@@ -130,6 +138,7 @@ impl PathAccess {
             directories,
             opened: Mutex::default(),
             save_targets: Mutex::default(),
+            save_directories: Mutex::default(),
             sequence: AtomicU64::new(0),
         }
     }
@@ -166,6 +175,53 @@ impl PathAccess {
         let normalized = normalize_save_target(path)?;
         lock(&self.save_targets).insert(normalized.clone());
         Ok(normalized)
+    }
+
+    /// 폴더 다이얼로그에서 고른 내보내기 폴더를 기록하고 canonical 경로를 돌려준다.
+    pub(crate) fn allow_save_directory(&self, path: &Path) -> Result<PathBuf, CommandError> {
+        let canonical = canonical_directory(path)?;
+        lock(&self.save_directories).insert(canonical.clone());
+        Ok(canonical)
+    }
+
+    /// 내보낼 새 PDF 경로: 고른 내보내기 폴더 바로 안의 `file_name`. 그 이름의 파일(또는 링크)이 이미 있으면
+    /// 덮어쓰지 않고 `이름 (2).pdf`, `이름 (3).pdf`…처럼 비어 있는 이름을 고른다. `file_name`은 경로 구분자·
+    /// `..` 없는 이름 하나여야 하고 확장자가 `pdf`여야 한다.
+    pub(crate) fn export_target(
+        &self,
+        directory: &Path,
+        file_name: &str,
+    ) -> Result<PathBuf, CommandError> {
+        let canonical = canonical_directory(directory)?;
+        let name = Path::new(file_name);
+        let is_plain_name = matches!(
+            name.components().collect::<Vec<_>>().as_slice(),
+            [Component::Normal(_)]
+        );
+        if !lock(&self.save_directories).contains(&canonical) || !is_plain_name {
+            return Err(CommandError::PathNotAllowed {
+                path: canonical.join(name),
+            });
+        }
+        ensure_extension(name, &[PDF_EXTENSION])?;
+        let stem = name
+            .file_stem()
+            .unwrap_or(name.as_os_str())
+            .to_string_lossy();
+        let extension = name.extension().unwrap_or_default().to_string_lossy();
+        std::iter::once(file_name.to_owned())
+            .chain(
+                (FIRST_DUPLICATE_NUMBER..=MAX_EXPORT_NAME_NUMBER)
+                    .map(|number| format!("{stem} ({number}).{extension}")),
+            )
+            .map(|candidate| canonical.join(candidate))
+            .find(|candidate| fs::symlink_metadata(candidate).is_err())
+            .ok_or_else(|| {
+                write_error(
+                    &canonical.join(name),
+                    io::Error::from(io::ErrorKind::AlreadyExists),
+                )
+            })
     }
 
     /// 읽어도 되는 파일의 canonical 경로. 열기 다이얼로그에서 고른 파일이거나 앱 폴더 안이어야 하고,
@@ -254,6 +310,26 @@ pub(crate) fn is_tiff(path: &Path) -> bool {
 /// 집합은 넣기·찾기만 하므로 다른 스레드가 패닉해도 내용이 깨지지 않는다. 잠금 오염은 무시한다.
 fn lock(set: &Mutex<HashSet<PathBuf>>) -> MutexGuard<'_, HashSet<PathBuf>> {
     set.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// 있는 폴더의 canonical 경로. 없으면 출력 폴더 없음(입력 파일 탓이 아니다)이다.
+fn canonical_directory(path: &Path) -> Result<PathBuf, CommandError> {
+    let canonical = path.canonicalize().map_err(|source| {
+        if source.kind() == io::ErrorKind::NotFound {
+            CommandError::Save(SaveError::DirectoryNotFound {
+                path: path.to_path_buf(),
+            })
+        } else {
+            write_error(path, source)
+        }
+    })?;
+    if canonical.is_dir() {
+        Ok(canonical)
+    } else {
+        Err(CommandError::Save(SaveError::DirectoryNotFound {
+            path: canonical,
+        }))
+    }
 }
 
 /// 저장 경로는 아직 없을 수 있다. 있으면 canonical 경로(링크를 푼 실제 파일),

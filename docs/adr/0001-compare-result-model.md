@@ -377,13 +377,17 @@ pub struct CompareResult {
 | OCR 단계 | 두 문서 **비교 범위 안**의 OCR 대상 쪽(§8 `needs_ocr`)만 읽는다. 범위 밖 스캔 쪽은 OCR하지 않고 출처가 `None`이며 안내도 없다(§3·§6). 쪽마다 추출 캐시 → OCR 디스크 캐시(파일 해시는 이때만 센다) → OCR 엔진 순서로 채우고, 캐시로 채운 쪽은 첫 이벤트부터 끝난 것으로 센다. 순서는 A 쪽들 다음 B 쪽들이다. |
 | 글자 정리 | 범위 쪽마다 OCR한 쪽은 OCR 글자로 바꾸고 줄을 뺀 뒤 토큰화한다. 범위 안에 출처가 OCR인 쪽이 어느 문서에든 있으면 두 문서 모두 NFKC다(§5). NFKC 판단과 토큰화는 `compare_texts`와 같은 함수(`tokenize_pair`)다. `LowTextConfidence`는 줄 제외 전 텍스트 레이어 글자로 판정한다. |
 | 쪽 짝짓기 단위 | 행 수는 짝짓기가 끝나야 알 수 있어 0% 이벤트에 `total`을 줄 수 없다. 그래서 두 범위 쪽 수 합(쪽마다 한 행에 한 번 놓인다)을 단위로 0%와 100%만 보낸다(500쪽 약 9 ms, §12). |
-| 문서 열기 | pdfium의 마지막 오류(`FPDF_GetLastError`)는 스레드마다 따로 있지 않다. pdfium-render는 열기와 오류 읽기에서 잠금을 따로 잡아, 병렬로 열면 다른 스레드의 열기 실패가 실패 이유를 덮었다(암호 문서가 `InvalidPdf`. 8스레드 × 500회에서 10번 중 10번 재현, `pdf_info.rs`). 문서 열기는 모두 프로세스 잠금 하나(`document.rs` `load_exclusively`) 안에서 한다. |
+| 문서 열기 | pdfium의 마지막 오류(`FPDF_GetLastError`)는 스레드마다 따로 있지 않다. pdfium-render는 열기와 오류 읽기에서 잠금을 따로 잡아, 병렬로 열면 다른 스레드의 열기 실패가 실패 이유를 덮었다(암호 문서가 `InvalidPdf`. 8스레드 × 500회에서 10번 중 10번 재현, `pdf_info.rs`). Step 22는 열기만 감싸는 잠금(`document.rs` `load_exclusively`)으로 막았고, Step 29부터는 아래 "pdfium 잠금"이 열기와 오류 읽기를 한 구간으로 감싸므로 그 잠금을 지웠다. |
+| pdfium 잠금(Step 29) | pdfium을 쓰는 pdf-core 공개 함수(정보 읽기·병합·TIFF 변환·추출·비교 실행기·OCR 렌더·리포트 내보내기·미리보기)는 시작할 때 프로세스 잠금 하나(`engine.rs` `PDFIUM_LOCK`)를 잡고 끝날 때 놓는다(`PdfEngine::session` → `PdfiumSession`). `&Pdfium`은 이 세션의 `Deref`로만 얻으므로 그 핸들로 연 문서·쪽·비트맵은 세션보다 오래 살 수 없다(컴파일러가 확인한다). 그래서 pdfium 호출과 객체 해제가 모두 잠금 안에서 일어난다. 비교 실행기는 비교 하나 동안 세션을 쥐고, pdfium을 부르지 않는 OCR 추론(ONNX Runtime)과 OCR 디스크 캐시용 파일 해시만 `PdfiumSession::unlocked`로 잠금 밖에서 돌린다(열어 둔 문서는 그대로 두되 그동안 pdfium을 부르지 않는다). 세션을 쥔 채 다른 공개 함수를 부르면 같은 스레드가 잠금을 다시 잡아 멈추므로, 공개 함수끼리 부를 때는 `&Pdfium`을 받는 crate 안 함수(`read_text_layer` 등)를 쓴다. 잠금 순서는 OCR 엔진 슬롯(`src-tauri`, 비교만 잡는다) → 이 잠금 → 추출 캐시·pdfium-render 함수별 잠금 하나뿐이다. 이 잠금을 쥔 채 기다리는 잠금은 뒤의 둘(안에서 pdfium도 이 잠금도 부르지 않는 짧은 구간)뿐이라 그 둘을 쥔 채 이 잠금을 기다리는 곳이 없고, OCR 엔진 슬롯을 쥔 채 이 잠금을 기다리는 비교는 있어도 이 잠금을 쥔 다른 작업은 OCR 엔진 슬롯을 기다리지 않으므로(두 비교는 슬롯에서 먼저 줄 선다) 교착이 없다. |
 
 - 측정(release, Apple M3 Pro, 다른 빌드가 돌던 부하 load average 약 5): 가상 계약서 텍스트 A·B(2쪽)를 50번 이어 만든 100쪽 짝(변경 350개)은 전체 167 ms(위 표), 옵션만 바꾼 재실행 28 ms(추출·OCR 0, 정리 25 ms)다. 같은 방식의 500쪽 짝은 841 ms(추출 339·346, 정리 121, diff 9, 짝짓기 5), 재실행 146 ms다. Phase 3 목표(100쪽 5초) 안이다.
 - 측정(스캔 쪽, `contract-b-scan-300dpi.pdf`, 400dpi 렌더): 쪽당 렌더 71~75 ms, 인식 524~963 ms(줄 20·45개). 스캔 2쪽 짝 전체 1.59초이고 거의 모두 OCR 단계다.
 - 가중치: 텍스트 짝에서는 추출이 시간의 약 80%이고 diff·짝짓기는 2% 미만이라 계획서 가중치(diff 15, 짝짓기 10)일 때 그 구간을 순식간에 지난다. 스캔 쪽이 있으면 OCR이 거의 전부다. Step 22는 계획서 시작값을 그대로 두고 측정만 기록한다. 조정은 실제 문서로 진행 화면(Phase 3)을 본 뒤 한다.
 - 메모리: 추출 글자 하나(`ExtractedChar`)가 40 B다. 위 100쪽 문서(70,900자)는 2.8 MB, 500쪽은 14.2 MB이고, 캐시 4문서면 500쪽 문서로 약 57 MB다.
-- 렌더·추론 스레드(계획서 §6.4 2번): 지금은 나누지 않는다. pdfium 호출은 pdfium-render `thread_safe`가 함수마다 프로세스 잠금으로 줄 세우고(`src-tauri`는 작업마다 `spawn_blocking`), ONNX Runtime 추론은 이 잠금을 잡지 않는다. 그래서 OCR 중인 비교가 병합을 막는 시간은 쪽당 렌더(약 75 ms)와 추출뿐이고, 렌더를 다른 스레드에서 미리 해 두는 파이프라인은 쪽당 시간을 렌더 몫(약 10%)만큼만 줄인다. 측정한 병목이 아니므로 그대로 둔다.
+- 렌더·추론 스레드(계획서 §6.4 2번): 지금은 나누지 않는다. pdfium 호출은 위 "pdfium 잠금"이 구간마다 줄 세우고(`src-tauri`는 작업마다 `spawn_blocking`), OCR 추론은 그 잠금 밖에서 돈다. 그래서 OCR 중인 비교가 병합·내보내기를 막는 시간은 쪽당 렌더와 추출뿐이고, 렌더를 다른 스레드에서 미리 해 두는 파이프라인은 쪽당 시간을 렌더 몫(약 10%)만큼만 줄인다. 측정한 병목이 아니므로 그대로 둔다.
+- Step 22~28의 이 항목은 "pdfium-render `thread_safe`가 함수마다 프로세스 잠금으로 줄 세운다"고 적었으나 사실이 아니었다. pdfium-render 0.9.4 `thread_safe`는 pdfium 함수 467개 중 182개(`FPDFPageObj_SetStrokeColor`·`GetStrokeColor`·`FPDFPath_BezierTo`·`FPDF_NewXObjectFromPage`·`FPDFText_GetCharBox`·`FPDFText_GetText`·`FPDF_RenderPageBitmapWithMatrix` 등, 함수 정의를 세어 확인)를 잠금 없이 부른다. 그래서 내보내기(장마다 상자·연결선 색 칠하기)와 미리보기 렌더·추출이 동시에 돌면 pdfium 공유 색공간의 참조 수가 깨져 `CPDF_Color::GetColorRef`에서 죽는다(Step 28에서 리포트 테스트 병렬 실행 20번 중 7번 재현). 함수마다가 아니라 구간마다 잡는 잠금은 pdfium이 스레드 안전하지 않다는 전제와 맞고, pdfium-render가 빠뜨린 함수를 하나씩 따라갈 필요가 없다.
+- 측정(Step 29, Apple M3 Pro): 재현 테스트(`tests/pdfium_concurrency.rs`, 12스레드 × 20회로 비교 PDF·주석 PDF 내보내기·미리보기·추출·정보 읽기를 섞는다)는 잠금을 빼면 30번 중 29번 SIGSEGV로 죽고, 잠금이 있으면 20번 중 20번 통과하며 debug 빌드 약 3초 걸린다(모두 줄 서므로 한 스레드로 돌린 시간과 같다). OCR 비교(텍스트 2쪽 ↔ 300dpi 스캔 2쪽, release, 1.64초) 동안 다른 스레드가 5 ms 간격으로 정보 읽기를 부르면, 추론을 잠금 밖에 둔 지금은 약 190번 중 중앙값 0 ms·최대 85~90 ms(쪽 하나 렌더) 기다리고, 추론까지 잠금 안에 두면 첫 호출이 비교가 끝날 때까지 1.64초 기다린다.
+- 버린 대안(pdfium 잠금): pdfium-render `thread_safe`가 빠뜨린 함수만 감싸는 래퍼 — 182개를 따라가야 하고 버전마다 바뀐다. 테스트만 잠그기(Step 28 `pdfium_serialized`) — 앱의 여러 작업 스레드는 그대로 겹친다. pdfium 전용 작업 스레드 하나에 모든 일을 보내기 — 커맨드마다 결과·진행률을 스레드 사이로 옮기는 코드가 늘고, 구간 잠금과 줄 서는 결과가 같다.
 - 한계: 추출 캐시는 (경로, 크기, 수정 시각)이 같으면 같은 파일로 본다. 내용을 바꾸고 크기와 수정 시각을 되돌린 파일은 알아보지 못한다.
 - 테스트(`compare_runner.rs`): 텍스트 짝의 진행 규칙(순서·단조·1% 단위·100은 끝에만)과 결과(diff·쪽 짝 golden), 쪽 범위의 쪽 번호·출처·OCR 대상, `InvalidRange` 때 이벤트 없음, 추출 중·OCR 중 취소, 옵션만 바꾼 재실행(추출 `Cached`, 결과가 캐시 없는 실행과 같음), 파일을 고치면 다시 추출, 스캔 짝의 쪽별 OCR 진행과 재실행(메모리 캐시만·디스크 캐시만으로 OCR 엔진 없이 `Cached`), OCR 엔진이 없을 때 바로 100%. 공식·1% 단위는 `runner/progress.rs` 단위 테스트다.
 - 버린 대안:
@@ -411,6 +415,23 @@ pub struct CompareResult {
 - 측정(release, Apple M3 Pro): OCR 엔진 첫 로드 711 ms(dylib 로드 + 검출·인식 세션 생성), 상주 메모리 +68 MB(로드 안 한 프로세스 10 MB → 79 MB). 병합만 쓰는 사용자가 이 메모리를 내지 않도록 앱 시작이 아니라 첫 비교에서 로드한다. 그래서 앱을 켠 뒤 첫 비교는 진행률 0%에서 약 0.7초 머문다(진행 이벤트는 실행기가 시작해야 나온다).
 - 버린 대안: 앱 시작 때(또는 별도 스레드에서) 미리 로드 — 비교를 안 쓰는 실행에도 68 MB를 쓴다. OCR 대상 쪽이 생길 때만 로드 — 실행기 API(`Option<&mut OcrEngine>`)를 바꿔야 하고, 측정한 병목이 아니다. 실행기마다 엔진을 새로 만들기 — 비교마다 0.7초.
 - 테스트(`src-tauri/src/compare.rs`, OCR 없이): 고르지 않은 파일 거부(이벤트 없음), 쪽 범위 오류가 `INVALID_RANGE`·경로 없음, `cancel_job` 토큰이 추출 중 비교를 멈춤, 계약 JSON 미러.
+
+### 17. 리포트 커맨드 (Step 29에서 정함)
+
+커맨드는 `preview_compare_report(request) -> ReportPreview`, `export_compare_pdf(request) -> ExportedFile`, `export_annotated_pdf(request) -> ExportedFile`, `pick_save_directory(options) -> 폴더 | null`이고 취소는 `cancel_job(request.jobId)`다. 코드는 `src-tauri/src/report.rs`(검증과 pdf-core 위임), 내보내기 폴더와 새 이름은 `src-tauri/src/access.rs`, 계약은 `src-tauri/src/contract.rs`다.
+
+| 항목 | 규칙 |
+|---|---|
+| 결과 | 프론트가 비교 커맨드에서 받은 `CompareResult` 계약 JSON을 그대로 다시 보낸다. 앱(Rust)은 끝난 결과를 따로 두지 않는다(결과를 어느 실행의 것으로 찾을지, 몇 개를 둘지 정할 상태가 생기지 않는다). 계약 미러는 이제 양쪽(`Serialize` + `Deserialize`, pdf-core로 옮기는 `From`)이다. 결과의 쪽 번호가 문서 밖이면 pdf-core가 `INVALID_PAGE`(그 문서 경로)로 거부한다. 확인: `report.rs`의 `compare_result_sent_back_by_the_front_equals_the_pdf_core_result`(회전·CropBox 오프셋·짝 없는 행·안내가 든 결과의 왕복이 pdf-core 결과와 같다). |
+| 옵션 | `CompareReportOptions { layout: "sideBySide" \| "aOnly" \| "bOnly", changedPagesOnly, drawBoxes, hiddenKinds }`가 §14 옵션 그대로다. `hiddenKinds`는 결과 화면 필터에서 끈 종류다. 주석 PDF 요청도 같은 `hiddenKinds`를 싣는다. 확인 필요 칩은 종류가 아니라 싣지 않는다(§14 "숨긴 종류"). 연결선은 따로 고르지 않는다(나란히 + 색 상자일 때 그린다, 화면의 "연결선" 체크박스와 잇지 않는다). |
+| 입력 경로 | A·B는 허용 경로 목록(또는 앱 폴더) 안의 PDF만 받는다(`PathAccess::readable`, §16과 같다). |
+| 출력 | 저장 위치는 파일이 아니라 폴더다. 폴더 다이얼로그(`pick_save_directory`)에서 고른 폴더를 허용 목록의 "내보내기 폴더"로 기록하고, 요청은 `output: { directory, fileName }`이다. 그 폴더 바로 안의 이름 하나(경로 구분자·`..` 없음, 확장자 `pdf`)만 받는다. 같은 이름의 파일(또는 링크)이 있으면 덮지 않고 `이름 (2).pdf` ~ `이름 (999).pdf` 중 비어 있는 첫 이름에 만들고, 실제 이름을 `ExportedFile.fileName`으로 돌려준다(다 차면 `WRITE_FAILED`). 고르지 않은 폴더·이름 형식이 틀리면 `PATH_NOT_ALLOWED`, 확장자가 다르면 `UNSUPPORTED_FILE_TYPE`, 폴더가 사라졌으면 `OUTPUT_DIRECTORY_NOT_FOUND`다. 출력이 비교한 파일이면 pdf-core가 `OUTPUT_IS_SOURCE`로 거부한다(새 이름이라 일어나지 않지만 마지막 방어선이다). |
+| 미리보기 | 앞 `PREVIEW_SHEETS`(8)장을 요청 너비(1 ~ 2400px)로 그려 PNG를 표준 base64 문자열로 보낸다(`ReportPreview { sheetCount, images }`). 프론트는 `data:image/png;base64,`에 붙여 그린다(CSP `img-src data:`). 바이너리 응답(`tauri::ipc::Response`)은 여러 그림과 장 수를 함께 싣지 못해 쓰지 않았다(base64는 1.33배지만 장 하나가 수십 KB다). 넣을 장이 없으면 `EMPTY_REPORT`(경로 없음)이고 화면은 그것으로 "넣을 쪽이 없어요"를 보인다. |
+| 에러 코드 | 새 코드 `EMPTY_REPORT`·`IMAGE_ENCODE_FAILED`. `ReportError` → `ErrorCode`는 `error.rs` 한 곳의 `match`다(`Compose` → `PDFIUM_FAILURE`). `path`는 `InvalidPage`와 문서 열기 실패일 때만 그 입력 문서이고, 출력·조립·그림·저장 실패와 `OUTPUT_IS_SOURCE`는 `null`이다. |
+| 취소 | 내보내기 두 커맨드는 병합·비교처럼 작업 ID를 등록하고 `cancel_job`이 켜는 토큰을 pdf-core에 넘긴다(§14 취소). 미리보기는 취소하지 않는다(앞 8장이라 짧고, 화면은 늦게 온 응답을 버린다). |
+
+- 버린 대안: 결과를 Rust에 두고 작업 ID로 찾기 — 어느 결과까지 둘지(마지막 하나·여러 개)와 취소·실패 뒤 상태를 정해야 하고, 결과 JSON은 수백 KB라 IPC로 다시 보내는 비용이 작다. 저장 다이얼로그(파일 하나 고르기)로 저장 위치 정하기 — 비교 PDF와 주석 PDF 두 파일 중 하나의 경로만 허용 목록에 들어가 두 번째 파일을 쓸 수 없다. 같은 이름이면 덮어쓰기 — 사용자가 고른 폴더의 다른 파일을 물어보지 않고 지울 수 있다(원본은 아니어도 사용자 데이터다).
+- 테스트(`src-tauri/src/report.rs`): 결과 왕복, 고르지 않은 폴더·경로가 섞인 이름·고르지 않은 원본 거부와 같은 이름의 사용자 파일·앞서 내보낸 파일을 덮지 않고 번호를 붙이기, 미리보기 그림이 표준 base64 PNG(요청 너비)이고 넣을 장이 없으면 `EMPTY_REPORT`.
 
 ## 결과
 

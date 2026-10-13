@@ -105,7 +105,7 @@ pub fn merge_pdfs(
     on_progress: impl FnMut(MergeProgress),
 ) -> Result<MergeResult, MergeError> {
     validate_request(request)?;
-    let pdfium = engine.pdfium();
+    let pdfium = engine.session();
     let mut reporter = ProgressReporter::new(on_progress);
     let page_count = request
         .sources
@@ -113,8 +113,8 @@ pub fn merge_pdfs(
         .map(|source| source.pages.len())
         .sum();
 
-    read_sources(pdfium, request, cancel, &mut reporter)?;
-    let merged = merge_pages(pdfium, request, page_count, cancel, &mut reporter)?;
+    read_sources(&pdfium, request, cancel, &mut reporter)?;
+    let merged = merge_pages(&pdfium, request, page_count, cancel, &mut reporter)?;
 
     reporter.report(MergeStage::Save, 0, SAVE_UNITS);
     ensure_not_cancelled(cancel)?;

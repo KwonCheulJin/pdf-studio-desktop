@@ -1,4 +1,5 @@
-import { ChevronLeft, Download, Ellipsis } from "lucide-react";
+import type { ReactNode } from "react";
+import { ChevronLeft, Ellipsis } from "lucide-react";
 import {
   Button,
   DropdownMenu,
@@ -18,14 +19,20 @@ import {
 import { useCompareExecution } from "../model/use-compare-execution";
 
 const BACK_ICON_SIZE = 18;
-const EXPORT_ICON_SIZE = 16;
 const MORE_ICON_SIZE = 18;
+
+interface CompareResultHeadingProps {
+  /** "새 비교"와 ⋯ 사이의 "내보내기"(`features/compare-export`, 위 레이어가 결과를 넘겨 조립한다) */
+  exportAction: ReactNode;
+}
 
 /**
  * 결과 화면 머리(시안 4, 모드 탭 오른쪽): 뒤로(옵션 화면), 제목 "A → B", 두 문서의 이름·쪽수와
- * 걸린 시간, "새 비교", "내보내기"(Step 29), ⋯(다시 실행).
+ * 걸린 시간, "새 비교", "내보내기", ⋯(다시 실행).
  */
-export function CompareResultHeading() {
+export function CompareResultHeading({
+  exportAction
+}: CompareResultHeadingProps) {
   const completed = useCompletedComparison();
   const showOptions = useCompareSessionStore((state) => state.showOptions);
   const startNewCompare = useCompareSessionStore(
@@ -66,10 +73,7 @@ export function CompareResultHeading() {
       >
         {COMPARE_RESULT_TEXT.NEW_COMPARE}
       </Button>
-      <Button disabled className="h-8.5 gap-1.5 rounded-md px-3.5 font-medium">
-        <Download size={EXPORT_ICON_SIZE} aria-hidden="true" />
-        {COMPARE_RESULT_TEXT.EXPORT}
-      </Button>
+      {exportAction}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button

@@ -2,12 +2,16 @@ import {
   OPENABLE_EXTENSIONS,
   type AppError,
   type CompareProgress,
+  type CompareReportOptions,
   type CompareResult,
   type ErrorCode,
+  type ExportedFile,
+  type ExportOutput,
   type MergeResult,
   type OpenedFile,
   type PageInfo,
   type PageSize,
+  type ReportLayout,
   type TextSource
 } from "@/renderer/shared/api/bindings";
 import { parsePageRange } from "@/renderer/shared/lib/page-range-parse";
@@ -53,6 +57,11 @@ export interface MockPlatformOptions {
   mergeOutput?: MockMergeOutput;
   /** `readThirdPartyNotices`가 돌려줄 고지 원문. 없으면 번들에 파일이 없을 때처럼 실패한다. */
   thirdPartyNotices?: string;
+  /**
+   * 폴더 다이얼로그(`pickSaveDirectory`)를 열 때마다 앞에서부터 하나씩 고를 폴더(`null`은 취소).
+   * 다 쓰면(또는 없으면) `/mock/exports`를 고른다.
+   */
+  directoryPicks?: (string | null)[];
 }
 
 export interface MockPlatform extends DesktopPlatform {
@@ -70,8 +79,34 @@ const MOCK_ERROR_CODE = {
   PATH_NOT_ALLOWED: "PATH_NOT_ALLOWED",
   UNSUPPORTED_FILE_TYPE: "UNSUPPORTED_FILE_TYPE",
   RESOURCE_UNAVAILABLE: "RESOURCE_UNAVAILABLE",
-  INVALID_RANGE: "INVALID_RANGE"
+  INVALID_RANGE: "INVALID_RANGE",
+  EMPTY_REPORT: "EMPTY_REPORT",
+  WRITE_FAILED: "WRITE_FAILED"
 } as const satisfies Record<string, ErrorCode>;
+
+/** 비교 PDF 배치(`ReportLayout`) */
+const MOCK_REPORT_LAYOUT = {
+  A_ONLY: "aOnly",
+  B_ONLY: "bOnly"
+} as const satisfies Record<string, ReportLayout>;
+
+/**
+ * mock 리포트. 장 수는 Rust `report::PREVIEW_SHEETS`, 이름 번호는 Rust `access::export_target`과 같고,
+ * 장 그림은 A4 가로(841.89 × 595.28pt) 비율의 흰 종이에 장 번호를 쓴 PNG다.
+ */
+const MOCK_REPORT = {
+  PREVIEW_SHEETS: 8,
+  FIRST_DUPLICATE_NUMBER: 2,
+  MAX_DUPLICATE_NUMBER: 999,
+  SHEET_ASPECT_RATIO: 841.89 / 595.28,
+  PNG_DATA_URL_PREFIX: "data:image/png;base64,",
+  PAPER_COLOR: "#ffffff",
+  INK_COLOR: "#3f3f46",
+  FONT: "600 48px sans-serif"
+} as const;
+
+const PATH_SEPARATORS = ["/", "\\"] as const;
+const PARENT_DIRECTORY = "..";
 
 /** mock 비교의 마지막 단계와 결과 글자 출처(Rust와 같은 값) */
 const MOCK_COMPARE = {
@@ -84,7 +119,8 @@ const MOCK_COMPARE = {
 
 const MOCK_DIRECTORY = {
   TEMP: "/mock/temp",
-  SAVE: "/mock/saved"
+  SAVE: "/mock/saved",
+  EXPORTS: "/mock/exports"
 } as const;
 
 const PERCENT_COMPLETE = 100;
@@ -192,6 +228,81 @@ function emptyCompareResult({
   };
 }
 
+type ReportRow = CompareResult["pagePairs"][number];
+
+interface MockReportSheetsParams {
+  result: CompareResult;
+  options: CompareReportOptions;
+}
+
+/**
+ * Rust `plan_sheets`(ADR 0001 §14)처럼 장을 고른다: 행 순서, 한쪽 배치는 그쪽 쪽이 없는 행을 빼고,
+ * 차이 쪽만이면 장에 보이는 쪽에 숨기지 않은 변경 상자가 있는 행만 남긴다.
+ */
+function mockReportSheets({
+  result,
+  options
+}: MockReportSheetsParams): ReportRow[] {
+  const visible = result.changes.filter(
+    (change) => !options.hiddenKinds.includes(change.kind)
+  );
+  const hasBox = (side: "before" | "after", page: number | null): boolean =>
+    page !== null &&
+    visible.some((change) =>
+      change[side]?.boxes.some((bounds) => bounds.page === page)
+    );
+  return result.pagePairs
+    .map(([before, after]): ReportRow => {
+      if (options.layout === MOCK_REPORT_LAYOUT.A_ONLY) return [before, null];
+      if (options.layout === MOCK_REPORT_LAYOUT.B_ONLY) return [null, after];
+      return [before, after];
+    })
+    .filter(([before, after]) => before !== null || after !== null)
+    .filter(
+      ([before, after]) =>
+        !options.changedPagesOnly ||
+        hasBox("before", before) ||
+        hasBox("after", after)
+    );
+}
+
+interface MockSheetImageParams {
+  sheetNumber: number;
+  widthPx: number;
+}
+
+/** 장 번호를 쓴 종이 PNG(base64). 장마다 그림이 달라 넘기기를 확인할 수 있다. */
+function mockSheetImage({
+  sheetNumber,
+  widthPx
+}: MockSheetImageParams): string {
+  const canvas = document.createElement("canvas");
+  canvas.width = widthPx;
+  canvas.height = Math.round(widthPx / MOCK_REPORT.SHEET_ASPECT_RATIO);
+  const context = canvas.getContext("2d");
+  if (context) {
+    context.fillStyle = MOCK_REPORT.PAPER_COLOR;
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = MOCK_REPORT.INK_COLOR;
+    context.font = MOCK_REPORT.FONT;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText(String(sheetNumber), canvas.width / 2, canvas.height / 2);
+  }
+  return canvas
+    .toDataURL("image/png")
+    .slice(MOCK_REPORT.PNG_DATA_URL_PREFIX.length);
+}
+
+/** Rust `export_target`처럼 경로 구분자·`..` 없는 이름 하나만 받는다. */
+function isPlainName(fileName: string): boolean {
+  return (
+    fileName !== "" &&
+    fileName !== PARENT_DIRECTORY &&
+    PATH_SEPARATORS.every((separator) => !fileName.includes(separator))
+  );
+}
+
 /**
  * 메모리 안 가짜 파일로 동작하는 구현(브라우저 E2E용).
  * 허용 경로 규칙과 에러 코드는 Tauri 커맨드와 같다.
@@ -200,7 +311,8 @@ export function createMockPlatform({
   files = [],
   dialogPicks = [],
   mergeOutput,
-  thirdPartyNotices
+  thirdPartyNotices,
+  directoryPicks = []
 }: MockPlatformOptions = {}): MockPlatform {
   const filesByPath = new Map(files.map((file) => [file.path, file]));
   const convertedFiles = new Map(
@@ -215,6 +327,11 @@ export function createMockPlatform({
   const saveTargets = new Map<string, string>();
   const tempOutputs = new Set<string>();
   const settings = new Map<string, SettingValue>();
+  const pendingDirectoryPicks = [...directoryPicks];
+  /** 폴더 다이얼로그에서 고른 내보내기 폴더 */
+  const saveDirectories = new Set<string>();
+  /** 내보낸 파일 경로(같은 이름이면 Rust처럼 번호를 붙인다) */
+  const exportedPaths = new Set<string>();
 
   const ensureReadable = (path: string): void => {
     if (
@@ -281,6 +398,52 @@ export function createMockPlatform({
     return { file, range: parsed.pages };
   };
 
+  /** Rust `export_target`: 고른 폴더 바로 안의 새 이름. 같은 이름이 있으면 `이름 (2).pdf`… */
+  const exportTarget = ({
+    directory,
+    fileName
+  }: ExportOutput): ExportedFile => {
+    const target = `${directory}/${fileName}`;
+    if (!saveDirectories.has(directory) || !isPlainName(fileName)) {
+      throw new PlatformError(
+        rejectedPath({ code: MOCK_ERROR_CODE.PATH_NOT_ALLOWED, path: target })
+      );
+    }
+    if (extensionOf(fileName) !== PDF_EXTENSION) {
+      throw new PlatformError(
+        rejectedPath({
+          code: MOCK_ERROR_CODE.UNSUPPORTED_FILE_TYPE,
+          path: target
+        })
+      );
+    }
+    const stem = stemOf(fileName);
+    const extension = fileName.slice(stem.length);
+    const numbers = Array.from(
+      {
+        length:
+          MOCK_REPORT.MAX_DUPLICATE_NUMBER -
+          MOCK_REPORT.FIRST_DUPLICATE_NUMBER +
+          1
+      },
+      (_, offset) => MOCK_REPORT.FIRST_DUPLICATE_NUMBER + offset
+    );
+    const name = [
+      fileName,
+      ...numbers.map((number) => `${stem} (${number})${extension}`)
+    ].find((candidate) => !exportedPaths.has(`${directory}/${candidate}`));
+    if (name === undefined) {
+      throw new PlatformError({
+        code: MOCK_ERROR_CODE.WRITE_FAILED,
+        message: target,
+        path: null
+      });
+    }
+    const outputPath = `${directory}/${name}`;
+    exportedPaths.add(outputPath);
+    return { outputPath, fileName: name };
+  };
+
   const newTempOutput = (jobId: string): MockMergeOutput => {
     const fileName = `${MERGED_FILE_PREFIX}${jobId}.${PDF_EXTENSION}`;
     return {
@@ -327,6 +490,15 @@ export function createMockPlatform({
       const path = `${MOCK_DIRECTORY.SAVE}/${fileName}`;
       saveTargets.set(path, fileName);
       return path;
+    },
+    pickSaveDirectory: async () => {
+      const picked = pendingDirectoryPicks.length
+        ? (pendingDirectoryPicks.shift() ?? null)
+        : MOCK_DIRECTORY.EXPORTS;
+      if (picked !== null) {
+        saveDirectories.add(picked);
+      }
+      return picked;
     },
     openFiles: async (paths) => paths.map(openFile),
     // 가짜 경로를 자르지 않고 시드의 표시 이름을 쓴다. 시드에 없는 경로는 그대로 돌려준다.
@@ -390,6 +562,48 @@ export function createMockPlatform({
         detail: null
       });
       return emptyCompareResult({ before, after });
+    },
+    previewCompareReport: async ({
+      result,
+      before,
+      after,
+      options,
+      widthPx
+    }) => {
+      ensureMergeSource(before);
+      ensureMergeSource(after);
+      const sheets = mockReportSheets({ result, options });
+      if (sheets.length === 0) {
+        throw new PlatformError({
+          code: MOCK_ERROR_CODE.EMPTY_REPORT,
+          message: "no sheets",
+          path: null
+        });
+      }
+      return {
+        sheetCount: sheets.length,
+        images: sheets
+          .slice(0, MOCK_REPORT.PREVIEW_SHEETS)
+          .map((_, index) =>
+            mockSheetImage({ sheetNumber: index + 1, widthPx })
+          )
+      };
+    },
+    exportComparePdf: async ({ result, before, after, options, output }) => {
+      ensureMergeSource(before);
+      ensureMergeSource(after);
+      if (mockReportSheets({ result, options }).length === 0) {
+        throw new PlatformError({
+          code: MOCK_ERROR_CODE.EMPTY_REPORT,
+          message: "no sheets",
+          path: null
+        });
+      }
+      return exportTarget(output);
+    },
+    exportAnnotatedPdf: async ({ after, output }) => {
+      ensureMergeSource(after);
+      return exportTarget(output);
     },
     cancelJob: async () => {},
     copyFile: async ({ source, destination }) => {

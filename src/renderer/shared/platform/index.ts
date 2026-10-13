@@ -14,6 +14,7 @@ export {
   type LogParams,
   type MergePdfsParams,
   type MergeProgressHandler,
+  type PickSaveDirectoryOptions,
   type PickSavePathOptions,
   type SetSettingParams,
   type SettingValue,

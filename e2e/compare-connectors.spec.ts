@@ -724,13 +724,20 @@ async function expectPanesSettled(page: Page): Promise<void> {
   }
 }
 
-/** 앱 행 배치를 따르지 않고 화면에서 잰 한 행 높이(A 1쪽 · B 1쪽 행) */
+/**
+ * 앱 행 배치를 따르지 않고 화면에서 잰 한 행 높이(A 1쪽 · B 1쪽 행). 빠르게 스크롤한 직후에는 virtuoso가
+ * 행을 자리표시(scroll seek)로 바꿨다가 속도가 가라앉으면 되돌린다. 그 사이 행이 없거나 찾은 순간 떼어져
+ * `boundingBox`가 `null`이므로, 행이 다시 그려질 때까지 기다려 잰다.
+ */
 async function rowHeight(page: Page): Promise<number> {
-  const box = await pane(page, "B")
-    .getByRole("group", { name: "A 1쪽 · B 1쪽" })
-    .boundingBox();
-  if (!box) throw new Error("첫 행이 화면에 없습니다.");
-  return box.height;
+  const row = pane(page, "B").getByRole("group", { name: "A 1쪽 · B 1쪽" });
+  let height = 0;
+  await expect(async () => {
+    const box = await row.boundingBox();
+    expect(box, "첫 행이 화면에 없습니다.").not.toBeNull();
+    height = box?.height ?? 0;
+  }).toPass();
+  return height;
 }
 
 async function scrollPane(page: Page, badge: string, top: number) {
@@ -759,8 +766,9 @@ test("동기 스크롤을 끄고 B만 내리면 위로 나간 B 끝은 패널 �
   await expect(first).toHaveAttribute("data-state", "shown");
 
   // B만 한 행 내린다: 1쪽 B 끝은 화면 위, A 끝은 그대로 보인다.
+  const firstRowHeight = await rowHeight(page);
   await scrollPane(page, "A", 0);
-  await scrollPane(page, "B", await rowHeight(page));
+  await scrollPane(page, "B", firstRowHeight);
   await expect(first).toHaveAttribute("data-state", "clamped");
   await expect(first).toHaveAttribute("data-clamped-side", "after");
   await expect(first).toHaveAttribute("data-clamp-edge", "top");
@@ -798,7 +806,7 @@ test("동기 스크롤을 끄고 B만 내리면 위로 나간 B 끝은 패널 �
   await page.mouse.click(layerBox.x + hitStart.x + 2, layerBox.y + hitStart.y);
   await expect(changeItem(page, 1)).toHaveAttribute("aria-current", "true");
   await expect(first).toHaveAttribute("data-state", "shown");
-  expect(await scrollTopOf(page, "B")).toBeLessThan(await rowHeight(page));
+  expect(await scrollTopOf(page, "B")).toBeLessThan(firstRowHeight);
   // 동기 스크롤이 꺼져 있으므로 두 패널은 따로다.
   await scrollPane(page, "B", 40);
   await expect.poll(() => scrollTopOf(page, "B")).toBe(40);
@@ -1046,6 +1054,7 @@ test("다른 행에 걸친 변경도 잇고(동기 스크롤이면 기울어진 
   await expect(
     pane(page, "A").locator(`rect[data-change-id="${anchorOnly.id}"]`)
   ).toHaveCount(0);
+  const firstRowHeight = await rowHeight(page);
   await changeItem(page, 2).click();
   const cross = connector(page, crossRow.id);
   await expect(cross).toHaveAttribute("data-state", "shown");
@@ -1054,7 +1063,7 @@ test("다른 행에 걸친 변경도 잇고(동기 스크롤이면 기울어진 
   const points = pathPoints(d);
   const rise = Math.abs(points[0].y - points[points.length - 1].y);
   // 두 끝이 한 행만큼 어긋난다(같은 쪽 자리 + 행 높이).
-  expect(rise).toBeCloseTo(await rowHeight(page), 0);
+  expect(rise).toBeCloseTo(firstRowHeight, 0);
 });
 
 interface TagBox {

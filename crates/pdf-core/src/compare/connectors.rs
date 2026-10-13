@@ -1,18 +1,22 @@
 //! 연결선 끝과 모양(계획서 §7.1). 변경마다 A 쪽 끝과 B 쪽 끝을 선 하나(또는 띠 하나)로 잇는다. 이
-//! 모듈이 정본이고, 화면(`entities/comparison/model/connector-ends.ts`)이 같은 규칙을 따라 구현한다.
-//! 비교 PDF 내보내기(`report/compose.rs`)가 이 결과로 연결선을 그리고, golden은
-//! `tests/golden/connector-geometry.connectors.json`이다(E2E가 같은 golden으로 화면 끝점을 맞댄다).
+//! 모듈이 정본이고, 화면(`entities/comparison/model/connector-ends.ts`, `widgets/compare-viewer`)이 같은
+//! 규칙을 따라 구현한다. 비교 PDF 내보내기(`report/compose.rs`)가 이 결과로 줄 표시와 연결선을 그리고,
+//! golden은 `tests/golden/connector-geometry.connectors.json`이다(E2E가 같은 golden으로 화면 줄 표시와
+//! 끝점을 맞댄다).
 //!
 //! - 끝은 사용자 공간 사각형이다(ADR 0001 §2). 글자가 있는 쪽은 첫 상자의 쪽에 있는 상자들의 합집합
 //!   (여러 쪽에 걸친 변경도 첫 쪽만), 글자가 없는 쪽은 앵커 막대(너비 0, ADR 0001 §4)다.
-//! - 끝점은 이 사각형을 화면·장 좌표로 옮긴 뒤 정한다([`ConnectorEnd::point`]). 그래서 회전·CropBox
-//!   원점·배율은 옮기는 변환 하나가 맡는다.
+//! - 끝마다 줄 표시(Step 28-d)가 있다: 화면 방향으로 그 쪽 너비 전체를 덮고 세로는 끝 사각형의 세로
+//!   범위인 사각형이다. 연결선은 줄 표시의 거터를 향한 변(A는 쪽 오른쪽 끝, B는 쪽 왼쪽 끝)의 세로
+//!   가운데에서 나간다([`exit_point`]). 줄 표시를 화면·장 좌표로 옮긴 뒤 정하므로 배율·자리는 옮기는
+//!   변환이 맡는다.
 //! - 모양은 글자가 있는 쪽 끝 중 하나라도 [`MAX_LINE_CONNECTOR_LINES`]줄을 넘으면 띠, 아니면 선이다.
 
 use serde::Serialize;
 
 use super::diff::SAME_LINE_MIN_OVERLAP;
 use super::model::{Change, ChangeKind, CompareResult, PageSize, Placement, Side, TextBox};
+use super::options::{display_size, to_display};
 use crate::info::PageBox;
 
 /// 끝 상자가 이 줄 수를 넘으면 선 대신 띠로 잇는다(계획서 §7.1 "합집합 높이 > 2줄").
@@ -37,21 +41,21 @@ pub struct ConnectorEnd {
     pub bounds: TextBox,
     /// 그 쪽에 글자가 없어 앵커에 잇는다.
     pub is_anchor: bool,
+    /// 줄 표시: 화면 방향 pt(`/Rotate` 적용, 쪽 `view_box` 왼쪽 아래 원점, y 위로, ADR 0001 §14 쪽 놓기와
+    /// 같은 좌표)의 사각형. 가로는 쪽 너비 전체(0 ~ 화면 방향 너비), 세로는 [`Self::bounds`]를 화면
+    /// 방향으로 옮긴 세로 범위다. 90·270도 쪽의 앵커 막대는 화면에서 가로로 눕으므로 높이 0이다.
+    pub row: PageBox,
 }
 
-impl ConnectorEnd {
-    /// 끝점. `mapped`는 [`Self::bounds`]를 화면·장 좌표로 옮긴 사각형이다(축 방향은 상관없다).
-    /// 글자 상자는 거터를 향한 변의 가운데(A는 오른쪽, B는 왼쪽), 앵커는 막대 가운데다. 90·270도 쪽의
-    /// 앵커 막대는 옮기면 가로로 눕지만 가운데는 같은 자리다.
-    pub(crate) fn point(&self, mapped: PageBox, side: Side) -> (f32, f32) {
-        let center_y = (mapped.bottom + mapped.top) * HALF;
-        let x = match (self.is_anchor, side) {
-            (true, _) => (mapped.left + mapped.right) * HALF,
-            (false, Side::Before) => mapped.right,
-            (false, Side::After) => mapped.left,
-        };
-        (x, center_y)
-    }
+/// 연결선이 줄 표시에서 나가는 점. `mapped_row`는 [`ConnectorEnd::row`]를 장 좌표로 옮긴 사각형이다(축
+/// 방향은 상관없다). 거터를 향한 변(A는 오른쪽 = 쪽 오른쪽 끝, B는 왼쪽 = 쪽 왼쪽 끝)의 세로 가운데다.
+pub(crate) fn exit_point(mapped_row: PageBox, side: Side) -> (f32, f32) {
+    let center_y = (mapped_row.bottom + mapped_row.top) * HALF;
+    let x = match side {
+        Side::Before => mapped_row.right,
+        Side::After => mapped_row.left,
+    };
+    (x, center_y)
 }
 
 /// 변경 하나의 연결선
@@ -63,6 +67,16 @@ pub struct Connector {
     pub shape: ConnectorShape,
     pub before: ConnectorEnd,
     pub after: ConnectorEnd,
+}
+
+impl Connector {
+    /// 그 쪽 끝
+    pub(crate) fn end(&self, side: Side) -> &ConnectorEnd {
+        match side {
+            Side::Before => &self.before,
+            Side::After => &self.after,
+        }
+    }
 }
 
 /// 결과 순서대로 변경마다 연결선을 만든다.
@@ -104,24 +118,37 @@ fn connector(change: &Change, result: &CompareResult) -> Option<Connector> {
 
 /// 그 쪽의 끝. 쪽이 `sizes`에 없으면 `None`이다.
 fn connector_end(placement: &Placement, sizes: &[PageSize]) -> Option<ConnectorEnd> {
-    let end = match placement {
-        Placement::Boxes { boxes, .. } => ConnectorEnd {
-            bounds: union(&first_page_boxes(boxes))?,
-            is_anchor: false,
-        },
-        &Placement::Anchor { page, x, y, h } => ConnectorEnd {
-            bounds: TextBox {
+    let (bounds, is_anchor) = match placement {
+        Placement::Boxes { boxes, .. } => (union(&first_page_boxes(boxes))?, false),
+        &Placement::Anchor { page, x, y, h } => (
+            TextBox {
                 page,
                 x,
                 y,
                 w: 0.0,
                 h,
             },
-            is_anchor: true,
-        },
+            true,
+        ),
     };
-    let index = usize::try_from(end.bounds.page).ok()?;
-    sizes.get(index).map(|_| end)
+    let size = sizes.get(usize::try_from(bounds.page).ok()?)?;
+    Some(ConnectorEnd {
+        bounds,
+        is_anchor,
+        row: row_of(&bounds, size),
+    })
+}
+
+/// 줄 표시: 끝 사각형을 화면 방향으로 옮긴 세로 범위 × 쪽 너비 전체
+fn row_of(bounds: &TextBox, size: &PageSize) -> PageBox {
+    let display = to_display(bounds, size);
+    let (width, _) = display_size(size);
+    PageBox {
+        left: 0.0,
+        bottom: display.y,
+        right: width,
+        top: display.y + display.h,
+    }
 }
 
 /// 첫 상자의 쪽에 있는 상자들(텍스트 순서)
@@ -277,6 +304,61 @@ mod tests {
                 h: first.y + LINE_HEIGHT - wrapped.y,
             }
         );
+    }
+
+    /// 줄 표시는 화면 방향(CropBox 원점을 빼고 `/Rotate`를 적용)으로 쪽 너비 전체를 덮고 세로는 끝
+    /// 사각형의 범위다. 연결선은 그 거터 쪽 변(A 오른쪽, B 왼쪽)의 세로 가운데에서 나간다. 회전 0 쪽과
+    /// 90도 쪽(화면 너비 = 사용자 공간 높이)을 손으로 계산한 값과 맞댄다.
+    #[test]
+    fn row_spans_the_display_page_width_at_the_end_height() {
+        let view_box = PageBox {
+            left: 30.0,
+            bottom: 40.0,
+            right: 565.0,
+            top: 812.0,
+        };
+        let bounds = TextBox {
+            page: 0,
+            x: 100.0,
+            y: 500.0,
+            w: 50.0,
+            h: 10.0,
+        };
+        let row_on = |rotation| {
+            let mut sized = result(
+                vec![change(
+                    ChangeKind::Replace,
+                    boxes(vec![bounds]),
+                    boxes(vec![bounds]),
+                )],
+                1,
+            );
+            sized.page_sizes.before = vec![PageSize { view_box, rotation }];
+            connectors(&sized, &[])[0].before.row
+        };
+
+        let upright = row_on(PageRotation::Degrees0);
+        assert_eq!(
+            upright,
+            PageBox {
+                left: 0.0,
+                bottom: 460.0,
+                right: 535.0,
+                top: 470.0,
+            }
+        );
+        // 90도: 화면 x = 사용자 y − 아래, 화면 y = 너비 − (사용자 x − 왼쪽) − w, 화면 너비 = 사용자 높이
+        assert_eq!(
+            row_on(PageRotation::Degrees90),
+            PageBox {
+                left: 0.0,
+                bottom: 415.0,
+                right: 772.0,
+                top: 465.0,
+            }
+        );
+        assert_eq!(exit_point(upright, Side::Before), (535.0, 465.0));
+        assert_eq!(exit_point(upright, Side::After), (0.0, 465.0));
     }
 
     /// 띠는 줄 수로 정한다. 한 줄의 글자 diff 상자 셋과 두 줄은 선이고, 세 줄부터 띠다. 글자가 있는

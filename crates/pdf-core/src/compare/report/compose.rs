@@ -10,7 +10,7 @@ use pdfium_render::prelude::{
     PdfRect, Pdfium, PdfiumError,
 };
 
-use super::super::connectors::{Connector, ConnectorShape, connectors};
+use super::super::connectors::{Connector, ConnectorShape, connectors, exit_point};
 use super::super::model::{ChangeKind, CompareResult, PageSize, Side};
 use super::sheet::{
     Mark, Marks, Placement, SHEET_HEIGHT_PT, SHEET_WIDTH_PT, Sheet, inflate, intersect, slots,
@@ -23,7 +23,7 @@ use crate::document::{DocumentError, open_document};
 use crate::info::PageBox;
 
 /// 디자인 토큰 `border`(oklch(0.905 0.008 285) ≈ #dfdfe5). 놓인 쪽의 테두리와 빈 쪽 자리에 쓴다.
-const BORDER_COLOR: PdfColor = PdfColor::new(0xdf, 0xdf, 0xe5, 0xff);
+pub(super) const BORDER_COLOR: PdfColor = PdfColor::new(0xdf, 0xdf, 0xe5, 0xff);
 const BORDER_WIDTH_PT: f32 = 0.75;
 /// 차이 상자 선 굵기. 확인 필요 상자는 채우지 않는 대신 선을 굵게 한다.
 const BOX_STROKE_WIDTH_PT: f32 = 0.75;
@@ -38,6 +38,10 @@ const DASH_PATTERN_PT: [f32; 2] = [3.0, 2.0];
 const CONNECTOR_STROKE_WIDTH_PT: f32 = 1.0;
 /// 띠(2줄 넘는 변경)의 테두리 굵기. 채움은 종류의 `-fill` 토큰(알파 그대로)이다.
 const BAND_STROKE_WIDTH_PT: f32 = 0.5;
+/// 연결선 끝 줄 표시(Step 28-d)의 테두리 굵기와 채움 알파를 나누는 값. 채움은 종류 `-fill` 토큰의 반
+/// 알파라 그 위의 변경 상자(`-fill` 그대로)가 더 진하게 보인다(화면 `ROW_BAND_STYLE.FILL_OPACITY`와 같다).
+pub(super) const ROW_STROKE_WIDTH_PT: f32 = 0.5;
+const ROW_FILL_ALPHA_DIVISOR: u8 = 2;
 /// 한 장의 연결선(변경 하나에 하나)이 이보다 많으면 그 장에는 연결선을 그리지 않는다(선이 엉켜 읽을 수
 /// 없다, 계획서 §7.1).
 pub(super) const MAX_SHEET_CONNECTORS: usize = 40;
@@ -73,19 +77,32 @@ pub(super) fn compose<'a>(
 
         let placed_before = place(before.as_ref(), sheet.before, before_slot);
         let placed_after = place(after.as_ref(), sheet.after, after_slot);
+        let on_sheet = connectors_on_sheet(&connectors, &placed_before, &placed_after);
         let mut canvas = Canvas {
             document: &mut document,
             page: &mut page,
         };
-        for (placed, page_marks) in [
-            (&placed_before, sheet.before.map(|page| marks.before(page))),
-            (&placed_after, sheet.after.map(|page| marks.after(page))),
+        for (side, placed, page_marks) in [
+            (
+                Side::Before,
+                &placed_before,
+                sheet.before.map(|page| marks.before(page)),
+            ),
+            (
+                Side::After,
+                &placed_after,
+                sheet.after.map(|page| marks.after(page)),
+            ),
         ] {
             let Some(placed) = placed else {
                 continue;
             };
             canvas.place_page(placed)?;
             canvas.frame(placed.placement.frame(), false)?;
+            // 줄 표시를 변경 상자보다 먼저 그려 상자가 그 위에 보이게 한다.
+            for connector in &on_sheet {
+                canvas.row_band(connector.kind, connector.end(side).row, &placed.placement)?;
+            }
             if options.draw_boxes {
                 for mark in page_marks.unwrap_or_default() {
                     canvas.mark(mark, &placed.placement)?;
@@ -95,18 +112,20 @@ pub(super) fn compose<'a>(
         if options.layout == ReportLayout::SideBySide {
             canvas.empty_slot(placed_before.as_ref(), placed_after.as_ref())?;
         }
-        if let (Some(before_page), Some(after_page)) = (&placed_before, &placed_after) {
-            let on_sheet: Vec<&Connector> = connectors
-                .iter()
-                .filter(|connector| {
-                    connector.before.bounds.page == before_page.page
-                        && connector.after.bounds.page == after_page.page
-                })
-                .collect();
-            if on_sheet.len() <= MAX_SHEET_CONNECTORS {
-                for connector in on_sheet {
-                    canvas.connector(connector, &before_page.placement, &after_page.placement)?;
-                }
+        if let (Some(before_page), Some(after_page), Some(before_slot), Some(after_slot)) =
+            (&placed_before, &placed_after, before_slot, after_slot)
+        {
+            let gutter = Gutter {
+                left: before_slot.right,
+                right: after_slot.left,
+            };
+            for connector in &on_sheet {
+                canvas.connector(
+                    connector,
+                    &before_page.placement,
+                    &after_page.placement,
+                    &gutter,
+                )?;
             }
         }
         page.regenerate_content().map_err(compose_error)?;
@@ -122,6 +141,28 @@ fn sheet_connectors(result: &CompareResult, options: &CompareReportOptions) -> V
         return Vec::new();
     }
     connectors(result, &options.hidden_kinds)
+}
+
+/// 장에 그릴 연결선: 두 끝이 모두 그 장의 두 쪽(A 칸 쪽, B 칸 쪽)에 있는 변경. 두 쪽이 다 놓이지 않았거나
+/// [`MAX_SHEET_CONNECTORS`]개를 넘으면 하나도 그리지 않는다(줄 표시도 연결선의 일부라 함께 뺀다).
+fn connectors_on_sheet<'c>(
+    connectors: &'c [Connector],
+    before: &Option<PlacedPage>,
+    after: &Option<PlacedPage>,
+) -> Vec<&'c Connector> {
+    let (Some(before), Some(after)) = (before, after) else {
+        return Vec::new();
+    };
+    let on_sheet: Vec<&Connector> = connectors
+        .iter()
+        .filter(|connector| {
+            connector.before.bounds.page == before.page && connector.after.bounds.page == after.page
+        })
+        .collect();
+    if on_sheet.len() > MAX_SHEET_CONNECTORS {
+        return Vec::new();
+    }
+    on_sheet
 }
 
 /// 장에 쓰는 원본 문서 한쪽과 그 쪽 크기 목록
@@ -283,23 +324,45 @@ impl<'a> Canvas<'_, 'a> {
         }
     }
 
-    /// 변경 하나를 잇는다(계획서 §7.1, 화면과 같은 모양). 선은 A 끝점 → A 쪽 오른쪽 끝까지 수평 →
-    /// 두 쪽 사이 3차 베지어 → B 쪽 왼쪽 끝 → B 끝점까지 수평이고, 띠는 두 끝의 위 변과 아래 변을 같은
-    /// 모양으로 이은 닫힌 경로다. 끝은 사용자 공간 사각형을 장 좌표로 옮긴 뒤 끝점을 정한다.
+    /// 연결선 끝의 줄 표시(계획서 §7.1 Step 28-d): 놓인 쪽 너비 전체, 끝 사각형의 세로 범위. 종류 선 색
+    /// 얇은 테두리 + 종류 `-fill` 반 알파 채움이다. `row`는 화면 방향 pt(`ConnectorEnd::row`).
+    fn row_band(
+        &mut self,
+        kind: ChangeKind,
+        row: PageBox,
+        placement: &Placement,
+    ) -> Result<(), ReportError> {
+        let (stroke, fill) = kind_colors(kind);
+        let fill = PdfColor::new(
+            fill.red(),
+            fill.green(),
+            fill.blue(),
+            fill.alpha() / ROW_FILL_ALPHA_DIVISOR,
+        );
+        self.rect(
+            placement.map_display(row),
+            stroke,
+            ROW_STROKE_WIDTH_PT,
+            Some(fill),
+            false,
+        )
+    }
+
+    /// 변경 하나를 잇는다(계획서 §7.1, 화면과 같은 모양). 선은 A 줄 표시의 거터 쪽 변(A 쪽 오른쪽 끝)
+    /// 세로 가운데 → A 칸 오른쪽 끝까지 수평 → 두 칸 사이 3차 베지어 → B 칸 왼쪽 끝 → B 쪽 왼쪽 끝까지
+    /// 수평이고, 띠는 두 줄 표시의 위 변과 아래 변을 같은 모양으로 이은 닫힌 경로다. 줄 표시를 장 좌표로
+    /// 옮긴 뒤 나가는 점을 정한다.
     fn connector(
         &mut self,
         connector: &Connector,
         before: &Placement,
         after: &Placement,
+        gutter: &Gutter,
     ) -> Result<(), ReportError> {
-        let gutter = Gutter {
-            left: before.frame().right,
-            right: after.frame().left,
-        };
-        let before_rect = before.map(&connector.before.bounds);
-        let after_rect = after.map(&connector.after.bounds);
-        let (start_x, start_y) = connector.before.point(before_rect, Side::Before);
-        let (end_x, end_y) = connector.after.point(after_rect, Side::After);
+        let before_row = before.map_display(connector.before.row);
+        let after_row = after.map_display(connector.after.row);
+        let (start_x, start_y) = exit_point(before_row, Side::Before);
+        let (end_x, end_y) = exit_point(after_row, Side::After);
         let (stroke, fill) = kind_colors(connector.kind);
         let path = match connector.shape {
             ConnectorShape::Line => {
@@ -313,20 +376,20 @@ impl<'a> Canvas<'_, 'a> {
             ConnectorShape::Band => {
                 let mut path = self.path_from(
                     start_x,
-                    before_rect.top,
+                    before_row.top,
                     stroke,
                     BAND_STROKE_WIDTH_PT,
                     Some(fill),
                 )?;
                 let before_edge = BandEdge {
                     x: start_x,
-                    top: before_rect.top,
-                    bottom: before_rect.bottom,
+                    top: before_row.top,
+                    bottom: before_row.bottom,
                 };
                 let after_edge = BandEdge {
                     x: end_x,
-                    top: after_rect.top,
-                    bottom: after_rect.bottom,
+                    top: after_row.top,
+                    bottom: after_row.bottom,
                 };
                 gutter
                     .band(&mut path, before_edge, after_edge)
@@ -388,8 +451,8 @@ impl<'a> Canvas<'_, 'a> {
     }
 }
 
-/// 두 쪽 사이(A 쪽 오른쪽 끝 → B 쪽 왼쪽 끝). 연결선은 이 구간을 3차 베지어로 건넌다: 제어점은 각
-/// 끝에서 구간 반만큼 수평으로 나간 점이라 양끝에서 수평으로 들고 난다(화면과 같은 식).
+/// 두 칸 사이(A 칸 오른쪽 끝 → B 칸 왼쪽 끝, 화면의 거터). 연결선은 이 구간을 3차 베지어로 건넌다:
+/// 제어점은 각 끝에서 구간 반만큼 수평으로 나간 점이라 양끝에서 수평으로 들고 난다(화면과 같은 식).
 struct Gutter {
     left: f32,
     right: f32,
@@ -404,7 +467,8 @@ struct BandEdge {
 }
 
 impl Gutter {
-    /// 지금 점(A 끝점)에서 A 쪽 끝까지 수평 → 건너기 → B 쪽 끝에서 B 끝점까지 수평. 끝은 둥글다.
+    /// 지금 점(A 쪽 오른쪽 끝)에서 A 칸 끝까지 수평 → 건너기 → B 칸 끝에서 B 쪽 왼쪽 끝까지 수평. 끝은
+    /// 둥글다.
     fn line(
         &self,
         path: &mut PdfPagePathObject,
@@ -417,7 +481,8 @@ impl Gutter {
         path.set_line_cap(PdfPageObjectLineCap::Round)
     }
 
-    /// 지금 점(A 위 변 끝점)에서 위 변을 B로 건너고, B 끝을 내려와 아래 변을 A로 돌아와 닫는다.
+    /// 지금 점(A 줄 표시 위 변의 쪽 끝)에서 위 변을 B로 건너고, B 쪽 끝을 내려와 아래 변을 A로 돌아와
+    /// 닫는다.
     fn band(
         &self,
         path: &mut PdfPagePathObject,
@@ -434,7 +499,7 @@ impl Gutter {
         path.close_path()
     }
 
-    /// 지금 점 `from`에서 `to`까지(둘 다 거터 양끝 중 하나). 제어점은 각 끝에서 반 폭만큼 상대 끝 쪽.
+    /// 지금 점 `from`에서 `to`까지(둘 다 칸 사이 양끝 중 하나). 제어점은 각 끝에서 반 폭만큼 상대 끝 쪽.
     fn cross(
         &self,
         path: &mut PdfPagePathObject,

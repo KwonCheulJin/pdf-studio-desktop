@@ -1,9 +1,9 @@
 import { useId, type RefObject } from "react";
 import { FileUp } from "lucide-react";
+import { formatFileSize } from "@/renderer/shared/lib/format-file-size";
 import { useRenderedPage } from "@/renderer/shared/lib/pdfjs";
 import { COMPARE_SLOT_LABEL, type CompareSlot } from "../config/compare-files";
 import { SLOT_THUMBNAIL_RENDER } from "../config/slot-thumbnail";
-import { formatFileSize } from "../lib/format-file-size";
 import type { CompareFile } from "../model/compare-session-store";
 
 const EMPTY_ICON_SIZE = 20;

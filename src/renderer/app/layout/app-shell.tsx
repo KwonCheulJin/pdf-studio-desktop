@@ -3,9 +3,11 @@ import { useShallow } from "zustand/react/shallow";
 import { ComparePage } from "@/renderer/pages/compare";
 import { HomePage } from "@/renderer/pages/home";
 import { MergedPreviewPage } from "@/renderer/pages/merged-preview";
+import { TranslatePage } from "@/renderer/pages/translate";
 import { MergeWorkspace } from "@/renderer/widgets/merge-workspace";
 import { useCompareFilePaths } from "@/renderer/features/pdf-compare";
 import { MergeProgressOverlay } from "@/renderer/features/pdf-merge";
+import { useTranslateFilePaths } from "@/renderer/features/pdf-translate";
 import {
   MERGE_VIEW,
   useMergeStore,
@@ -21,6 +23,8 @@ import { AppStatusBar } from "./app-status-bar";
 import { AppToolbar } from "./app-toolbar";
 import { AppToolbarCompare } from "./app-toolbar-compare";
 import { AppToolbarPreview } from "./app-toolbar-preview";
+import { AppToolbarTranslate } from "./app-toolbar-translate";
+import { AppTranslateStatusBar } from "./app-translate-status-bar";
 
 interface ModeScreenProps {
   mode: AppMode;
@@ -33,6 +37,8 @@ function ModeHeader({ mode, mergeView }: ModeScreenProps) {
       return <AppHomeHeader />;
     case APP_MODE.COMPARE:
       return <AppToolbarCompare />;
+    case APP_MODE.TRANSLATE:
+      return <AppToolbarTranslate />;
     default:
       return mergeView === MERGE_VIEW.PREVIEW ? (
         <AppToolbarPreview />
@@ -48,6 +54,8 @@ function ModeStatusBar({ mode }: Pick<ModeScreenProps, "mode">) {
       return <AppHomeStatusBar />;
     case APP_MODE.COMPARE:
       return <AppCompareStatusBar />;
+    case APP_MODE.TRANSLATE:
+      return <AppTranslateStatusBar />;
     default:
       return <AppStatusBar />;
   }
@@ -66,6 +74,9 @@ export function AppShell() {
   // 비교 슬롯의 문서도 같다. 모드를 오가도 썸네일을 그리려고 다시 읽지 않는다.
   const comparePaths = useCompareFilePaths();
   usePdfDocumentRetention(comparePaths);
+  // 번역 문서도 같다.
+  const translatePaths = useTranslateFilePaths();
+  usePdfDocumentRetention(translatePaths);
 
   const handleEnterMerge = useCallback(
     () => setMode(APP_MODE.MERGE),
@@ -73,6 +84,10 @@ export function AppShell() {
   );
   const handleEnterCompare = useCallback(
     () => setMode(APP_MODE.COMPARE),
+    [setMode]
+  );
+  const handleEnterTranslate = useCallback(
+    () => setMode(APP_MODE.TRANSLATE),
     [setMode]
   );
   const handleExitCompare = useCallback(
@@ -87,10 +102,13 @@ export function AppShell() {
           <HomePage
             onEnterMerge={handleEnterMerge}
             onEnterCompare={handleEnterCompare}
+            onEnterTranslate={handleEnterTranslate}
           />
         );
       case APP_MODE.COMPARE:
         return <ComparePage onExit={handleExitCompare} />;
+      case APP_MODE.TRANSLATE:
+        return <TranslatePage />;
       default:
         return view === MERGE_VIEW.PREVIEW ? (
           <MergedPreviewPage />

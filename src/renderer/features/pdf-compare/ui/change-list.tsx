@@ -18,6 +18,7 @@ import {
   COMPARE_RESULT_TEXT,
   compareResultMessage
 } from "../config/compare-result";
+import { useHoveredChangeIds } from "../model/change-hover-store";
 import {
   useActiveChangeId,
   useChangeFilter,
@@ -36,6 +37,7 @@ interface ChangeGroupSectionProps {
   group: ChangeGroup;
   result: CompareResult;
   activeChangeId: string | null;
+  hoveredChangeIds: readonly string[];
   onSelect: (changeId: string) => void;
 }
 
@@ -44,6 +46,7 @@ function ChangeGroupSection({
   group,
   result,
   activeChangeId,
+  hoveredChangeIds,
   onSelect
 }: ChangeGroupSectionProps) {
   const headerId = useId();
@@ -67,6 +70,7 @@ function ChangeGroupSection({
             key={numbered.change.id}
             numbered={numbered}
             isActive={numbered.change.id === activeChangeId}
+            isHovered={hoveredChangeIds.includes(numbered.change.id)}
             onSelect={onSelect}
           />
         ))}
@@ -122,6 +126,7 @@ export function ChangeList({ counts }: ChangeListProps) {
   const completed = useCompletedComparison();
   const filter = useChangeFilter();
   const activeChangeId = useActiveChangeId();
+  const hoveredChangeIds = useHoveredChangeIds();
   const selectChange = useCompareSessionStore((state) => state.selectChange);
   const resetFilter = useCompareSessionStore((state) => state.resetFilter);
   const [isGrouped, setIsGrouped] = useState(true);
@@ -176,6 +181,7 @@ export function ChangeList({ counts }: ChangeListProps) {
                 key={numbered.change.id}
                 numbered={numbered}
                 isActive={numbered.change.id === activeChangeId}
+                isHovered={hoveredChangeIds.includes(numbered.change.id)}
                 onSelect={selectChange}
               />
             ))}
@@ -188,6 +194,7 @@ export function ChangeList({ counts }: ChangeListProps) {
         group={group}
         result={result}
         activeChangeId={activeChangeId}
+        hoveredChangeIds={hoveredChangeIds}
         onSelect={selectChange}
       />
     ));

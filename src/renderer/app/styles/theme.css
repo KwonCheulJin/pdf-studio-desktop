@@ -44,6 +44,7 @@
   --color-diff-delete-fill: var(--diff-delete-fill);
   --color-diff-change: var(--diff-change);
   --color-diff-change-fill: var(--diff-change-fill);
+  --color-connector: var(--connector);
 }
 
 /* 글꼴·간격·모서리·그림자: 테마와 상관없는 고정값 */

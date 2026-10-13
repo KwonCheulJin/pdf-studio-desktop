@@ -15,6 +15,22 @@ export const VIEWER_LAYOUT = {
   OVERSCAN_PX: 400
 } as const;
 
+/** 연결선 굵기(px, 계획서 §7.1): 평상시 2px, 고르거나 가리키면 3px, 마우스를 받는 투명한 선 14px */
+export const CONNECTOR_STROKE_PX = {
+  NORMAL: 2,
+  EMPHASIZED: 3,
+  HIT: 14
+} as const;
+
+/**
+ * 마지막 스크롤 이벤트 뒤 이만큼 지나면 페이지 영역의 `data-scrolling`을 지운다(계획서 §7.1). 연결선이
+ * 사라지고 다시 나타나는 CSS 전환(`connector-layer.tsx`의 `duration-140`)과 같은 값이다.
+ */
+export const SCROLL_IDLE_MS = 140;
+
+/** 스크롤하는 동안 스크롤 컨테이너에 다는 속성 */
+export const SCROLLING_ATTRIBUTE = "data-scrolling";
+
 /** pdf.js 뷰어와 같은 100%: 1pt = 96/72 CSS px */
 export const CSS_PX_PER_PT = 96 / 72;
 

@@ -16,6 +16,7 @@ interface PageViewProps {
   renderScale: number;
   highlights: readonly PageHighlight[];
   activeChangeId: string | null;
+  hoveredChangeIds: readonly string[];
 }
 
 /**
@@ -32,7 +33,8 @@ export function PageView({
   heightPx,
   renderScale,
   highlights,
-  activeChangeId
+  activeChangeId,
+  hoveredChangeIds
 }: PageViewProps) {
   const { url, isLoading, hasError } = useRenderedPage({
     path,
@@ -76,6 +78,7 @@ export function PageView({
           highlights={highlights}
           side={side}
           activeChangeId={activeChangeId}
+          hoveredChangeIds={hoveredChangeIds}
           widthPx={widthPx}
         />
       )}

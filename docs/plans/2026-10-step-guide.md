@@ -228,7 +228,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 |---|---|---|---|---|
 | 16 | P2-1 결과 모델 ADR | `docs/adr-compare-result` | `CompareResult` 타입과 좌표 규칙이 ADR로 고정. 페이지별 텍스트 출처(`page_sources`: 텍스트 레이어/OCR), OCR 신뢰도(`min_confidence`), "확인 필요"(`needs_review`) 필드 포함 → [ADR 0001](../adr/0001-compare-result-model.md) | [x] |
 | 17 | P2-2 추출 + 좌표 일치 | `feat/compare-extract` | pdfium 박스 Rust golden 테스트 통과 + pdf.js 화면 박스 위치 E2E 통과(CropBox 오프셋, 회전 페이지 포함) | [x] |
-| 17-a | ★ P2-2a OCR 스파이크 (게이트) | `spike/ocr` | 계획서 §6.4 합격 기준 표 전부 통과(한국어 CER, 숫자·금액·날짜 토큰 일치율, 숫자 조용한 오인식 0건, 쪽당 처리 시간, 번들 증가량), ad-hoc 서명 `.app`에서 ONNX Runtime 로드·추론, 확정한 모델 이름·버전·ONNX 출처·SHA-256과 측정값을 §6.4에 기록. Mac·Windows 결과 일치는 미확인(Step 26부터 CI 세 OS가 OCR 테스트를 돌리지만 OS끼리 맞대는 비교는 아직 없다) | [x] |
+| 17-a | ★ P2-2a OCR 스파이크 (게이트) | `spike/ocr` | 계획서 §6.4 합격 기준 표 전부 통과(한국어 CER, 숫자·금액·날짜 토큰 일치율, 숫자 조용한 오인식 0건, 쪽당 처리 시간, 번들 증가량), ad-hoc 서명 `.app`에서 ONNX Runtime 로드·추론, 확정한 모델 이름·버전·ONNX 출처·SHA-256과 측정값을 §6.4에 기록. Mac·Windows 결과 일치는 확인됨(CI, 픽스처 golden — Step 26 PR CI에서 Windows·Linux compare_ocr 통과) | [x] |
 | 18 | P2-3 정규화·토큰화 | `feat/compare-tokenize` | 한글 픽스처 토큰화 golden 통과 | [x] |
 | 19 | P2-4 정렬과 diff | `feat/compare-diff` | 삽입·삭제·치환·문단 이동 golden 통과 | [x] |
 | 19-a | P2-4a OCR 연결 | `feat/compare-ocr` | Step 17-a 통과 후 시작. 텍스트본 ↔ 스캔본 차이 0, 금액·날짜·조항을 바꾼 짝에서 바꾼 곳만 변경 golden 통과, OCR 상자 → PDF pt 되돌리기가 원본 상자와 허용 오차 안(CropBox 오프셋, 회전 페이지 포함), 신뢰도 기준 미만 토큰이 걸린 변경과 OCR 쪽 띄어쓰기만·문장부호만 다른 치환이 `needs_review`로 분류, OCR 쪽이 있으면 NFKC 강제(ADR 0001 §5), 같은 파일 재비교에서 OCR 생략(캐시) → [ADR 0001 §11](../adr/0001-compare-result-model.md) | [x] |
@@ -252,7 +252,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 | 25 | P3-2 파일 슬롯 | 3 위 | A/B 빈·채운 상태, 드롭·다이얼로그, A↔B 맞바꾸기 | [x] |
 | 26 | P3-3 실행 전 옵션 + P3-3a 진행 화면 | 3 아래, 9 | A·B 페이지 범위 검증 문구, 반복 줄 3종, 대소문자, 실행 불가 이유와 버튼 비활성 / 실행 후 **전체 %와 작업별 %(6단계, 스캔 쪽 글자 읽기 포함)**, 상태 점, 취소, 다른 모드에서도 상태바에 % → 비교 커맨드·OCR 번들은 [ADR 0001 §16](../adr/0001-compare-result-model.md), 시안 대조는 토큰 문서 §6.4 | [x] |
 | 27 | P3-4 결과 미리보기 | 4 | 차이 목록(쪽별 묶기, 펼침), 종류 칩 필터, 이전/다음·키보드, 나란히/A만/B만, 페이지 쌍 행 하나의 스크롤, 미니맵, OCR로 읽은 쪽에 "OCR" 배지, `needs_review` 변경은 "확인 필요" 칩으로 차이 개수와 따로 세고 페이지에서 차이와 구별해 표시(E2E) → 결정은 계획서 P3-4 "Step 27에서 정한 것", 시안 대조는 토큰 문서 §6.5 | [x] |
-| 28 | P3-4 연결선 | 4 | 계획서 §7.1 완료 기준 | [ ] |
+| 28 | P3-4 연결선 | 4 | 계획서 §7.1 완료 기준 → 결정은 계획서 §7.1 "Step 28에서 정한 것", 시안 대조는 토큰 문서 §6.6 | [x] |
 | 29 | P3-5 내보내기 | 5 | 비교 PDF(배치·차이 쪽만·색 상자)와 주석 PDF, 저장 위치, 미리보기 넘기기 | [ ] |
 
 - 읽을 곳: 계획서 §7과 §7.1, 토큰 문서 §2.1의 비교 하이라이트

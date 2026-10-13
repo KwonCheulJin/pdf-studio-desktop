@@ -10,6 +10,11 @@ export {
   type CompletedComparison
 } from "./model/compare-session-store";
 export { useCompareIntake } from "./model/use-compare-intake";
+export {
+  useChangeHoverStore,
+  useHoveredChangeIds
+} from "./model/change-hover-store";
+export { useConnectorStems } from "./model/use-connector-stems";
 export { useCompareRunStatus } from "./model/compare-run-store";
 export {
   COMPARE_SCREEN,
@@ -33,6 +38,7 @@ export { CompareProgressCard } from "./ui/compare-progress-card";
 export { CompareResultHeading } from "./ui/compare-result-heading";
 export { RecentResultButton } from "./ui/recent-result-button";
 export { ChangeKindChips } from "./ui/change-kind-chips";
+export { ConnectorToggle } from "./ui/connector-toggle";
 export { ChangeNavigator } from "./ui/change-navigator";
 export { ViewModeToggle } from "./ui/view-mode-toggle";
 export { ChangeList } from "./ui/change-list";

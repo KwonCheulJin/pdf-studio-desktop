@@ -53,13 +53,15 @@ export const COMPARE_VIEW = {
 
 export type CompareView = ValueOf<typeof COMPARE_VIEW>;
 
-/** 결과 화면의 보는 상태(고른 변경·칩 필터·보기 방식) */
+/** 결과 화면의 보는 상태(고른 변경·칩 필터·보기 방식·연결선 표시) */
 interface ResultViewState {
   activeChangeId: string | null;
   /** 고른 변경으로 스크롤하라는 요청 번호. 고를 때마다 1씩 늘린다(같은 변경을 다시 골라도). */
   revealCount: number;
   filter: ChangeFilter;
   viewMode: CompareViewMode;
+  /** 툴바 "연결선" 체크박스(하이라이트와 별개, 계획서 §7.1). 보기 방식처럼 결과가 바뀌어도 남는다. */
+  isConnectorShown: boolean;
 }
 
 interface CompareSessionState
@@ -114,11 +116,15 @@ interface CompareSessionActions {
   toggleReviewHidden: () => void;
   resetFilter: () => void;
   setViewMode: (viewMode: CompareViewMode) => void;
+  setConnectorShown: (isConnectorShown: boolean) => void;
 }
 
 type CompareSessionStore = CompareSessionState & CompareSessionActions;
 
-const INITIAL_RESULT_VIEW: Omit<ResultViewState, "viewMode"> = {
+const INITIAL_RESULT_VIEW: Omit<
+  ResultViewState,
+  "viewMode" | "isConnectorShown"
+> = {
   activeChangeId: null,
   revealCount: 0,
   filter: EMPTY_CHANGE_FILTER
@@ -137,6 +143,7 @@ export const useCompareSessionStore = create<CompareSessionStore>((set) => ({
   view: COMPARE_VIEW.OPTIONS,
   ...INITIAL_RESULT_VIEW,
   viewMode: COMPARE_VIEW_MODE.SIDE_BY_SIDE,
+  isConnectorShown: true,
   setSlotFile: ({ slot, file }) =>
     set((state) =>
       state[slot]?.path === file.path
@@ -205,7 +212,8 @@ export const useCompareSessionStore = create<CompareSessionStore>((set) => ({
       filter: { ...state.filter, isReviewHidden: !state.filter.isReviewHidden }
     })),
   resetFilter: () => set({ filter: EMPTY_CHANGE_FILTER }),
-  setViewMode: (viewMode) => set({ viewMode })
+  setViewMode: (viewMode) => set({ viewMode }),
+  setConnectorShown: (isConnectorShown) => set({ isConnectorShown })
 }));
 
 export const useCompareSlotFile = (slot: CompareSlot) =>
@@ -231,6 +239,9 @@ export const useRevealCount = () =>
 
 export const useCompareViewMode = () =>
   useCompareSessionStore((state) => state.viewMode);
+
+export const useIsConnectorShown = () =>
+  useCompareSessionStore((state) => state.isConnectorShown);
 
 /** 세션에 든 문서 경로(A → B 슬롯, 그다음 끝난 결과의 두 문서. 빈 슬롯은 뺀다) */
 export const useCompareFilePaths = () =>

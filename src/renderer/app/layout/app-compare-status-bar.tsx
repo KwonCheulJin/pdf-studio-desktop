@@ -13,6 +13,7 @@ import {
   useCompareScreen,
   useCompareSlotFile,
   useCompletedComparison,
+  useConnectorStems,
   type CompareFile
 } from "@/renderer/features/pdf-compare";
 import { ThirdPartyNoticesButton } from "@/renderer/features/third-party-notices";
@@ -29,9 +30,13 @@ function Separator() {
   return <span className="text-muted-foreground/50 mx-2">|</span>;
 }
 
-/** 결과 화면 왼쪽: 필터와 상관없는 전체 차이·확인 필요 수(시안 4 "차이 25건") */
+/**
+ * 결과 화면 왼쪽: 필터와 상관없는 전체 차이·확인 필요 수(시안 4 "차이 25건"), 연결선을 그리는
+ * 동안은 지금 필터로 그릴 연결선 묶음 수("연결선 2개", 문서 전체)
+ */
 function ResultCounts() {
   const completed = useCompletedComparison();
+  const connectorStems = useConnectorStems();
   const counts = useMemo(
     () =>
       countChanges({
@@ -47,6 +52,12 @@ function ResultCounts() {
         <>
           <Separator />
           {compareResultMessage.review(counts.totalReview)}
+        </>
+      )}
+      {connectorStems && (
+        <>
+          <Separator />
+          {compareResultMessage.connectors(connectorStems.flat().length)}
         </>
       )}
     </span>

@@ -1,7 +1,10 @@
 //! 사용 토큰(계약 `TokenUsage`, ADR 0002 §6·§9). 받은 200 응답의 `usage`를 더한다. `u32`로 넘치면
-//! `u32::MAX`에서 멈춘다.
+//! `u32::MAX`에서 멈춘다. 이어하기 기록(§8)에 `{ inputTokens, outputTokens }`로 쓴다.
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TokenUsage {
     pub input_tokens: u32,
     pub output_tokens: u32,

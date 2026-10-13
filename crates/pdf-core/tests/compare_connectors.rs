@@ -1,8 +1,9 @@
 //! 연결선 끝·모양의 golden 검증(계획서 §7.1). 픽스처는 `connector-geometry-a.pdf`·
 //! `connector-geometry-b.pdf`(`generate_compare_fixtures.py`, 회전 0·90·180·270과 CropBox 오프셋·
 //! MediaBox 원점 쪽)이고, 실행기(`compare_pdfs`)로 비교한 결과에서 변경마다 연결선을 만든다. 화면
-//! E2E(`e2e/compare-connectors.spec.ts`)가 같은 golden으로 결과를 시드하고 화면 끝점·모양을 맞대므로,
-//! 픽스처나 규칙을 바꾸면 `UPDATE_GOLDEN=1`로 다시 쓴 뒤 바뀐 끝을 눈으로 확인하고 E2E까지 통과시킨다.
+//! E2E(`e2e/compare-connectors.spec.ts`)가 같은 golden으로 결과를 시드하고 화면 줄 표시(끝의 `row`,
+//! 화면 방향 pt)·끝점·모양을 맞대므로, 픽스처나 규칙을 바꾸면 `UPDATE_GOLDEN=1`로 다시 쓴 뒤 바뀐 끝을
+//! 눈으로 확인하고 E2E까지 통과시킨다.
 
 mod common;
 

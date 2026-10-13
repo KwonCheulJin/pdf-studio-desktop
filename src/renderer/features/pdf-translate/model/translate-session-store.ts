@@ -5,11 +5,14 @@ import { SOURCE_LANGUAGE } from "@/renderer/entities/translation";
 import type {
   SourceLanguage,
   TranslateModel,
+  TranslateProgress,
   TranslateRequest,
+  TranslateStage,
   TranslationPlan,
   TranslationResult
 } from "@/renderer/shared/api/bindings";
 import type { PlatformErrorCode } from "@/renderer/shared/platform";
+import type { ValueOf } from "@/renderer/shared/types/common";
 
 /** 번역할 문서(`openFiles`로 연 PDF) */
 export interface TranslateFile {
@@ -42,10 +45,56 @@ export interface TranslationPlanEntry {
   errorCode: PlatformErrorCode | null;
 }
 
-/** 진행 중인 번역(진행 화면은 Step 45) */
+/** 진행 카드 머리·사용량 상자에 보일 값. 시작할 때 정해 실행·실패 동안 그대로 둔다. */
+export interface TranslateRunInfo {
+  /** 시작할 때의 문서 이름(확장자 포함) */
+  fileName: string;
+  /** 원문 언어. 자동 감지면 계획이 감지한 언어(간체·번체를 가르지 않는다) */
+  sourceLanguage: SourceLanguage | null;
+  /** 계획의 예상 입력 + 출력 토큰(보낼 것만, 사용량 상자 "예상 합계") */
+  estimatedTokens: number;
+}
+
+/** 진행 중인 번역(시안 12) */
 export interface TranslateRun {
   jobId: string;
   request: TranslateRequest;
+  info: TranslateRunInfo;
+  /** 시작 시각(`Date.now()`, 경과 시간) */
+  startedAt: number;
+  /** 마지막으로 받은 진행률 */
+  progress: TranslateProgress | null;
+  /** 단계마다 마지막으로 받은 진행률. 지난 단계의 개수를 보인다. */
+  stageProgress: Partial<Record<TranslateStage, TranslateProgress>>;
+  isCancelRequested: boolean;
+}
+
+/** 실패한 번역. 진행 카드 자리에 원인·멈춘 곳을 보이고 같은 요청으로 다시 시도한다. */
+export interface TranslateFailure {
+  code: PlatformErrorCode;
+  request: TranslateRequest;
+  info: TranslateRunInfo;
+  /** 멈출 때 마지막으로 받은 진행률(받기 전에 멈췄으면 `null`) */
+  progress: TranslateProgress | null;
+}
+
+/** 실행하지 않을 때 번역 화면이 보이는 것. 결과는 끝난 번역이 있을 때만 보인다. */
+export const TRANSLATE_VIEW = {
+  OPTIONS: "options",
+  RESULT: "result"
+} as const;
+
+export type TranslateView = ValueOf<typeof TRANSLATE_VIEW>;
+
+interface StartRunParams {
+  request: TranslateRequest;
+  info: TranslateRunInfo;
+  startedAt: number;
+}
+
+interface UpdateProgressParams {
+  jobId: string;
+  progress: TranslateProgress;
 }
 
 const INITIAL_OPTIONS: TranslateSessionOptions = {
@@ -66,7 +115,9 @@ interface TranslateSessionState {
   /** 번역이 끝나면 늘린다. 같은 옵션이어도 기록이 바뀌었으니 계획을 다시 받는다. */
   planRevision: number;
   run: TranslateRun | null;
+  failure: TranslateFailure | null;
   result: TranslationResult | null;
+  view: TranslateView;
 }
 
 interface TranslateSessionActions {
@@ -79,9 +130,22 @@ interface TranslateSessionActions {
   setGlossaryRows: (glossaryRows: GlossaryRow[]) => void;
   setTransferConsentChecked: (isChecked: boolean) => void;
   receivePlan: (entry: TranslationPlanEntry) => void;
-  startRun: (run: TranslateRun) => void;
-  /** 끝나면(성공·실패·취소) 실행을 비우고 계획을 다시 받게 한다. 성공이면 결과를 둔다. */
-  endRun: (result: TranslationResult | null) => void;
+  /** 실행 상태로 바꾼다. 앞 실패는 지우고 동의 체크는 비운다. */
+  startRun: (params: StartRunParams) => void;
+  /** 진행 중인 작업의 진행률만 받는다(끝났거나 다른 작업의 늦은 보고는 버린다). */
+  updateProgress: (params: UpdateProgressParams) => void;
+  requestCancel: () => void;
+  /**
+   * 끝나면(성공·실패·취소) 실행을 비우고 계획을 다시 받게 한다(기록이 바뀌었다).
+   * 성공이면 결과를 두고 결과 화면으로, 실패면 그 자리에 실패를 두고, 취소면 옵션 화면으로 간다.
+   */
+  completeRun: (result: TranslationResult) => void;
+  failRun: (code: PlatformErrorCode) => void;
+  cancelRun: () => void;
+  /** 실패 화면을 닫고 옵션 화면으로 */
+  closeFailure: () => void;
+  /** 결과 화면에서 옵션 화면으로(결과는 남는다) */
+  showOptions: () => void;
 }
 
 interface OptionChange<K extends keyof TranslateSessionOptions> {
@@ -105,14 +169,18 @@ export const useTranslateSessionStore = create<
     plan: null,
     planRevision: 0,
     run: null,
+    failure: null,
     result: null,
+    view: TRANSLATE_VIEW.OPTIONS,
     setFile: (file) =>
       set({
         file,
         options: INITIAL_OPTIONS,
         isTransferConsentChecked: false,
         plan: null,
-        result: null
+        failure: null,
+        result: null,
+        view: TRANSLATE_VIEW.OPTIONS
       }),
     setSourceLanguage: (value) => setOption({ key: "sourceLanguage", value }),
     setRange: (value) => setOption({ key: "range", value }),
@@ -123,13 +191,65 @@ export const useTranslateSessionStore = create<
     setTransferConsentChecked: (isTransferConsentChecked) =>
       set({ isTransferConsentChecked }),
     receivePlan: (plan) => set({ plan }),
-    startRun: (run) => set({ run, isTransferConsentChecked: false }),
-    endRun: (result) =>
+    startRun: ({ request, info, startedAt }) =>
+      set({
+        run: {
+          jobId: request.jobId,
+          request,
+          info,
+          startedAt,
+          progress: null,
+          stageProgress: {},
+          isCancelRequested: false
+        },
+        failure: null,
+        isTransferConsentChecked: false
+      }),
+    updateProgress: ({ jobId, progress }) =>
+      set((state) =>
+        state.run?.jobId === jobId
+          ? {
+              run: {
+                ...state.run,
+                progress,
+                stageProgress: {
+                  ...state.run.stageProgress,
+                  [progress.stage]: progress
+                }
+              }
+            }
+          : state
+      ),
+    requestCancel: () =>
+      set((state) =>
+        state.run ? { run: { ...state.run, isCancelRequested: true } } : state
+      ),
+    completeRun: (result) =>
       set((state) => ({
         run: null,
-        result: result ?? state.result,
+        result,
+        view: TRANSLATE_VIEW.RESULT,
         planRevision: state.planRevision + 1
-      }))
+      })),
+    failRun: (code) =>
+      set((state) => ({
+        run: null,
+        failure: state.run && {
+          code,
+          request: state.run.request,
+          info: state.run.info,
+          progress: state.run.progress
+        },
+        planRevision: state.planRevision + 1
+      })),
+    cancelRun: () =>
+      set((state) => ({
+        run: null,
+        view: TRANSLATE_VIEW.OPTIONS,
+        planRevision: state.planRevision + 1
+      })),
+    closeFailure: () => set({ failure: null, view: TRANSLATE_VIEW.OPTIONS }),
+    showOptions: () => set({ view: TRANSLATE_VIEW.OPTIONS })
   };
 });
 
@@ -158,3 +278,25 @@ export const useTranslateFilePlan = (): TranslationPlan | null =>
       ? state.plan.plan
       : null
   );
+
+interface TranslateRunStatus {
+  isRunning: boolean;
+  /** 진행 중이 아니거나 아직 진행률을 받지 않았으면 0 */
+  overallPercent: number;
+  /** 실패 화면을 보이는 중 */
+  hasFailure: boolean;
+}
+
+const NO_PROGRESS_PERCENT = 0;
+
+/** 툴바·상태바용 요약(다른 모드 상태바 "번역 중 50%") */
+export function useTranslateRunStatus(): TranslateRunStatus {
+  const isRunning = useTranslateSessionStore((state) => state.run !== null);
+  const overallPercent = useTranslateSessionStore(
+    (state) => state.run?.progress?.overallPercent ?? NO_PROGRESS_PERCENT
+  );
+  const hasFailure = useTranslateSessionStore(
+    (state) => state.failure !== null
+  );
+  return { isRunning, overallPercent, hasFailure };
+}

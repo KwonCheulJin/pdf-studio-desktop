@@ -19,7 +19,7 @@ import type {
  * - 막힘 이유는 파일 → 범위 → 언어 → 번역할 것 → 키(누르면 키 모달) → 동의 순서로 하나만 보인다(계획서 §9.1.6).
  * - 외부 전송 동의(ADR 0002 §13): 설정에서 끄면 첫 번역만 확인하고, 새 키를 저장하면 다시 확인한다.
  * - 이어하기·이미 번역됨 표시, 번역 요청에 실린 옵션(공용 용어와 합친 용어집)은 `__E2E_MOCK_TRANSLATES__`로 본다.
- * 계획은 시드 `translationPlans`(옵션별)이고, 진행 화면은 Step 45다.
+ * 계획은 시드 `translationPlans`(옵션별)이다. 진행·취소·실패 화면은 `translate-progress.spec.ts`(Step 45)가 본다.
  */
 
 const FIXTURE_BYTES = readFileSync(
@@ -265,6 +265,15 @@ async function lastPlanRequest(page: Page) {
 
 async function translateRequests(page: Page) {
   return page.evaluate(() => window.__E2E_MOCK_TRANSLATES__ ?? []);
+}
+
+/** 번역이 끝나면 결과 자리(Step 46 전)가 뜬다. 옵션 화면으로 돌아간다. */
+async function backToOptions(page: Page): Promise<void> {
+  await page
+    .getByRole("region", { name: "번역을 마쳤어요" })
+    .getByRole("button", { name: "옵션으로 돌아가기" })
+    .click();
+  await expect(summaryCard(page)).toBeVisible();
 }
 
 async function storedSetting(page: Page, key: string): Promise<unknown> {
@@ -606,6 +615,7 @@ test("설정에서 외부 전송 확인을 끄면 키 등록 뒤 첫 번역만 �
   await startButton(page).click();
   await expect.poll(async () => (await translateRequests(page)).length).toBe(1);
   expect(await storedSetting(page, SETTING.CONFIRMED_ONCE)).toBe(true);
+  await backToOptions(page);
 
   // 한 번 확인한 뒤에는 체크 없이 시작하고, 끈 표시가 보인다.
   await expect(consentCheckbox(page)).toHaveCount(0);
@@ -613,6 +623,7 @@ test("설정에서 외부 전송 확인을 끄면 키 등록 뒤 첫 번역만 �
   await expect(startButton(page)).toBeEnabled();
   await startButton(page).click();
   await expect.poll(async () => (await translateRequests(page)).length).toBe(2);
+  await backToOptions(page);
 
   // "설정"은 설정 모달을 번역 탭으로 연다. 확인을 다시 켜면 체크를 받는다.
   await summaryCard(page)
@@ -643,6 +654,7 @@ test("확인을 켜 두면 한 번 확인한 뒤에도 늘 체크를 받고, 시
   await consentCheckbox(page).check();
   await startButton(page).click();
   await expect.poll(async () => (await translateRequests(page)).length).toBe(1);
+  await backToOptions(page);
   await expect(consentCheckbox(page)).not.toBeChecked();
   await expectBlocked(page, TEXT.NO_CONSENT);
 });
@@ -835,7 +847,7 @@ test("번역 요청에 고른 옵션과 합친 용어집(문서별 먼저·정�
   expect((await lastPlanRequest(page))?.options).toEqual(request.options);
 });
 
-test("번역을 시작하면 실행 상태가 되어 버튼이 막히고, 끝나면 계획을 다시 받는다", async ({
+test("번역을 시작하면 진행 화면이 되고, 끝나면 결과 자리로 넘어가며 계획을 다시 받는다", async ({
   page
 }) => {
   await openTranslate(page, {
@@ -848,7 +860,6 @@ test("번역을 시작하면 실행 상태가 되어 버튼이 막히고, 끝나
         }
       ]
     },
-    // 동의 체크가 없어도 시작할 수 있는 상태: 실행 중에 버튼을 막는 것은 실행 상태뿐이다.
     settings: { [SETTING.CONFIRM]: false, [SETTING.CONFIRMED_ONCE]: true }
   });
   await expectSummary(page, SPEC_SUMMARY);
@@ -860,11 +871,12 @@ test("번역을 시작하면 실행 상태가 되어 버튼이 막히고, 끝나
   const plansBefore = await planRequestCount(page);
 
   await startButton(page).click();
-  await expect(startButton(page, "번역하는 중…")).toBeDisabled();
+  await expect(page.getByRole("region", { name: "전체 진행률" })).toBeVisible();
+  await expect(summaryCard(page)).toBeHidden();
   await expect.poll(async () => (await translateRequests(page)).length).toBe(1);
 
   await page.evaluate(() => window.__E2E_RELEASE_TRANSLATE__?.());
-  await expect(startButton(page)).toBeVisible();
+  await backToOptions(page);
   // 번역이 기록을 바꿨으니 같은 옵션이어도 계획을 다시 받는다.
   await expect.poll(() => planRequestCount(page)).toBe(plansBefore + 1);
   expect((await lastPlanRequest(page))?.path).toBe(FILE_SPEC.path);

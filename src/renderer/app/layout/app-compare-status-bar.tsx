@@ -19,6 +19,7 @@ import {
 import { ThirdPartyNoticesButton } from "@/renderer/features/third-party-notices";
 import { APP_STATUS } from "@/renderer/shared/constants";
 import { compareRunningText } from "./compare-run-indicator";
+import { TranslateRunIndicator } from "./translate-run-indicator";
 
 const EMPTY_SLOT_TEXT = "비어 있음";
 
@@ -92,6 +93,7 @@ export function AppCompareStatusBar() {
         </span>
       )}
       <div className="flex items-center gap-3">
+        <TranslateRunIndicator />
         <span role="status">상태: {statusText}</span>
         <span className="text-muted-foreground/50">|</span>
         <span>v{__APP_VERSION__}</span>

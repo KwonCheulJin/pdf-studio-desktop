@@ -39,8 +39,15 @@ function NoticesBody({ notices }: NoticesBodyProps) {
   }
 }
 
+interface ThirdPartyNoticesButtonProps {
+  /** 버튼 모양을 바꿀 때(설정 › 정보). 없으면 상태바의 글자 버튼 */
+  className?: string;
+}
+
 /** 앱 정보: 번들한 제3자 고지(THIRD_PARTY_NOTICES.md)를 대화상자로 보여 준다. */
-export function ThirdPartyNoticesButton() {
+export function ThirdPartyNoticesButton({
+  className = "text-muted-foreground text-sm font-normal"
+}: ThirdPartyNoticesButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
   const { notices, loadNotices } = useThirdPartyNotices();
 
@@ -58,11 +65,7 @@ export function ThirdPartyNoticesButton() {
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-muted-foreground text-sm font-normal"
-        >
+        <Button variant="ghost" size="sm" className={className}>
           {NOTICES_TITLE}
         </Button>
       </DialogTrigger>

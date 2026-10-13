@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { loadErrorReportingSetting } from "@/renderer/features/error-reporting";
 import { loadThemeMode } from "@/renderer/features/theme-toggle";
+import { loadTranslateSettings } from "@/renderer/features/translate-settings";
 import { THEME_MODE } from "@/renderer/shared/config/theme";
 import { AppShell, AppToaster } from "./layout";
 import {
@@ -29,7 +30,8 @@ async function bootstrap(): Promise<void> {
 
   const [themeMode] = await Promise.all([
     loadThemeMode(),
-    loadErrorReportingSetting()
+    loadErrorReportingSetting(),
+    loadTranslateSettings()
   ]);
   applyThemeMode(themeMode);
 

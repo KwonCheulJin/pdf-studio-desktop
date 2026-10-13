@@ -4,3 +4,4 @@ export {
   useAppModeStore,
   type AppMode
 } from "./app-mode-store";
+export { useSettingsShortcut } from "./use-settings-shortcut";

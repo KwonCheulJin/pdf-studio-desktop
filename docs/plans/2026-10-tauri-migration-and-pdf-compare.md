@@ -1203,7 +1203,7 @@ struct ApiKeyStatus { registered: bool, hint: Option<String> }  // hint = 끝 4�
 
 기존 코드 `PATH_NOT_ALLOWED`·`UNSUPPORTED_FILE_TYPE`·`INVALID_RANGE`·`CANCELLED`·`JOB_ALREADY_RUNNING`·문서 열기 코드를 그대로 쓴다.
 
-**설정 저장소 키**(`plugin-store` `settings.json`, 프론트는 `getSetting`/`setSetting`): `translate.defaultModel`(`sonnet`|`haiku`), `translate.confirmExternalTransfer`(boolean, 기본 `true`, Q11), `translate.glossary`(`GlossaryTerm[]`, 상한 `MAX_GLOSSARY_TERMS` 500·글자 수 상한), `translate.transferConfirmedOnce`(boolean, Q11), `translate.apiKeyHint`(Rust만 쓴다). 키 자체는 여기에 두지 않는다.
+**설정 저장소 키**(`plugin-store` `settings.json`, 프론트는 `getSetting`/`setSetting`): `translate.defaultModel`(`sonnet`|`haiku`), `translate.confirmExternalTransfer`(boolean, 기본 `true`, Q11), `translate.glossary`(`GlossaryTerm[]`, 상한 `MAX_GLOSSARY_TERMS` 500·글자 수 상한. 설정 표에 적힌 그대로(빈 칸·겹친 원어 포함) 저장하고, 번역에 실을 때 `entities/glossary`의 `normalizeGlossary`로 정규화한다 — Step 43), `translate.transferConfirmedOnce`(boolean, Q11), `translate.apiKeyHint`(Rust만 쓴다). 키 자체는 여기에 두지 않는다.
 
 **`DesktopPlatform`에 더할 것(Step 41에서 더했다):** `getApiKeyStatus`, `verifyApiKey`, `saveApiKey`, `deleteApiKey`, `prepareTranslation({ path, options })`, `translatePdf({ request, onProgress })`, `retranslateParagraph`, `editTranslatedParagraph`, `deleteTranslationRecords`, `copyText`(복사. tauri는 `navigator.clipboard.writeText`, mock은 기록). 번역·다시 번역은 진행 중인 작업으로 센다(`running-work`, 업데이트 재시작을 미룬다).
 
@@ -1274,7 +1274,7 @@ struct ApiKeyStatus { registered: bool, hint: Option<String> }  // hint = 끝 4�
 - **P6-12 문단 동작 (M, 시안 13):** 다시 번역은 그 문단 자리에 진행 표시(회전 + "다시 번역하는 중")를 두고, 끝나면 글을 바꾸고 사용량을 더한다. 실패는 토스트(코드 문구). 직접 고치기는 번역 자리를 여러 줄 입력으로 바꾸고 "저장"(⌘/Ctrl+Enter) / "취소"(Esc). 복사는 그 문단 번역 글을 복사하고 "복사했어요" 토스트.
 - **P6-8 설정 모달 (M, 시안 14):** 모달(760×480), 왼쪽 탭 목록(`card-inset` 바탕, "설정" 제목, 일반·번역·오류 보고·정보, 고른 탭 `accent`), 오른쪽 내용 + 닫기 ✕(Esc).
   - 번역 탭: "Claude API 키" 행(`✓ 등록됨` + mono `sk-ant-····a1F3` + "· 키체인에 저장", "바꾸기"(키 모달), "삭제"(`destructive` 글자, 누르면 행 안에서 "키를 지울까요? 지우기 / 취소" 확인 — `confirm()`은 쓰지 않는다) / 없으면 "등록 안 됨" + "등록"), "기본 모델" 세그먼트 `Sonnet 5.5 (권장) | Haiku 5.5`, 체크박스 "번역 전에 외부 전송 확인 받기" + "끄면 실행 전 확인 체크박스를 건너뛰어요. 회사 문서를 다룬다면 켜 두세요.", "공용 용어집" 행(`용어 12개` + "모든 번역에 기본으로 적용" + "편집" → 같은 모달 안 용어 표 편집 화면, 옵션 화면 용어집 표와 같은 컴포넌트), 아래 "사용량과 요금은 Anthropic 콘솔(platform.claude.com)에서 확인할 수 있어요."
-  - 일반·오류 보고·정보 탭(Q9): 일반 = 테마 `시스템 | 라이트 | 다크` + "저장된 번역 n개" + "모두 지우기", 오류 보고 = 지금 오류 보고 켜기·끄기(같은 설정 키) + 보내는 것/보내지 않는 것 안내(문서 내용·파일 이름·API 키는 보내지 않음), 오류 보고 기능이 없는 빌드면 탭을 숨긴다, 정보 = 앱 이름·버전·"오픈소스 라이선스"(지금 대화상자)·저장소 주소(글자).
+  - 일반·오류 보고·정보 탭(Q9): 일반 = 테마 `시스템 | 라이트 | 다크` + "저장된 번역" + "모두 지우기"(행 안에서 "저장된 번역을 모두 지울까요? 지우기 / 취소" 확인. 기록 수를 세는 커맨드가 없어 개수 "n개"는 보이지 않는다 — Step 43, 필요해지면 `count_translation_records`를 더한다), 오류 보고 = 지금 오류 보고 켜기·끄기(같은 설정 키) + 보내는 것/보내지 않는 것 안내(문서 내용·파일 이름·API 키는 보내지 않음), 오류 보고 기능이 없는 빌드면 탭을 숨긴다, 정보 = 앱 이름·버전·"오픈소스 라이선스"(지금 대화상자)·저장소 주소(글자).
   - 바꾸면 바로 저장한다(저장 버튼 없음). 재시작 뒤에도 남는다.
 - **시안에 없는 상태(앱이 정함):** 실행 전 확인 바닥의 막힘 이유(위에서부터 하나): 파일 없음 "번역할 PDF를 넣어 주세요." → 범위 오류(비교 문구) → 언어 모름 "원문 언어를 골라 주세요." → 번역할 것 없음 "범위 안에 번역할 글이 없어요."(스캔 쪽이 있으면 "스캔 페이지 옵션을 켜면 번역할 수 있어요.") → 키 없음(버튼은 켜져 있고 누르면 키 모달) → 동의 없음 "전송을 확인하면 시작할 수 있어요.". 계획을 받는 동안 숫자 자리에 "…". 모든 문단이 이미 번역된 기록이면 "이미 번역한 문서예요 · 추가 요금 없음" + 버튼 "결과 보기". 공용 용어가 있으면 용어집 안내 끝에 "· 공용 용어 n개도 함께 적용해요".
 

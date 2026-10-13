@@ -128,8 +128,12 @@ export type FileDropEvent =
 
 export type FileDropHandler = (event: FileDropEvent) => void;
 
-/** 설정 저장소에 넣는 값 */
-export type SettingValue = string | boolean;
+/** 설정 저장소에 넣는 값(JSON으로 저장된다) */
+export type SettingValue =
+  | string
+  | boolean
+  | readonly SettingValue[]
+  | { readonly [key: string]: SettingValue };
 
 export interface SetSettingParams {
   key: string;

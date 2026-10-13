@@ -21,5 +21,11 @@ export {
 } from "./dropdown-menu";
 export { GridItemWrapper } from "./grid-item-wrapper";
 export { ProgressBar } from "./progress-bar";
+export { SegmentedControl, type SegmentedOption } from "./segmented-control";
+export {
+  SETTING_BUTTON_CLASS,
+  SettingRow,
+  SettingSection
+} from "./setting-section";
 export { Slider } from "./slider";
 export { Tooltip } from "./tooltip";

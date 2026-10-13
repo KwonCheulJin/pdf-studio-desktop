@@ -32,6 +32,8 @@ specta-typescript = "=0.0.12"
 thiserror = "2"
 tauri-plugin-store = "2"
 base64 = "0.23"
+keyring = "4"
+reqwest = { version = "0.13", default-features = false, features = ["native-tls"] }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-window-state = "2"

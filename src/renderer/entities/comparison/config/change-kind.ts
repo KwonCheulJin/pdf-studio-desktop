@@ -4,6 +4,7 @@ import type {
   Side,
   TextSource
 } from "@/renderer/shared/api/bindings";
+import type { ValueOf } from "@/renderer/shared/types/common";
 
 /** 변경 종류(`Change.kind`) */
 export const CHANGE_KIND = {
@@ -40,6 +41,14 @@ export const PLACEMENT_KIND = {
   BOXES: "boxes",
   ANCHOR: "anchor"
 } as const satisfies Record<string, Placement["kind"]>;
+
+/** 연결선 모양(계획서 §7.1, Rust `ConnectorShape`): 줄 단위 변경은 선, 2줄 넘는 블록은 띠 */
+export const CONNECTOR_SHAPE = {
+  LINE: "line",
+  BAND: "band"
+} as const;
+
+export type ConnectorShape = ValueOf<typeof CONNECTOR_SHAPE>;
 
 /** 비교하는 두 문서 쪽(`Side`) */
 export const COMPARE_SIDE = {

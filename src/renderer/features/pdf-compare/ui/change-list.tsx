@@ -18,7 +18,7 @@ import {
   COMPARE_RESULT_TEXT,
   compareResultMessage
 } from "../config/compare-result";
-import { useHoveredChangeIds } from "../model/change-hover-store";
+import { useHoveredChangeId } from "../model/change-hover-store";
 import {
   useActiveChangeId,
   useChangeFilter,
@@ -37,7 +37,7 @@ interface ChangeGroupSectionProps {
   group: ChangeGroup;
   result: CompareResult;
   activeChangeId: string | null;
-  hoveredChangeIds: readonly string[];
+  hoveredChangeId: string | null;
   onSelect: (changeId: string) => void;
 }
 
@@ -46,7 +46,7 @@ function ChangeGroupSection({
   group,
   result,
   activeChangeId,
-  hoveredChangeIds,
+  hoveredChangeId,
   onSelect
 }: ChangeGroupSectionProps) {
   const headerId = useId();
@@ -70,7 +70,7 @@ function ChangeGroupSection({
             key={numbered.change.id}
             numbered={numbered}
             isActive={numbered.change.id === activeChangeId}
-            isHovered={hoveredChangeIds.includes(numbered.change.id)}
+            isHovered={numbered.change.id === hoveredChangeId}
             onSelect={onSelect}
           />
         ))}
@@ -126,7 +126,7 @@ export function ChangeList({ counts }: ChangeListProps) {
   const completed = useCompletedComparison();
   const filter = useChangeFilter();
   const activeChangeId = useActiveChangeId();
-  const hoveredChangeIds = useHoveredChangeIds();
+  const hoveredChangeId = useHoveredChangeId();
   const selectChange = useCompareSessionStore((state) => state.selectChange);
   const resetFilter = useCompareSessionStore((state) => state.resetFilter);
   const [isGrouped, setIsGrouped] = useState(true);
@@ -181,7 +181,7 @@ export function ChangeList({ counts }: ChangeListProps) {
                 key={numbered.change.id}
                 numbered={numbered}
                 isActive={numbered.change.id === activeChangeId}
-                isHovered={hoveredChangeIds.includes(numbered.change.id)}
+                isHovered={numbered.change.id === hoveredChangeId}
                 onSelect={selectChange}
               />
             ))}
@@ -194,7 +194,7 @@ export function ChangeList({ counts }: ChangeListProps) {
         group={group}
         result={result}
         activeChangeId={activeChangeId}
-        hoveredChangeIds={hoveredChangeIds}
+        hoveredChangeId={hoveredChangeId}
         onSelect={selectChange}
       />
     ));

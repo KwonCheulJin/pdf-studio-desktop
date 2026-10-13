@@ -1,35 +1,34 @@
-//! 연결선 묶기의 golden 검증(계획서 §7.1). 픽스처는 `connectors-a.pdf`·`connectors-b.pdf`
-//! (`generate_compare_fixtures.py`)이고, 실행기(`compare_pdfs`)로 비교한 결과에서 행마다 묶음을 만든다.
-//! 화면 E2E(`e2e/compare-connectors.spec.ts`)가 같은 두 golden으로 결과를 시드하고 연결선 끝점을
-//! 맞대므로, 픽스처나 규칙을 바꾸면 `UPDATE_GOLDEN=1`로 다시 쓴 뒤 바뀐 묶음을 눈으로 확인하고 E2E까지
-//! 통과시킨다.
+//! 연결선 끝·모양의 golden 검증(계획서 §7.1). 픽스처는 `connector-geometry-a.pdf`·
+//! `connector-geometry-b.pdf`(`generate_compare_fixtures.py`, 회전 0·90·180·270과 CropBox 오프셋·
+//! MediaBox 원점 쪽)이고, 실행기(`compare_pdfs`)로 비교한 결과에서 변경마다 연결선을 만든다. 화면
+//! E2E(`e2e/compare-connectors.spec.ts`)가 같은 golden으로 결과를 시드하고 화면 끝점·모양을 맞대므로,
+//! 픽스처나 규칙을 바꾸면 `UPDATE_GOLDEN=1`로 다시 쓴 뒤 바뀐 끝을 눈으로 확인하고 E2E까지 통과시킨다.
 
 mod common;
 
-use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 
 use common::{assert_matches_golden, engine, fixture_path};
 use pdf_core::{
-    ChangeKind, CompareOptions, CompareRequest, CompareResult, ExtractionCache, PagePair, PageSize,
-    RowConnectors, compare_pdfs, connector_stems,
+    ChangeKind, CompareOptions, CompareRequest, CompareResult, Connector, ConnectorShape,
+    ExtractionCache, PagePair, PageSize, compare_pdfs, connectors,
 };
 use serde::Serialize;
 
-const BEFORE: &str = "connectors-a.pdf";
-const AFTER: &str = "connectors-b.pdf";
+const BEFORE: &str = "connector-geometry-a.pdf";
+const AFTER: &str = "connector-geometry-b.pdf";
 /// golden 깊이는 `compare_diff.rs`와 같다: 변경 → 쪽 → 상자
 const CHANGES_GOLDEN_DEPTH: usize = 4;
-/// golden 깊이: 최상위 → 행 배열 → 행 → 묶음 배열 → 묶음. 묶음의 id 목록·상자는 한 줄이다.
-const STEMS_GOLDEN_DEPTH: usize = 5;
+/// golden 깊이: 최상위 → 연결선 배열 → 연결선. 끝은 한 줄이다.
+const CONNECTORS_GOLDEN_DEPTH: usize = 3;
 
-/// 화면 E2E가 결과를 다시 세우는 데 필요한 행·쪽 크기와 행마다의 묶음
+/// 화면 E2E가 결과를 다시 세우는 데 필요한 행·쪽 크기와 변경마다의 연결선
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ConnectorsGolden<'r> {
     page_pairs: &'r [PagePair],
     page_sizes: SizesGolden<'r>,
-    rows: Vec<RowConnectors>,
+    connectors: &'r [Connector],
 }
 
 #[derive(Serialize)]
@@ -40,7 +39,7 @@ struct SizesGolden<'r> {
 
 fn compare_fixtures() -> CompareResult {
     let request = CompareRequest {
-        job_id: "connectors".to_owned(),
+        job_id: "connector-geometry".to_owned(),
         before: fixture_path(BEFORE),
         after: fixture_path(AFTER),
         options: CompareOptions::default(),
@@ -57,72 +56,109 @@ fn compare_fixtures() -> CompareResult {
     .expect("compare fixtures")
 }
 
-/// 행 (A 쪽, B 쪽)의 묶음을 변경의 A 글자로 적는다.
-fn grouped_texts(
-    result: &CompareResult,
-    rows: &[RowConnectors],
-    pages: (u32, u32),
-) -> Vec<Vec<String>> {
-    let before_text: HashMap<&str, &str> = result
-        .changes
+/// 연결선 하나를 (종류, 글자, 모양, A 끝 쪽·앵커, B 끝 쪽·앵커)로 적는다. 글자는 글자가 있는 쪽
+/// (A 먼저)의 글자다.
+type Summary = (ChangeKind, String, ConnectorShape, (u32, bool), (u32, bool));
+
+fn summaries(result: &CompareResult, drawn: &[Connector]) -> Vec<Summary> {
+    drawn
         .iter()
-        .filter_map(|change| Some((change.id.as_str(), change.before.text()?)))
-        .collect();
-    rows.iter()
-        .filter(|row| row.pages == pages)
-        .flat_map(|row| &row.stems)
-        .map(|stem| {
-            stem.change_ids
+        .map(|connector| {
+            let change = result
+                .changes
                 .iter()
-                .map(|id| before_text[id.as_str()].to_owned())
-                .collect()
+                .find(|change| change.id == connector.change_id)
+                .expect("connector of a change");
+            let text = change
+                .before
+                .text()
+                .or(change.after.text())
+                .unwrap_or_default()
+                .to_owned();
+            (
+                connector.kind,
+                text,
+                connector.shape,
+                (connector.before.bounds.page, connector.before.is_anchor),
+                (connector.after.bounds.page, connector.after.is_anchor),
+            )
         })
         .collect()
 }
 
-fn texts(group: &[&str]) -> Vec<String> {
-    group.iter().map(|text| (*text).to_owned()).collect()
+fn summary(
+    kind: ChangeKind,
+    text: &str,
+    shape: ConnectorShape,
+    before: (u32, bool),
+    after: (u32, bool),
+) -> Summary {
+    (kind, text.to_owned(), shape, before, after)
 }
 
-/// 세로 쪽 행: 여러 줄 변경은 혼자, 인접 변경 3개는 한 묶음, 20pt 경계 안의 두 변경은 묶고 밖은 가르며,
-/// A만 경계 안이거나 B 순서가 뒤바뀐 두 변경은 가른다. 추가·삭제는 묶음에 없다.
-/// 가로 쪽 행: A는 /Rotate 90에 돌려 그린 글자라 화면 방향 읽는 순서로 첫 두 줄 변경이 붙고(사용자 공간
-/// 위쪽 모서리로 세면 순서가 뒤집혀 갈린다), 멀리 떨어진 셋째 줄은 따로다.
+/// 변경마다 연결선이 하나다. 한 줄·한 줄에 상자가 여럿인 치환·두 줄 치환은 선, 세 줄 치환과 세 줄
+/// 삽입은 띠다. 삽입은 A 앵커, 삭제는 B 앵커에 잇고, 쪽을 넘는 치환은 첫 쪽(2쪽)에서 잇는다.
 #[test]
-fn stems_match_golden() {
+fn connectors_match_golden() {
+    use ChangeKind::{Delete, Insert, Replace};
+    use ConnectorShape::{Band, Line};
+    const BOXES: bool = false;
+    const ANCHOR: bool = true;
     let result = compare_fixtures();
-    assert_eq!(
-        result.page_pairs,
-        vec![(Some(0), Some(0)), (Some(1), Some(1))]
+    let multi_box_line = result
+        .changes
+        .iter()
+        .find(|change| change.before.text() == Some("2026년 1월 2일부터 3월 4일까지다."))
+        .expect("multi-box replace");
+    assert!(
+        multi_box_line.before.boxes().len() > 2,
+        "fixture lost the one-line replace with many boxes: {multi_box_line:?}"
     );
-    let kinds: Vec<ChangeKind> = result.changes.iter().map(|change| change.kind).collect();
-    for kind in [ChangeKind::Insert, ChangeKind::Delete] {
-        assert!(kinds.contains(&kind), "fixture lacks {kind:?}: {kinds:?}");
-    }
-    let rows = connector_stems(&result, &[]);
+    let drawn = connectors(&result, &[]);
 
+    assert_eq!(drawn.len(), result.changes.len());
     assert_eq!(
-        grouped_texts(&result, &rows, (0, 0)),
+        summaries(&result, &drawn),
         [
-            texts(&["서면으로 통지한"]),
-            texts(&["1,000,000원으로", "30%로", "14일"]),
-            texts(&["2일부터", "10일로"]),
-            texts(&["1년으로"]),
-            texts(&["5%로"]),
-            texts(&["0.1%로"]),
-            texts(&["10%를"]),
-            texts(&["갑의"]),
-            texts(&["2통을"]),
+            summary(Replace, "1,000,000원으로", Line, (0, BOXES), (0, BOXES)),
+            summary(
+                Replace,
+                "2026년 1월 2일부터 3월 4일까지다.",
+                Line,
+                (0, BOXES),
+                (0, BOXES)
+            ),
+            summary(Replace, "갑에게 넘긴다.", Line, (0, BOXES), (0, BOXES)),
+            summary(
+                Replace,
+                "하자 보증 기간은 일 년이다. 보증금은 대금의 오 퍼센트다. 지체상금은 하루 천분의 일이다.",
+                Band,
+                (0, BOXES),
+                (0, BOXES)
+            ),
+            summary(Insert, "상대방에게", Line, (0, ANCHOR), (0, BOXES)),
+            summary(Delete, "두", Line, (0, BOXES), (0, ANCHOR)),
+            summary(Replace, "열흘", Line, (1, BOXES), (1, BOXES)),
+            summary(Insert, "바로", Line, (1, ANCHOR), (1, BOXES)),
+            summary(
+                Insert,
+                "수정 내역은 별도 대장에 날짜와 담당자를 적어 발주자에게 함께 보인다.",
+                Band,
+                (1, ANCHOR),
+                (1, BOXES)
+            ),
+            summary(Delete, "다시", Line, (1, BOXES), (1, ANCHOR)),
+            summary(Delete, "남에게", Line, (2, BOXES), (2, ANCHOR)),
+            summary(Replace, "삼", Line, (2, BOXES), (2, BOXES)),
+            summary(Replace, "준다. 다만", Line, (2, BOXES), (2, BOXES)),
+            summary(Replace, "갑의", Line, (3, BOXES), (3, BOXES)),
+            summary(Insert, "양측이", Line, (3, ANCHOR), (3, BOXES)),
         ]
-    );
-    assert_eq!(
-        grouped_texts(&result, &rows, (1, 1)),
-        [texts(&["7일", "5일을"]), texts(&["2026년"])]
     );
 
     assert_matches_golden(
         &result.changes,
-        "connectors.changes.json",
+        "connector-geometry.changes.json",
         CHANGES_GOLDEN_DEPTH,
     );
     assert_matches_golden(
@@ -132,17 +168,20 @@ fn stems_match_golden() {
                 before: &result.page_sizes.before,
                 after: &result.page_sizes.after,
             },
-            rows,
+            connectors: &drawn,
         },
-        "connectors.stems.json",
-        STEMS_GOLDEN_DEPTH,
+        "connector-geometry.connectors.json",
+        CONNECTORS_GOLDEN_DEPTH,
     );
 }
 
-/// 숨긴 종류의 변경은 입력에서 뺀다: 변경(`Replace`)을 숨기면 이을 변경이 없어 묶음도 없다.
+/// 숨긴 종류의 변경은 잇지 않고, 남은 종류는 그대로 잇는다.
 #[test]
-fn hidden_kinds_leave_no_stems() {
+fn hidden_kinds_are_not_connected() {
     let result = compare_fixtures();
 
-    assert!(connector_stems(&result, &[ChangeKind::Replace]).is_empty());
+    let drawn = connectors(&result, &[ChangeKind::Replace, ChangeKind::Delete]);
+
+    let kinds: Vec<ChangeKind> = drawn.iter().map(|connector| connector.kind).collect();
+    assert_eq!(kinds, [ChangeKind::Insert; 4]);
 }

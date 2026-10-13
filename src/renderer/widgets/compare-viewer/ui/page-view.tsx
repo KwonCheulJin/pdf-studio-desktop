@@ -16,7 +16,7 @@ interface PageViewProps {
   renderScale: number;
   highlights: readonly PageHighlight[];
   activeChangeId: string | null;
-  hoveredChangeIds: readonly string[];
+  hoveredChangeId: string | null;
 }
 
 /**
@@ -34,7 +34,7 @@ export function PageView({
   renderScale,
   highlights,
   activeChangeId,
-  hoveredChangeIds
+  hoveredChangeId
 }: PageViewProps) {
   const { url, isLoading, hasError } = useRenderedPage({
     path,
@@ -53,7 +53,7 @@ export function PageView({
       role="img"
       aria-label={label}
       aria-busy={isLoading}
-      className="bg-paper rounded-paper shadow-paper relative justify-self-center"
+      className="bg-paper rounded-paper shadow-paper relative mx-auto"
       style={{ width: widthPx, height: heightPx }}
     >
       {url && (
@@ -78,7 +78,7 @@ export function PageView({
           highlights={highlights}
           side={side}
           activeChangeId={activeChangeId}
-          hoveredChangeIds={hoveredChangeIds}
+          hoveredChangeId={hoveredChangeId}
           widthPx={widthPx}
         />
       )}

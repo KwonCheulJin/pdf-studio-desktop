@@ -12,16 +12,16 @@ mod tiff;
 pub use compare::{
     AnnotatedReport, Change, ChangeKind, CompareError, CompareOptions, CompareOptionsError,
     CompareProgress, CompareReport, CompareReportOptions, CompareRequest, CompareResult,
-    CompareStage, ComparedPages, ConnectorStem, DIFF_TIME_LIMIT, DocumentText, ExtractedChar,
-    ExtractedPage, ExtractionCache, Glyph, HEADER_FOOTER_BAND_PT, LOW_TEXT_CONFIDENCE_RATIO,
-    LineExclusions, MAX_PREVIEW_WIDTH_PX, NoTextReason, NormalizeOptions, Notice,
-    OCR_MIN_CONFIDENCE, OCR_MIN_CONFIDENCE_NUMERIC, OCR_MIN_TEXT_CHARS, OcrFailure, PagePair,
-    PageSize, PageSizes, PageSources, Placement, ProgressDetail, ReportError, ReportLayout,
-    ReportPreview, ReportSources, RowConnectors, Side, TextBox, TextComparison, TextSource, Token,
-    TokenDiff, UnicodeForm, compare_pdfs, compare_texts, connector_stems, diff_tokens,
-    exclude_lines, export_annotated_pdf, export_compare_pdf, extract_text_layer,
-    has_low_text_confidence, pair_pages, parse_page_range, preview_compare_report,
-    read_document_text, select_pages, tokenize,
+    CompareStage, ComparedPages, Connector, ConnectorEnd, ConnectorShape, DIFF_TIME_LIMIT,
+    DocumentText, ExtractedChar, ExtractedPage, ExtractionCache, Glyph, HEADER_FOOTER_BAND_PT,
+    LOW_TEXT_CONFIDENCE_RATIO, LineExclusions, MAX_PREVIEW_WIDTH_PX, NoTextReason,
+    NormalizeOptions, Notice, OCR_MIN_CONFIDENCE, OCR_MIN_CONFIDENCE_NUMERIC, OCR_MIN_TEXT_CHARS,
+    OcrFailure, PagePair, PageSize, PageSizes, PageSources, Placement, ProgressDetail, ReportError,
+    ReportLayout, ReportPreview, ReportSources, Side, TextBox, TextComparison, TextSource, Token,
+    TokenDiff, UnicodeForm, compare_pdfs, compare_texts, connectors, diff_tokens, exclude_lines,
+    export_annotated_pdf, export_compare_pdf, extract_text_layer, has_low_text_confidence,
+    pair_pages, parse_page_range, preview_compare_report, read_document_text, select_pages,
+    tokenize,
 };
 pub use document::{DocumentError, MAX_INPUT_FILE_BYTES};
 pub use engine::{EngineError, PdfEngine};

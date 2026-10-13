@@ -19,6 +19,8 @@ interface ViewerState {
   fitScale: number | null;
   /** 페이지 영역 세로 가운데에 걸친 행(현재 쪽 표시)과 그 결과의 작업 ID */
   currentRow: CurrentRow | null;
+  /** 나란히 보기에서 두 패널을 함께 스크롤한다(툴바 "동기 스크롤", 기본 켬, 계획서 §7.1). */
+  isScrollSynced: boolean;
 }
 
 interface CurrentRow {
@@ -32,6 +34,7 @@ interface ViewerActions {
   zoomToFit: () => void;
   setFitScale: (fitScale: number) => void;
   setCurrentRow: (currentRow: CurrentRow) => void;
+  setScrollSynced: (isScrollSynced: boolean) => void;
 }
 
 type ViewerStore = ViewerState & ViewerActions;
@@ -89,12 +92,13 @@ function zoomTo({ state, direction }: NextZoomParams): Partial<ViewerState> {
     : { zoomMode: ZOOM_MODE.FIXED, fixedPercent: next };
 }
 
-/** 비교 결과 페이지 영역의 배율·현재 행. 다른 결과를 열어도 배율은 남는다. */
+/** 비교 결과 페이지 영역의 배율·현재 행·동기 스크롤. 다른 결과를 열어도 배율·동기 스크롤은 남는다. */
 export const useViewerStore = create<ViewerStore>((set) => ({
   zoomMode: ZOOM_MODE.FIT,
   fixedPercent: ZOOM.PERCENT_BASE,
   fitScale: null,
   currentRow: null,
+  isScrollSynced: true,
   zoomIn: () => set((state) => zoomTo({ state, direction: ZOOM_DIRECTION.IN })),
   zoomOut: () =>
     set((state) => zoomTo({ state, direction: ZOOM_DIRECTION.OUT })),
@@ -107,7 +111,8 @@ export const useViewerStore = create<ViewerStore>((set) => ({
       state.currentRow.row === currentRow.row
         ? state
         : { currentRow }
-    )
+    ),
+  setScrollSynced: (isScrollSynced) => set({ isScrollSynced })
 }));
 
 export { ZOOM_DIRECTION };
@@ -127,3 +132,6 @@ export function currentRowOf({ state, jobId }: CurrentRowParams): number {
 
 export const useCurrentRow = (jobId: string) =>
   useViewerStore((state) => currentRowOf({ state, jobId }));
+
+export const useIsScrollSynced = () =>
+  useViewerStore((state) => state.isScrollSynced);

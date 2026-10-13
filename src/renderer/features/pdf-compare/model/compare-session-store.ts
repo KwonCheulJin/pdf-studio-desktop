@@ -237,6 +237,10 @@ export const useActiveChangeId = () =>
 export const useRevealCount = () =>
   useCompareSessionStore((state) => state.revealCount);
 
+/** 변경을 고르고 그 자리로 스크롤한다(목록·이전/다음·연결선 누르기). */
+export const useSelectChange = () =>
+  useCompareSessionStore((state) => state.selectChange);
+
 export const useCompareViewMode = () =>
   useCompareSessionStore((state) => state.viewMode);
 

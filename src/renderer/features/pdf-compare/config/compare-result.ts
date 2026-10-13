@@ -76,7 +76,7 @@ export const compareResultMessage = {
   review: (count: number) => `확인 필요 ${count}건`,
   hidden: (count: number) => `${count}개 숨김`,
   notices: (count: number) => `안내 ${count}건`,
-  /** 상태바 "연결선 2개"(시안 4): 지금 필터로 그릴 연결선 묶음 수 */
+  /** 상태바 "연결선 2개"(시안 4): 지금 필터로 그릴 연결선 수(변경마다 하나) */
   connectors: (count: number) => `연결선 ${count}개`,
   /** 칩 글자 "추가 12" */
   chip: ({ label, count }: ChipTextParams) => `${label} ${count}`

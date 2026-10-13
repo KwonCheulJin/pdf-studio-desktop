@@ -1,59 +1,15 @@
 import {
-  changeSideOf,
-  COMPARE_SIDE,
   groupByRow,
-  type Change,
   type ChangeKind,
   type NumberedChange,
-  type RowLookup,
-  type Side
+  type RowLookup
 } from "@/renderer/entities/comparison";
-import type { TextBox } from "@/renderer/shared/api/bindings";
-import {
-  COMPARE_VIEW_MODE,
-  type CompareViewMode
-} from "@/renderer/features/pdf-compare";
 import { VIEWER_LAYOUT } from "../config/viewer-layout";
 import type { ViewerRow } from "./row-layout";
 
 const PERCENT = 100;
 /** 행 안에서 눈금을 칸 가운데에 둔다. */
 const TICK_CENTER = 0.5;
-
-/** 고른 변경으로 스크롤할 곳: 그 쪽의 첫 상자와 그 상자가 있는 행 */
-export interface RevealTarget {
-  row: number;
-  side: Side;
-  box: TextBox;
-}
-
-/** 보기 방식에 따라 먼저 맞출 쪽. 나란히·A만은 A 상자, B만은 B 상자, 없으면 반대편 */
-function preferredSidesOf(viewMode: CompareViewMode): readonly Side[] {
-  return viewMode === COMPARE_VIEW_MODE.AFTER_ONLY
-    ? [COMPARE_SIDE.AFTER, COMPARE_SIDE.BEFORE]
-    : [COMPARE_SIDE.BEFORE, COMPARE_SIDE.AFTER];
-}
-
-interface RevealTargetParams {
-  change: Change;
-  viewMode: CompareViewMode;
-  rowLookup: RowLookup;
-}
-
-export function revealTargetOf({
-  change,
-  viewMode,
-  rowLookup
-}: RevealTargetParams): RevealTarget | null {
-  for (const side of preferredSidesOf(viewMode)) {
-    const box = changeSideOf({ change, side })?.boxes[0];
-    const row = box ? rowLookup[side].get(box.page) : undefined;
-    if (box && row !== undefined) {
-      return { row, side, box };
-    }
-  }
-  return null;
-}
 
 /** 미니맵 눈금 하나 */
 export interface MinimapTick {

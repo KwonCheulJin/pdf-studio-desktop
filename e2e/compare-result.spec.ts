@@ -17,7 +17,7 @@ import type {
 /**
  * 비교 결과 미리보기(계획서 P3-4, 진행 가이드 Step 27, 시안 4).
  * - 머리(제목·문서 정보·걸린 시간·새 비교·내보내기·⋯), 종류 칩·확인 필요 칩, 이전/다음·키보드,
- *   보기 방식, 배율, 안내 띠, 쪽별 차이 목록, 페이지 쌍 행 하나의 스크롤, 미니맵
+ *   보기 방식, 배율, 안내 띠, 쪽별 차이 목록, A·B 두 패널(같은 쌍 행 배치), 미니맵
  * - 하이라이트 사각형이 pdf.js 글자 위치와 맞는지(CropBox 오프셋·회전·UserUnit)
  * - 화면 근처 행만 그리는지(pdf.js 렌더 캐시 항목 수)
  *
@@ -210,6 +210,11 @@ function pageArea(page: Page): Locator {
   return page.getByRole("region", { name: "페이지 영역" });
 }
 
+/** 문서 하나의 패널(나란히 보기는 A·B 두 패널이 따로 스크롤한다, 계획서 §7.1) */
+function pane(page: Page, badge: string): Locator {
+  return pageArea(page).getByRole("group", { name: `${badge} 문서` });
+}
+
 function pageImage(page: Page, name: string): Locator {
   return pageArea(page).getByRole("img", { name, exact: true });
 }
@@ -313,10 +318,14 @@ test("결과 화면: 머리·칩·안내 띠·쪽별 목록·페이지 행이 �
   await changeList(page).getByRole("button", { name: "목록 펼치기" }).click();
   await expect(changeItems(page)).toHaveCount(7);
 
-  // 페이지 행: A 1쪽 | 거터 | B 1쪽, 캡션에 파일 이름·쪽
-  const row = pageArea(page).getByRole("group", { name: "A 1쪽 · B 1쪽" });
-  await expect(row).toContainText("diff-base.pdf · 1쪽");
-  await expect(row).toContainText("diff-edit.pdf · 1쪽");
+  // 페이지 행: A 패널과 B 패널에 같은 쌍(A 1쪽 · B 1쪽)의 행, 캡션에 파일 이름·쪽
+  const pair = { name: "A 1쪽 · B 1쪽" };
+  await expect(pane(page, "A").getByRole("group", pair)).toContainText(
+    "diff-base.pdf · 1쪽"
+  );
+  await expect(pane(page, "B").getByRole("group", pair)).toContainText(
+    "diff-edit.pdf · 1쪽"
+  );
   await expect(pageImage(page, "A 1쪽")).toHaveAttribute("aria-busy", "false");
   await expect(pageImage(page, "B 1쪽")).toHaveAttribute("aria-busy", "false");
   await expect(highlight(page, DIFF_CHANGES[0], "before")).toHaveCount(3);
@@ -555,16 +564,25 @@ test("짝 없는 쪽은 반대편에 자리표시를 두고, 목록 머리와 �
   ).toBeVisible();
   await changeItem(page, 1).click();
 
-  const row = pageArea(page).getByRole("group", { name: "B 3쪽", exact: true });
-  await expect(row).toBeVisible();
-  await expect(row).toContainText("A에 없는 쪽이에요");
-  await expect(row).toContainText("pages-insert.pdf · 3쪽");
-  await expect(row.getByRole("img", { name: "B 3쪽" })).toBeVisible();
-  await expect(row.getByRole("img", { name: /^A / })).toHaveCount(0);
+  // B만 있는 행: A 패널에는 자리표시, B 패널에는 B 3쪽. 동기 스크롤이라 두 행이 같은 높이에 있다.
+  const unpaired = { name: "B 3쪽", exact: true };
+  const placeholderRow = pane(page, "A").getByRole("group", unpaired);
+  const pageRow = pane(page, "B").getByRole("group", unpaired);
+  await expect(placeholderRow).toBeVisible();
+  await expect(placeholderRow).toContainText("A에 없는 쪽이에요");
+  await expect(placeholderRow).toContainText("pages-base.pdf");
+  await expect(placeholderRow.getByRole("img")).toHaveCount(0);
+  await expect(pageRow).toContainText("pages-insert.pdf · 3쪽");
+  await expect(pageRow.getByRole("img", { name: "B 3쪽" })).toBeVisible();
+  const [placeholderBox, pageBox] = await Promise.all([
+    placeholderRow.boundingBox(),
+    pageRow.boundingBox()
+  ]);
+  expect(placeholderBox?.y).toBeCloseTo(pageBox?.y ?? Number.NaN, 0);
   await expectInsidePageArea(page, highlight(page, newPage, "after"));
   // 다음 행은 A 3쪽과 B 4쪽이 짝이다.
   await expect(
-    pageArea(page).getByRole("group", { name: "A 3쪽 · B 4쪽" })
+    pane(page, "B").getByRole("group", { name: "A 3쪽 · B 4쪽" })
   ).toBeAttached();
 });
 

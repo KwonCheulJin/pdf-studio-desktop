@@ -10,22 +10,19 @@ import type {
   CompareResult,
   PageInfo,
   PageSize,
-  Placement,
   TextBox,
   TextSource
 } from "../src/renderer/shared/api/bindings";
 
 /**
- * 연결선(계획서 §7.1, 진행 가이드 Step 28, 시안 4).
- * - 화면 묶음과 SVG 끝점이 Rust golden(`connectors.stems.json`)과 같다: 행마다 같은 묶음이 같은 순서로
- *   있고, 끝점은 golden 묶음 상자를 pdf.js viewport로 바꾼 상자의 세로 가운데다(앱의 배율 1 변환과 다른
- *   길로 잰다). 확대·축소·창 크기를 바꿔도 같다.
- * - 스크롤하는 동안 `data-scrolling`으로 사라지고 멈추면 다시 나타난다.
- * - 툴바 "연결선"·상태바 "연결선 N개"·A만/B만·숨긴 종류·다른 행 대응·자리표시자, 호버·선택 강조
- * - 작은 배율에서 번호 태그가 겹치지 않는다.
- *
- * 결과는 Rust golden(`connectors.changes.json`·`connectors.stems.json`)과 같은 폴더의 픽스처 PDF로
- * 시드한다(사본 없이 읽는다).
+ * 연결선(계획서 §7.1, 진행 가이드 Step 28-c, 시안 4).
+ * - 화면 끝점·모양이 Rust golden(`connector-geometry.connectors.json`)과 같다: 끝 사각형을 화면에 놓인 쪽
+ *   너비 배율의 pdf.js viewport로 바꾼 점(앱의 배율 1 변환 + 비율과 다른 길)과 1px 안. 회전 0·90·180·270,
+ *   CropBox 오프셋, MediaBox 원점, 한 줄·여러 줄·여러 쪽·앵커 끝, 띠. 배율·창 크기를 바꿔도 같다.
+ * - 좌표 변환·경로·컬링 순수 함수(`lib/connector-geometry.ts`)를 개발 서버 모듈로 불러 확인한다(새 Vitest를
+ *   쓰지 않는 정책, 경계값처럼 화면으로 정확히 맞출 수 없는 사례).
+ * - 컬링·클램프·클릭 스크롤·hover·동기 스크롤 토글·연결선 체크박스·상태바 개수
+ * - 연결선 200개에서 스크롤 프레임 시간(측정값은 계획서 §7.1에 기록)
  */
 
 const PDF_CORE_TEST_DIRECTORY = path.join(
@@ -35,17 +32,21 @@ const PDF_CORE_TEST_DIRECTORY = path.join(
   "pdf-core",
   "tests"
 );
+const E2E_FIXTURE_DIRECTORY = path.join(__dirname, "fixtures");
 const PDFJS_SETUP_MODULE = "/src/renderer/shared/lib/pdfjs/pdfjs-setup.ts";
+const PAGE_GEOMETRY_MODULE = "/src/renderer/shared/lib/pdfjs/page-geometry.ts";
+const CONNECTOR_GEOMETRY_MODULE =
+  "/src/renderer/widgets/compare-viewer/lib/connector-geometry.ts";
 const VIEWPORT = { width: 1280, height: 800 };
-/** 창을 키우면 "맞춤" 배율이 커진다. */
-const WIDE_VIEWPORT = { width: 1600, height: 900 };
+/** 배율 50%에서도 가로 쪽이 패널에 들어가는 창 */
+const WIDE_VIEWPORT = { width: 1920, height: 1080 };
 const DEVICE_PIXEL_RATIO = 2;
 /** 끝점 허용 오차(px): 좌표 반올림(0.01px)과 쪽 배치의 소수 px */
 const ENDPOINT_TOLERANCE_PX = 1;
-const GUTTER_PORTRAIT_PX = 120;
-const GUTTER_LANDSCAPE_PX = 72;
+/** 화면 밖 끝을 패널 경계에서 들여놓는 거리(앱 `CONNECTOR_STYLE.CLAMP_INSET_PX`와 같은 값) */
+const CLAMP_INSET_PX = 8;
 /** 연결선 굵기(px): 평상시·강조 */
-const STROKE_NORMAL = "2";
+const STROKE_NORMAL = "1.5";
 const STROKE_EMPHASIZED = "3";
 
 test.use({ viewport: VIEWPORT, deviceScaleFactor: DEVICE_PIXEL_RATIO });
@@ -54,36 +55,36 @@ function readCore(folder: string, name: string): Buffer {
   return readFileSync(path.join(PDF_CORE_TEST_DIRECTORY, folder, name));
 }
 
-interface GoldenStem {
-  changeIds: string[];
-  before: TextBox;
-  after: TextBox;
+interface GoldenEnd {
+  bounds: TextBox;
+  isAnchor: boolean;
 }
 
-interface GoldenRow {
-  pages: [number, number];
-  stems: GoldenStem[];
+interface GoldenConnector {
+  changeId: string;
+  kind: Change["kind"];
+  shape: "line" | "band";
+  before: GoldenEnd;
+  after: GoldenEnd;
 }
 
 interface ConnectorsGolden {
   pagePairs: CompareResult["pagePairs"];
   pageSizes: CompareResult["pageSizes"];
-  rows: GoldenRow[];
+  connectors: GoldenConnector[];
 }
 
 const CHANGES = JSON.parse(
-  readCore("golden", "connectors.changes.json").toString("utf8")
+  readCore("golden", "connector-geometry.changes.json").toString("utf8")
 ) as Change[];
 const GOLDEN = JSON.parse(
-  readCore("golden", "connectors.stems.json").toString("utf8")
+  readCore("golden", "connector-geometry.connectors.json").toString("utf8")
 ) as ConnectorsGolden;
-const BEFORE_BYTES = readCore("fixtures", "connectors-a.pdf").toString(
+const BEFORE_BYTES = readCore("fixtures", "connector-geometry-a.pdf").toString(
   "base64"
 );
-const AFTER_BYTES = readCore("fixtures", "connectors-b.pdf").toString("base64");
-const STEM_COUNT = GOLDEN.rows.reduce(
-  (count, row) => count + row.stems.length,
-  0
+const AFTER_BYTES = readCore("fixtures", "connector-geometry-b.pdf").toString(
+  "base64"
 );
 
 const HALF_TURN = 180;
@@ -115,26 +116,21 @@ function seedFile(
 }
 
 const BEFORE_FILE = seedFile(
-  "connectors-a.pdf",
+  "connector-geometry-a.pdf",
   BEFORE_BYTES,
   GOLDEN.pageSizes.before
 );
 const AFTER_FILE = seedFile(
-  "connectors-b.pdf",
+  "connector-geometry-b.pdf",
   AFTER_BYTES,
   GOLDEN.pageSizes.after
 );
-
-/** 변경 쪽의 글자 상자. 앵커(글자가 없는 쪽)는 상자가 없다(ADR 0001 §4). */
-function boxesOf(placement: Placement): TextBox[] {
-  return placement.kind === "boxes" ? placement.boxes : [];
-}
 
 function textLayer(count: number): TextSource[] {
   return Array.from({ length: count }, () => "textLayer");
 }
 
-function connectorsResult(changes: Change[] = CHANGES): CompareResult {
+function geometryResult(changes: Change[] = CHANGES): CompareResult {
   return {
     changes,
     pagePairs: GOLDEN.pagePairs,
@@ -157,7 +153,7 @@ async function openResult(
   page: Page,
   {
     files = [BEFORE_FILE, AFTER_FILE],
-    result = connectorsResult()
+    result = geometryResult()
   }: OpenResultParams = {}
 ): Promise<void> {
   const seed: E2eMockSeed = {
@@ -196,11 +192,19 @@ function pageArea(page: Page): Locator {
   return page.getByRole("region", { name: "페이지 영역" });
 }
 
-function rowGroup(page: Page, [before, after]: [number, number]): Locator {
-  return pageArea(page).getByRole("group", {
-    name: `A ${before + 1}쪽 · B ${after + 1}쪽`,
-    exact: true
-  });
+/** 문서 하나의 패널 이름("A 문서"·"B 문서") */
+function paneName(badge: string): string {
+  return `${badge} 문서`;
+}
+
+const PANE_A = paneName("A");
+
+function pane(page: Page, badge: string): Locator {
+  return pageArea(page).getByRole("group", { name: paneName(badge) });
+}
+
+function paneScroller(page: Page, badge: string): Locator {
+  return pane(page, badge).locator("[data-virtuoso-scroller]");
 }
 
 function changeItem(page: Page, number: number): Locator {
@@ -213,43 +217,81 @@ function connectorToggle(page: Page): Locator {
   return page.getByRole("checkbox", { name: "연결선" });
 }
 
+function syncToggle(page: Page): Locator {
+  return page.getByRole("checkbox", { name: "동기 스크롤" });
+}
+
 function statusBar(page: Page): Locator {
   return page.locator("footer");
 }
 
-function stemGroups(scope: Locator): Locator {
-  return scope.locator("[data-connector-layer] g[data-change-ids]");
+function overlay(page: Page): Locator {
+  return pageArea(page).locator("[data-connector-layer]");
 }
 
-function stemKey(stem: GoldenStem): string {
-  return stem.changeIds.join(" ");
+function connector(page: Page, changeId: string): Locator {
+  return overlay(page).locator(`g[data-change-id="${changeId}"]`);
 }
 
 function changeNumber(id: string): number {
   return CHANGES.findIndex((change) => change.id === id) + 1;
 }
 
-interface ViewportCentersArgs {
+interface Point {
+  x: number;
+  y: number;
+}
+
+/** path `d`(M·H·V·L·C·Z)가 지나는 점들. 베지어는 끝점만 */
+function pathPoints(d: string): Point[] {
+  const tokens = d.match(/[MHVLCZ]|-?\d+(?:\.\d+)?/g) ?? [];
+  const points: Point[] = [];
+  let current: Point = { x: 0, y: 0 };
+  let index = 0;
+  const next = () => Number(tokens[index++]);
+  while (index < tokens.length) {
+    const command = tokens[index++];
+    if (command === "M" || command === "L") {
+      current = { x: next(), y: next() };
+    } else if (command === "H") {
+      current = { ...current, x: next() };
+    } else if (command === "V") {
+      current = { ...current, y: next() };
+    } else if (command === "C") {
+      index += 4;
+      current = { x: next(), y: next() };
+    } else {
+      continue;
+    }
+    points.push(current);
+  }
+  return points;
+}
+
+/** golden 끝 사각형을 pdf.js 배율 1 viewport로 바꾼 사각형과 그 쪽 viewport 너비(px) */
+interface ViewportEnd {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+  pageWidth: number;
+}
+
+interface ViewportEndsArgs {
   pdfjsSetupModule: string;
   pdfBase64: string;
-  pageIndex: number;
-  /** 쪽 그림이 화면에 놓인 너비(px) */
-  displayWidth: number;
-  boxes: TextBox[];
+  ends: GoldenEnd[];
 }
 
 /**
- * 브라우저에서 돈다. 앱과 같은 pdf.js 설정으로 픽스처를 열어, 화면에 놓인 너비의 배율로 만든
- * viewport에서 상자마다 `convertToViewportRectangle`로 바꾼 사각형의 세로 가운데(px, 쪽 위 끝 기준)를
- * 돌려준다(앱은 배율 1 변환을 쪽 높이 비율로 맞추므로 다른 길이다).
+ * 브라우저에서 돈다. 앱과 같은 pdf.js 설정으로 픽스처를 열어 golden 끝 사각형마다 그 쪽 viewport(배율 1)로
+ * 바꾼 사각형을 돌려준다(`convertToViewportRectangle`, 앱의 쪽 변환·쪽 배치·스크롤 계산을 거치지 않는다).
  */
-async function viewportCenters({
+async function viewportEnds({
   pdfjsSetupModule,
   pdfBase64,
-  pageIndex,
-  displayWidth,
-  boxes
-}: ViewportCentersArgs): Promise<number[]> {
+  ends
+}: ViewportEndsArgs): Promise<ViewportEnd[]> {
   const {
     openPdfDocument
   }: typeof import("../src/renderer/shared/lib/pdfjs/pdfjs-setup") =
@@ -260,109 +302,173 @@ async function viewportCenters({
   const loadingTask = openPdfDocument(bytes);
   try {
     const document = await loadingTask.promise;
-    const pdfPage = await document.getPage(pageIndex + 1);
-    const scale = displayWidth / pdfPage.getViewport({ scale: 1 }).width;
-    const viewport = pdfPage.getViewport({ scale });
-    return boxes.map(({ x, y, w, h }) => {
-      const [, top, , bottom] = viewport.convertToViewportRectangle([
-        x,
-        y,
-        x + w,
-        y + h
+    const results: ViewportEnd[] = [];
+    for (const { bounds } of ends) {
+      const pdfPage = await document.getPage(bounds.page + 1);
+      const viewport = pdfPage.getViewport({ scale: 1 });
+      const [x1, y1, x2, y2] = viewport.convertToViewportRectangle([
+        bounds.x,
+        bounds.y,
+        bounds.x + bounds.w,
+        bounds.y + bounds.h
       ]);
-      return (top + bottom) / 2;
-    });
+      results.push({
+        left: Math.min(x1, x2),
+        top: Math.min(y1, y2),
+        right: Math.max(x1, x2),
+        bottom: Math.max(y1, y2),
+        pageWidth: viewport.width
+      });
+    }
+    return results;
   } finally {
     await loadingTask.destroy();
   }
 }
 
-/** 화면에 놓인 쪽이 가로인가(회전 90·270이면 너비·높이를 바꾼다) */
-function isLandscape({ viewBox, rotation }: PageSize): boolean {
-  const width = viewBox.right - viewBox.left;
-  const height = viewBox.top - viewBox.bottom;
-  return rotation % HALF_TURN === 0 ? width > height : height > width;
+/** golden 연결선마다 두 끝의 pdf.js 사각형(배율 1) */
+type GoldenViewports = Map<string, { before: ViewportEnd; after: ViewportEnd }>;
+
+async function goldenViewports(page: Page): Promise<GoldenViewports> {
+  const [before, after] = await Promise.all([
+    page.evaluate(viewportEnds, {
+      pdfjsSetupModule: PDFJS_SETUP_MODULE,
+      pdfBase64: BEFORE_BYTES,
+      ends: GOLDEN.connectors.map((golden) => golden.before)
+    }),
+    page.evaluate(viewportEnds, {
+      pdfjsSetupModule: PDFJS_SETUP_MODULE,
+      pdfBase64: AFTER_BYTES,
+      ends: GOLDEN.connectors.map((golden) => golden.after)
+    })
+  ]);
+  return new Map(
+    GOLDEN.connectors.map((golden, index) => [
+      golden.changeId,
+      { before: before[index], after: after[index] }
+    ])
+  );
 }
 
-/** 거터 폭(계획서 §7.1): 한쪽이라도 가로 쪽이면 72px */
-function gutterPxOf({ pages: [before, after] }: GoldenRow): number {
-  const sizes = [
-    GOLDEN.pageSizes.before[before],
-    GOLDEN.pageSizes.after[after]
-  ];
-  return sizes.some(isLandscape) ? GUTTER_LANDSCAPE_PX : GUTTER_PORTRAIT_PX;
+/** 쪽 위에 놓인 끝의 기대 자리(px, 화면 좌표) */
+interface ExpectedEnd {
+  x: number;
+  top: number;
+  bottom: number;
 }
 
-/** path `d`의 시작점과 끝점 */
-function pathEnds(d: string): { start: number[]; end: number[] } {
-  const numbers = (d.match(/-?\d+(?:\.\d+)?/g) ?? []).map(Number);
-  return { start: numbers.slice(0, 2), end: numbers.slice(-2) };
+interface ExpectedEndParams {
+  viewportEnd: ViewportEnd;
+  end: GoldenEnd;
+  isBefore: boolean;
+  /** 쪽 그림이 화면에 놓인 자리 */
+  image: { x: number; y: number; width: number };
+}
+
+/** 끝점(상자는 A 오른쪽·B 왼쪽 변, 앵커는 막대 가운데)을 쪽 그림 너비의 배율로 화면에 놓는다. */
+function expectedEnd({
+  viewportEnd,
+  end,
+  isBefore,
+  image
+}: ExpectedEndParams): ExpectedEnd {
+  const ratio = image.width / viewportEnd.pageWidth;
+  const left = viewportEnd.left * ratio;
+  const right = viewportEnd.right * ratio;
+  const edge = isBefore ? right : left;
+  return {
+    x: image.x + (end.isAnchor ? (left + right) / 2 : edge),
+    top: image.y + viewportEnd.top * ratio,
+    bottom: image.y + viewportEnd.bottom * ratio
+  };
 }
 
 /**
- * 행 하나의 연결선이 golden 묶음과 같은 묶음·순서이고, 끝점이 golden 묶음 상자를 pdf.js viewport로
- * 바꾼 상자의 세로 가운데에 있으며, x는 거터의 0과 너비다.
+ * 연결선 하나가 보이고(`shown`), 모양이 golden과 같고, 그린 경로의 두 끝이 golden 끝을 pdf.js로 옮긴 자리와
+ * 1px 안이다. 선은 시작점 = A 끝점, 끝점 = B 끝점이고, 띠는 A 위 변 → B 위·아래 변 → A 아래 변이다.
  */
-async function expectRowMatchesGolden(page: Page, row: GoldenRow) {
-  const group = rowGroup(page, row.pages);
-  const layer = group.locator("[data-connector-layer]");
-  await expect(stemGroups(group)).toHaveCount(row.stems.length);
-  expect(
-    await stemGroups(group).evaluateAll((groups) =>
-      groups.map((element) => element.getAttribute("data-change-ids"))
-    )
-  ).toEqual(row.stems.map(stemKey));
+async function expectConnectorMatchesGolden(
+  page: Page,
+  golden: GoldenConnector,
+  viewports: GoldenViewports
+): Promise<void> {
+  const group = connector(page, golden.changeId);
+  await expect(group).toHaveAttribute("data-shape", golden.shape);
+  // 고른 변경으로 스크롤하는 중일 수 있어 자리가 멈출 때까지 다시 잰다.
+  await expect(() =>
+    measureConnectorAgainstGolden(page, golden, viewports)
+  ).toPass();
+}
 
-  const [before, after] = row.pages;
-  const beforeImage = group.getByRole("img", { name: `A ${before + 1}쪽` });
-  const afterImage = group.getByRole("img", { name: `B ${after + 1}쪽` });
+async function measureConnectorAgainstGolden(
+  page: Page,
+  golden: GoldenConnector,
+  viewports: GoldenViewports
+): Promise<void> {
+  const group = connector(page, golden.changeId);
+  expect(await group.getAttribute("data-state"), golden.changeId).toBe("shown");
+  const pageViewports = viewports.get(golden.changeId);
+  const beforeImage = pane(page, "A").getByRole("img", {
+    name: `A ${golden.before.bounds.page + 1}쪽`
+  });
+  const afterImage = pane(page, "B").getByRole("img", {
+    name: `B ${golden.after.bounds.page + 1}쪽`
+  });
   const [layerBox, beforeBox, afterBox] = await Promise.all([
-    layer.boundingBox(),
+    overlay(page).boundingBox(),
     beforeImage.boundingBox(),
     afterImage.boundingBox()
   ]);
-  if (!layerBox || !beforeBox || !afterBox) {
-    throw new Error(`행 ${row.pages}: 연결선이나 쪽 그림이 화면에 없습니다.`);
+  if (!pageViewports || !layerBox || !beforeBox || !afterBox) {
+    throw new Error(
+      `${golden.changeId}: 연결선이나 쪽 그림이 화면에 없습니다.`
+    );
   }
-  expect(layerBox.width).toBeCloseTo(gutterPxOf(row), 0);
-  const [beforeCenters, afterCenters] = await Promise.all([
-    page.evaluate(viewportCenters, {
-      pdfjsSetupModule: PDFJS_SETUP_MODULE,
-      pdfBase64: BEFORE_BYTES,
-      pageIndex: before,
-      displayWidth: beforeBox.width,
-      boxes: row.stems.map((stem) => stem.before)
-    }),
-    page.evaluate(viewportCenters, {
-      pdfjsSetupModule: PDFJS_SETUP_MODULE,
-      pdfBase64: AFTER_BYTES,
-      pageIndex: after,
-      displayWidth: afterBox.width,
-      boxes: row.stems.map((stem) => stem.after)
-    })
-  ]);
-
-  for (const [index, stem] of row.stems.entries()) {
-    const d = await group
-      .locator(`g[data-change-ids="${stemKey(stem)}"] path`)
-      .last()
-      .getAttribute("d");
-    const { start, end } = pathEnds(d ?? "");
-    const message = `행 ${row.pages} 묶음 ${stemKey(stem)}: ${d}`;
-    expect(start[0], message).toBe(0);
-    expect(end[0], message).toBeCloseTo(layerBox.width, 1);
-    expect(
-      Math.abs(layerBox.y + start[1] - (beforeBox.y + beforeCenters[index])),
-      message
-    ).toBeLessThanOrEqual(ENDPOINT_TOLERANCE_PX);
-    expect(
-      Math.abs(layerBox.y + end[1] - (afterBox.y + afterCenters[index])),
-      message
-    ).toBeLessThanOrEqual(ENDPOINT_TOLERANCE_PX);
+  const before = expectedEnd({
+    viewportEnd: pageViewports.before,
+    end: golden.before,
+    isBefore: true,
+    image: beforeBox
+  });
+  const after = expectedEnd({
+    viewportEnd: pageViewports.after,
+    end: golden.after,
+    isBefore: false,
+    image: afterBox
+  });
+  const part = golden.shape === "band" ? "band" : "line";
+  const d =
+    (await group.locator(`path[data-part="${part}"]`).getAttribute("d")) ?? "";
+  const points = pathPoints(d).map(({ x, y }) => ({
+    x: layerBox.x + x,
+    y: layerBox.y + y
+  }));
+  const expected: Point[] =
+    golden.shape === "band"
+      ? [
+          { x: before.x, y: before.top },
+          { x: after.x, y: after.top },
+          { x: after.x, y: after.bottom },
+          { x: before.x, y: before.bottom }
+        ]
+      : [
+          { x: before.x, y: (before.top + before.bottom) / 2 },
+          { x: after.x, y: (after.top + after.bottom) / 2 }
+        ];
+  const actual =
+    golden.shape === "band"
+      ? [points[0], points[3], points[4], points[7]]
+      : [points[0], points[points.length - 1]];
+  const message = `${golden.changeId}(${golden.kind} ${golden.shape}): ${d}`;
+  for (const [index, point] of expected.entries()) {
+    expect(Math.abs(actual[index].x - point.x), message).toBeLessThanOrEqual(
+      ENDPOINT_TOLERANCE_PX
+    );
+    expect(Math.abs(actual[index].y - point.y), message).toBeLessThanOrEqual(
+      ENDPOINT_TOLERANCE_PX
+    );
   }
 }
-
-const [PORTRAIT_ROW, LANDSCAPE_ROW] = GOLDEN.rows;
 
 const MAX_ZOOM_PRESSES = 8;
 
@@ -380,121 +486,448 @@ async function zoomTo(page: Page, percent: number): Promise<void> {
   await expect(zoomLevel).toHaveText(`${percent}%`);
 }
 
-test("연결선 묶음과 끝점이 Rust golden과 같다(세로·가로 행), 확대·축소와 창 크기를 바꿔도 상자 가운데에 붙는다", async ({
+/** 변경을 목록에서 골라(두 패널이 그 자리로 간다) 연결선을 golden과 맞댄다. */
+async function expectAllConnectorsMatchGolden(
+  page: Page,
+  viewports: GoldenViewports
+): Promise<void> {
+  for (const golden of GOLDEN.connectors) {
+    await changeItem(page, changeNumber(golden.changeId)).click();
+    await expectConnectorMatchesGolden(page, golden, viewports);
+  }
+}
+
+test("화면 끝점·모양이 Rust golden과 1px 안이다(회전 0·90·180·270·CropBox·MediaBox 원점, 한 줄·두 줄·여러 쪽·앵커·띠), 배율·창 크기를 바꿔도 같다", async ({
   page
 }) => {
+  await page.setViewportSize(WIDE_VIEWPORT);
   await openResult(page);
   await expect(connectorToggle(page)).toBeChecked();
-  await expect(statusBar(page)).toContainText(`연결선 ${STEM_COUNT}개`);
+  await expect(statusBar(page)).toContainText(
+    `연결선 ${GOLDEN.connectors.length}개`
+  );
+  expect(new Set(GOLDEN.connectors.map(({ shape }) => shape))).toEqual(
+    new Set(["line", "band"])
+  );
+  const viewports = await goldenViewports(page);
 
-  await expectRowMatchesGolden(page, PORTRAIT_ROW);
-  await changeItem(
-    page,
-    changeNumber(LANDSCAPE_ROW.stems[0].changeIds[0])
-  ).click();
-  await expectRowMatchesGolden(page, LANDSCAPE_ROW);
+  await expectAllConnectorsMatchGolden(page, viewports);
 
-  await changeItem(page, 1).click();
-  const zoomLevel = page.getByRole("status", { name: "배율" });
-  const fitPercent = (await zoomLevel.textContent()) ?? "";
-  for (const percent of [75, 25]) {
-    await zoomTo(page, percent);
-    await expectRowMatchesGolden(page, PORTRAIT_ROW);
-  }
+  await zoomTo(page, 50);
+  await expectAllConnectorsMatchGolden(page, viewports);
 
   // 맞춤 배율은 창 너비를 따라간다.
   await page.getByRole("button", { name: "맞춤" }).click();
-  await expect(zoomLevel).toHaveText(fitPercent);
-  await page.setViewportSize(WIDE_VIEWPORT);
-  await expect(zoomLevel).not.toHaveText(fitPercent);
-  await expectRowMatchesGolden(page, PORTRAIT_ROW);
+  const zoomLevel = page.getByRole("status", { name: "배율" });
+  const widePercent = (await zoomLevel.textContent()) ?? "";
+  await page.setViewportSize(VIEWPORT);
+  await expect(zoomLevel).not.toHaveText(widePercent);
+  await expectAllConnectorsMatchGolden(page, viewports);
 });
 
-/** 페이지 영역 스크롤 컨테이너(react-virtuoso) */
-function scroller(page: Page): Locator {
-  return pageArea(page).locator("[data-virtuoso-scroller]");
+interface PureCaseArgs {
+  pdfjsSetupModule: string;
+  pageGeometryModule: string;
+  connectorGeometryModule: string;
+  pdfBase64: string;
 }
 
-/** 스크롤 속도를 scroll seek(600px/s) 아래로 두고 일정 시간 조금씩 스크롤한다. */
-const SLOW_SCROLL = { STEP_PX: 3, INTERVAL_MS: 16, STEPS: 60 };
+interface PureCaseResult {
+  pageIndex: number;
+  scale: number;
+  /** 모듈의 변환(배율 1 viewport + 비율 + 쪽 자리 − 스크롤 + 패널 자리) */
+  actual: { left: number; top: number; right: number; bottom: number };
+  /** 그 배율의 pdf.js viewport로 바로 바꾼 사각형 + 같은 자리 이동 */
+  expected: { left: number; top: number; right: number; bottom: number };
+}
 
-test("스크롤하는 동안 연결선이 사라졌다가 멈추면 다시 나타난다", async ({
+/**
+ * 브라우저에서 돈다. 좌표 변환 파이프라인(`toContentRect` → `toOverlayRect`)을 4쪽(회전 0+CropBox, 90+CropBox,
+ * 180, 270+MediaBox 원점)·배율 0.5/1/2에서 부르고, 같은 쪽을 그 배율의 pdf.js viewport로 바로 바꾼 값과 함께
+ * 돌려준다. 쪽 자리·스크롤·패널 자리는 일부러 0이 아닌 값이다.
+ */
+async function transformCases({
+  pdfjsSetupModule,
+  pageGeometryModule,
+  connectorGeometryModule,
+  pdfBase64
+}: PureCaseArgs): Promise<PureCaseResult[]> {
+  const {
+    openPdfDocument
+  }: typeof import("../src/renderer/shared/lib/pdfjs/pdfjs-setup") =
+    await import(pdfjsSetupModule);
+  const {
+    toPageGeometry
+  }: typeof import("../src/renderer/shared/lib/pdfjs/page-geometry") =
+    await import(pageGeometryModule);
+  const {
+    toContentRect,
+    toOverlayRect
+  }: typeof import("../src/renderer/widgets/compare-viewer/lib/connector-geometry") =
+    await import(connectorGeometryModule);
+  const pageLeft = 37;
+  const pageTop = 1210;
+  const pane = { left: 412, top: 9, scrollLeft: 15, scrollTop: 1100 };
+  const bytes = Uint8Array.from(atob(pdfBase64), (character) =>
+    character.charCodeAt(0)
+  );
+  const loadingTask = openPdfDocument(bytes);
+  try {
+    const document = await loadingTask.promise;
+    const results: PureCaseResult[] = [];
+    for (const pageIndex of [0, 1, 2, 3]) {
+      const pdfPage = await document.getPage(pageIndex + 1);
+      const geometry = toPageGeometry(pdfPage.getViewport({ scale: 1 }));
+      const view = pdfPage.view;
+      const bounds = {
+        page: pageIndex,
+        x: view[0] + 50,
+        y: view[1] + 120,
+        w: 80,
+        h: 12
+      };
+      for (const scale of [0.5, 1, 2]) {
+        const viewport = pdfPage.getViewport({ scale });
+        const content = toContentRect({
+          geometry,
+          bounds,
+          page: {
+            left: pageLeft,
+            top: pageTop,
+            widthPx: viewport.width,
+            heightPx: viewport.height
+          }
+        });
+        const [x1, y1, x2, y2] = viewport.convertToViewportRectangle([
+          bounds.x,
+          bounds.y,
+          bounds.x + bounds.w,
+          bounds.y + bounds.h
+        ]);
+        const dx = pageLeft - pane.scrollLeft + pane.left;
+        const dy = pageTop - pane.scrollTop + pane.top;
+        results.push({
+          pageIndex,
+          scale,
+          actual: toOverlayRect({ rect: content, pane }),
+          expected: {
+            left: Math.min(x1, x2) + dx,
+            top: Math.min(y1, y2) + dy,
+            right: Math.max(x1, x2) + dx,
+            bottom: Math.max(y1, y2) + dy
+          }
+        });
+      }
+    }
+    return results;
+  } finally {
+    await loadingTask.destroy();
+  }
+}
+
+/** 브라우저에서 돈다. 경로·컬링 순수 함수를 손으로 정한 입력으로 부른다. */
+async function pathAndCullCases(connectorGeometryModule: string) {
+  const {
+    bandPath,
+    connectorPath,
+    cullConnector
+  }: typeof import("../src/renderer/widgets/compare-viewer/lib/connector-geometry") =
+    await import(connectorGeometryModule);
+  const gutter = { left: 100, right: 220 };
+  const view = { top: 0, bottom: 100 };
+  const span = (top: number, bottom: number) => ({ x: 0, top, bottom });
+  return {
+    line: connectorPath({
+      start: { x: 10, y: 20 },
+      end: { x: 300, y: 60 },
+      gutter
+    }),
+    band: bandPath({
+      before: { x: 40, top: 10, bottom: 70 },
+      after: { x: 250, top: 30, bottom: 30 },
+      gutter
+    }),
+    // A 끝이 화면 아래 경계에 정확히 닿는다(보인다), B 끝은 화면 위
+    edgeTouching: cullConnector({
+      ends: { before: span(100, 110), after: span(-20, -10) },
+      views: { before: view, after: view }
+    }),
+    // A 끝이 경계에서 0.01px 아래, B 끝은 화면 위: 둘 다 밖
+    bothOutside: cullConnector({
+      ends: { before: span(100.01, 110), after: span(-20, -10) },
+      views: { before: view, after: view }
+    }),
+    // 띠 끝이 화면 위에서 걸쳐 내려온다(가운데는 밖이어도 보인다)
+    bandStraddling: cullConnector({
+      ends: { before: span(-50, 5), after: span(40, 60) },
+      views: { before: view, after: view }
+    }),
+    // B 끝만 화면 아래
+    afterBelow: cullConnector({
+      ends: { before: span(40, 60), after: span(130, 140) },
+      views: { before: view, after: view }
+    })
+  };
+}
+
+test("순수 함수: 좌표 변환(회전 0/90/180/270·배율 0.5/1/2·CropBox·MediaBox 원점), 경로 끝점, 컬링 경계값", async ({
   page
 }) => {
-  await openResult(page);
-  // 맞춤 배율에서는 두 행이 거의 한 화면이라 스크롤할 거리가 없다.
-  await zoomTo(page, 50);
-  const layer = rowGroup(page, PORTRAIT_ROW.pages).locator(
-    "[data-connector-layer]"
-  );
-  await expect(stemGroups(rowGroup(page, PORTRAIT_ROW.pages))).toHaveCount(
-    PORTRAIT_ROW.stems.length
-  );
-  const opacity = () =>
-    layer.evaluate((element) => getComputedStyle(element).opacity);
-  await expect.poll(opacity).toBe("1");
-  await expect(scroller(page)).not.toHaveAttribute("data-scrolling");
+  await page.goto("/");
+  const transforms = await page.evaluate(transformCases, {
+    pdfjsSetupModule: PDFJS_SETUP_MODULE,
+    pageGeometryModule: PAGE_GEOMETRY_MODULE,
+    connectorGeometryModule: CONNECTOR_GEOMETRY_MODULE,
+    pdfBase64: BEFORE_BYTES
+  });
+  expect(transforms).toHaveLength(12);
+  for (const { pageIndex, scale, actual, expected } of transforms) {
+    for (const key of ["left", "top", "right", "bottom"] as const) {
+      expect(
+        Math.abs(actual[key] - expected[key]),
+        `${pageIndex}쪽 배율 ${scale} ${key}`
+      ).toBeLessThan(0.01);
+    }
+  }
 
-  await page.evaluate(({ STEP_PX, INTERVAL_MS, STEPS }) => {
-    const element = document.querySelector("[data-virtuoso-scroller]");
-    if (!element) throw new Error("스크롤 컨테이너가 없습니다.");
-    let count = 0;
-    const timer = setInterval(() => {
-      element.scrollTop += STEP_PX;
-      count += 1;
-      if (count >= STEPS) clearInterval(timer);
-    }, INTERVAL_MS);
-  }, SLOW_SCROLL);
-
-  await expect(scroller(page)).toHaveAttribute("data-scrolling", "");
-  await expect.poll(opacity).toBe("0");
-  await expect(scroller(page)).not.toHaveAttribute("data-scrolling");
-  await expect.poll(opacity).toBe("1");
+  const cases = await page.evaluate(
+    pathAndCullCases,
+    CONNECTOR_GEOMETRY_MODULE
+  );
+  // 수평 stem(10 → 100) + 거터 베지어(제어점 x = 100 + 60, 220 − 60) + 수평 stem(220 → 300)
+  expect(cases.line).toBe("M10 20 H100 C160 20 160 60 220 60 H300");
+  // 위 변 A(40, 10) → B(250, 30), B를 내려와(높이 0인 앵커 변) 아래 변 → A(40, 70)
+  expect(cases.band).toBe(
+    "M40 10 H100 C160 10 160 30 220 30 H250 V30 H220 C160 30 160 70 100 70 H40 Z"
+  );
+  expect(cases.edgeTouching).toEqual({
+    state: "clamped",
+    side: "after",
+    edge: "top"
+  });
+  expect(cases.bothOutside).toEqual({ state: "hidden" });
+  expect(cases.bandStraddling).toEqual({ state: "shown" });
+  expect(cases.afterBelow).toEqual({
+    state: "clamped",
+    side: "after",
+    edge: "bottom"
+  });
 });
 
-test("연결선 체크박스·A만/B만·숨긴 종류는 연결선과 상태바 개수를 끄고, 다른 행 대응·자리표시자 행은 잇지 않는다", async ({
+/** 두 패널의 첫 쪽 그림을 받을 때까지 기다린다(패널을 만들고 스크롤 처리를 붙인 뒤다). */
+async function expectPanesSettled(page: Page): Promise<void> {
+  for (const badge of ["A", "B"]) {
+    await expect(
+      pane(page, badge).getByRole("img", { name: `${badge} 1쪽` })
+    ).toHaveAttribute("aria-busy", "false");
+  }
+}
+
+/** 앱 행 배치를 따르지 않고 화면에서 잰 한 행 높이(A 1쪽 · B 1쪽 행) */
+async function rowHeight(page: Page): Promise<number> {
+  const box = await pane(page, "B")
+    .getByRole("group", { name: "A 1쪽 · B 1쪽" })
+    .boundingBox();
+  if (!box) throw new Error("첫 행이 화면에 없습니다.");
+  return box.height;
+}
+
+async function scrollPane(page: Page, badge: string, top: number) {
+  await paneScroller(page, badge).evaluate((element, value) => {
+    element.scrollTop = value;
+  }, top);
+}
+
+async function scrollTopOf(page: Page, badge: string): Promise<number> {
+  return paneScroller(page, badge).evaluate((element) => element.scrollTop);
+}
+
+const [FIRST_CONNECTOR] = GOLDEN.connectors;
+/** 마지막 쪽(4쪽)의 연결선 */
+const LAST_PAGE_CONNECTOR = GOLDEN.connectors[GOLDEN.connectors.length - 1];
+
+test("동기 스크롤을 끄고 B만 내리면 위로 나간 B 끝은 패널 위 경계로 끌려온 점선이 되고, 둘 다 밖이면 그리지 않으며, 누르면 B가 그 변경으로 돌아온다", async ({
+  page
+}) => {
+  await page.setViewportSize(WIDE_VIEWPORT);
+  await openResult(page);
+  await expectPanesSettled(page);
+  await syncToggle(page).click();
+  await expect(syncToggle(page)).not.toBeChecked();
+  const first = connector(page, FIRST_CONNECTOR.changeId);
+  await expect(first).toHaveAttribute("data-state", "shown");
+
+  // B만 한 행 내린다: 1쪽 B 끝은 화면 위, A 끝은 그대로 보인다.
+  await scrollPane(page, "A", 0);
+  await scrollPane(page, "B", await rowHeight(page));
+  await expect(first).toHaveAttribute("data-state", "clamped");
+  await expect(first).toHaveAttribute("data-clamped-side", "after");
+  await expect(first).toHaveAttribute("data-clamp-edge", "top");
+  await expect(first.locator("path[data-part=line]")).toHaveAttribute(
+    "stroke-dasharray",
+    /\d/
+  );
+  await expect(first.locator("path[data-part=marker]")).toHaveAttribute(
+    "d",
+    /^M/
+  );
+  const [layerBox, paneBox] = await Promise.all([
+    overlay(page).boundingBox(),
+    pane(page, "B").boundingBox()
+  ]);
+  const d =
+    (await first.locator("path[data-part=line]").getAttribute("d")) ?? "";
+  const clampedPoints = pathPoints(d);
+  const clampedEnd = clampedPoints[clampedPoints.length - 1];
+  if (!layerBox || !paneBox || !clampedEnd) {
+    throw new Error("연결선이나 패널이 화면에 없습니다.");
+  }
+  expect(layerBox.y + clampedEnd.y).toBeCloseTo(paneBox.y + CLAMP_INSET_PX, 0);
+  // 4쪽 연결선: A 끝은 화면 아래(A는 맨 위), B 끝도 화면 아래(B는 한 행만 내렸다)
+  await expect(connector(page, LAST_PAGE_CONNECTOR.changeId)).toHaveAttribute(
+    "data-state",
+    "hidden"
+  );
+
+  // 점선을 누르면 그 변경을 고르고 B 패널이 그 끝으로 돌아온다(A는 맨 위 그대로 보인다). 화면 밖 끝이
+  // 같은 경계로 모인 다른 점선과 겹치지 않는 A 쪽 시작점(거터 왼쪽 끝)을 누른다.
+  const hitD =
+    (await first.locator("path[data-part=hit]").getAttribute("d")) ?? "";
+  const [hitStart] = pathPoints(hitD);
+  await page.mouse.click(layerBox.x + hitStart.x + 2, layerBox.y + hitStart.y);
+  await expect(changeItem(page, 1)).toHaveAttribute("aria-current", "true");
+  await expect(first).toHaveAttribute("data-state", "shown");
+  expect(await scrollTopOf(page, "B")).toBeLessThan(await rowHeight(page));
+  // 동기 스크롤이 꺼져 있으므로 두 패널은 따로다.
+  await scrollPane(page, "B", 40);
+  await expect.poll(() => scrollTopOf(page, "B")).toBe(40);
+  expect(await scrollTopOf(page, "A")).not.toBe(40);
+});
+
+test("동기 스크롤(기본 켬)은 두 패널을 같은 위치로 두고, 끄면 따로 스크롤하며, 다시 켜면 B를 A에 맞춘다", async ({
+  page
+}) => {
+  await page.setViewportSize(WIDE_VIEWPORT);
+  await openResult(page);
+  await expectPanesSettled(page);
+  await expect(syncToggle(page)).toBeChecked();
+
+  await scrollPane(page, "A", 300);
+  await expect.poll(() => scrollTopOf(page, "B")).toBe(300);
+  await scrollPane(page, "B", 120);
+  await expect.poll(() => scrollTopOf(page, "A")).toBe(120);
+
+  await syncToggle(page).click();
+  await scrollPane(page, "A", 500);
+  await expect.poll(() => scrollTopOf(page, "A")).toBe(500);
+  expect(await scrollTopOf(page, "B")).toBe(120);
+
+  await syncToggle(page).click();
+  await expect.poll(() => scrollTopOf(page, "B")).toBe(500);
+
+  // 패널이 하나인 보기에서는 토글을 막는다.
+  await page
+    .getByRole("group", { name: "보기 방식" })
+    .getByRole("button", { name: "A만" })
+    .click();
+  await expect(syncToggle(page)).toBeDisabled();
+});
+
+test("연결선을 가리키면 굵어지고 양쪽 상자·목록 항목을 함께 강조하며, 누르면 그 변경을 고른다", async ({
+  page
+}) => {
+  await page.setViewportSize(WIDE_VIEWPORT);
+  await openResult(page);
+  const band = GOLDEN.connectors.find(({ shape }) => shape === "band");
+  if (!band) throw new Error("golden에 띠가 없습니다.");
+  const target = connector(page, band.changeId);
+  await expect(target).toHaveAttribute("data-state", "shown");
+  const outline = target.locator("path[data-part=band]");
+  const bandStroke = await outline.getAttribute("stroke-width");
+
+  await target.locator("path[data-part=hit]").hover();
+  await expect(target).toHaveAttribute("data-emphasized", "true");
+  await expect(outline).not.toHaveAttribute("stroke-width", bandStroke ?? "");
+  const number = changeNumber(band.changeId);
+  await expect(changeItem(page, number)).toHaveAttribute(
+    "data-hovered",
+    "true"
+  );
+  for (const side of ["before", "after"]) {
+    await expect(
+      pageArea(page)
+        .locator(`rect[data-change-id="${band.changeId}"][data-side="${side}"]`)
+        .first()
+    ).toHaveAttribute("data-hovered", "true");
+  }
+  // 다른 변경은 강조하지 않는다.
+  await expect(changeItem(page, 1)).not.toHaveAttribute("data-hovered", "true");
+
+  await page.mouse.move(1, VIEWPORT.height / 2);
+  await expect(target).not.toHaveAttribute("data-emphasized", "true");
+  await expect(changeItem(page, number)).not.toHaveAttribute(
+    "data-hovered",
+    "true"
+  );
+
+  // 선 연결선을 누르면 그 변경을 고르고 그 선이 강조된다.
+  const line = connector(page, FIRST_CONNECTOR.changeId);
+  await changeItem(page, number).click();
+  await expect(line.locator("path[data-part=line]")).toHaveAttribute(
+    "stroke-width",
+    STROKE_NORMAL
+  );
+  await line.locator("path[data-part=hit]").click();
+  await expect(changeItem(page, 1)).toHaveAttribute("aria-current", "true");
+  await expect(line).toHaveAttribute("data-emphasized", "true");
+  await expect(line.locator("path[data-part=line]")).toHaveAttribute(
+    "stroke-width",
+    STROKE_EMPHASIZED
+  );
+  await expect(line.locator("path[data-part=line]")).toHaveClass(
+    /stroke-diff-change/
+  );
+});
+
+test("연결선 체크박스·A만/B만·숨긴 종류는 연결선과 상태바 개수를 바꾼다", async ({
   page
 }) => {
   await openResult(page);
-  const layers = pageArea(page).locator("[data-connector-layer]");
-  await expect(layers.first()).toBeAttached();
+  const groups = overlay(page).locator("g[data-change-id]");
+  await expect(groups).toHaveCount(GOLDEN.connectors.length);
 
   await connectorToggle(page).click();
   await expect(connectorToggle(page)).not.toBeChecked();
-  await expect(layers).toHaveCount(0);
+  await expect(overlay(page)).toHaveCount(0);
   await expect(statusBar(page)).not.toContainText("연결선");
   // 하이라이트는 그대로다(연결선과 별개).
-  const [firstChange] = CHANGES;
   await expect(
-    pageArea(page).locator(`rect[data-change-id="${firstChange.id}"]`)
-  ).toHaveCount(
-    boxesOf(firstChange.before).length + boxesOf(firstChange.after).length
-  );
+    pageArea(page).locator(`rect[data-change-id="${FIRST_CONNECTOR.changeId}"]`)
+  ).toHaveCount(2);
   await connectorToggle(page).click();
-  await expect(layers.first()).toBeAttached();
-  await expect(statusBar(page)).toContainText(`연결선 ${STEM_COUNT}개`);
+  await expect(groups).toHaveCount(GOLDEN.connectors.length);
 
   const viewMode = page.getByRole("group", { name: "보기 방식" });
   for (const mode of ["A만", "B만"]) {
     await viewMode.getByRole("button", { name: mode }).click();
-    await expect(layers).toHaveCount(0);
+    await expect(overlay(page)).toHaveCount(0);
     await expect(connectorToggle(page)).toBeDisabled();
     await expect(statusBar(page)).not.toContainText("연결선");
   }
   await viewMode.getByRole("button", { name: "나란히" }).click();
-  await expect(connectorToggle(page)).toBeEnabled();
-  await expect(layers.first()).toBeAttached();
+  await expect(groups).toHaveCount(GOLDEN.connectors.length);
 
-  // 변경(`Replace`)을 숨기면 이을 변경이 없다. 남은 추가·삭제는 잇지 않는다.
+  // 변경(`Replace`)을 숨기면 추가·삭제(앵커에 잇는다)만 남는다.
   await page
     .getByRole("group", { name: "차이 종류" })
     .getByRole("button", { name: /^변경 / })
     .click();
-  await expect(layers).toHaveCount(0);
-  await expect(statusBar(page)).toContainText("연결선 0개");
+  const anchored = GOLDEN.connectors.filter(({ kind }) => kind !== "replace");
+  await expect(groups).toHaveCount(anchored.length);
+  await expect(statusBar(page)).toContainText(`연결선 ${anchored.length}개`);
 });
 
-test("대응이 다른 행에 있는 변경과 자리표시자 행에는 연결선이 없다", async ({
+test("다른 행에 걸친 변경도 잇고(동기 스크롤이면 기울어진 선), 끝의 쪽이 문서에 없는 앵커는 잇지 않는다", async ({
   page
 }) => {
   const base = readCore("fixtures", "pages-base.pdf").toString("base64");
@@ -514,7 +947,7 @@ test("대응이 다른 행에 있는 변경과 자리표시자 행에는 연결�
     w: 120,
     h: 12
   });
-  /** A 2쪽(행 A 2쪽 · B 2쪽)과 B 3쪽(B만 있는 행)에 걸친 변경 */
+  /** A 2쪽(행 A 2쪽 · B 2쪽)과 B 3쪽(B만 있는 다음 행)에 걸친 변경 */
   const crossRow: Change = {
     id: "cross-row",
     kind: "replace",
@@ -533,13 +966,27 @@ test("대응이 다른 행에 있는 변경과 자리표시자 행에는 연결�
     pagePair: [1, 2],
     needsReview: false
   };
+  /** A에 없는 쪽(문서는 5쪽)에 놓인 앵커: 잇지 않는다 */
+  const nowhere: Change = {
+    id: "nowhere",
+    kind: "insert",
+    before: { kind: "anchor", page: 7, x: 0, y: 0, h: 0 },
+    after: {
+      kind: "boxes",
+      text: "새 줄",
+      boxes: [box(0)],
+      minConfidence: null
+    },
+    pagePair: [null, 0],
+    needsReview: false
+  };
   await openResult(page, {
     files: [
       seedFile("pages-base.pdf", base, sizes(5)),
       seedFile("pages-insert.pdf", inserted, sizes(6))
     ],
     result: {
-      changes: [crossRow],
+      changes: [nowhere, crossRow],
       pagePairs,
       pageSizes: { before: sizes(5), after: sizes(6) },
       pageSources: { before: textLayer(5), after: textLayer(6) },
@@ -547,67 +994,17 @@ test("대응이 다른 행에 있는 변경과 자리표시자 행에는 연결�
     }
   });
 
-  await expect(
-    pageArea(page).locator(`rect[data-change-id="${crossRow.id}"]`).first()
-  ).toBeAttached();
-  await expect(pageArea(page).locator("[data-connector-layer]")).toHaveCount(0);
-  await expect(statusBar(page)).toContainText("연결선 0개");
-  await changeItem(page, 1).click();
-  const placeholderRow = pageArea(page).getByRole("group", {
-    name: "B 3쪽",
-    exact: true
-  });
-  await expect(placeholderRow).toContainText("A에 없는 쪽이에요");
-  await expect(
-    placeholderRow.locator("[data-connector-gutter]")
-  ).toBeAttached();
-  await expect(placeholderRow.locator("[data-connector-layer]")).toHaveCount(0);
-});
-
-test("연결선을 가리키면 묶음의 변경을 페이지·목록에서 함께 강조하고, 묶음 안 변경을 고르면 선이 그 종류 색으로 굵어진다", async ({
-  page
-}) => {
-  await openResult(page);
-  const row = rowGroup(page, PORTRAIT_ROW.pages);
-  const triple = PORTRAIT_ROW.stems.find((stem) => stem.changeIds.length === 3);
-  if (!triple) throw new Error("golden에 인접 변경 3개 묶음이 없습니다.");
-  const tripleGroup = row.locator(`g[data-change-ids="${stemKey(triple)}"]`);
-  const visible = tripleGroup.locator("path").last();
-  await expect(visible).toHaveAttribute("stroke-width", STROKE_NORMAL);
-
-  const hit = await tripleGroup.locator("path").first().boundingBox();
-  if (!hit) throw new Error("연결선이 화면에 없습니다.");
-  await page.mouse.move(hit.x + hit.width / 2, hit.y + hit.height / 2);
-  await expect(tripleGroup).toHaveAttribute("data-emphasized", "true");
-  await expect(visible).toHaveAttribute("stroke-width", STROKE_EMPHASIZED);
-  for (const id of triple.changeIds) {
-    await expect(changeItem(page, changeNumber(id))).toHaveAttribute(
-      "data-hovered",
-      "true"
-    );
-    for (const side of ["before", "after"]) {
-      await expect(
-        row.locator(`rect[data-change-id="${id}"][data-side="${side}"]`)
-      ).toHaveAttribute("data-hovered", "true");
-    }
-  }
-  const outside = PORTRAIT_ROW.stems.find((stem) => stem !== triple);
-  if (!outside) throw new Error("golden에 다른 묶음이 없습니다.");
-  await expect(
-    changeItem(page, changeNumber(outside.changeIds[0]))
-  ).not.toHaveAttribute("data-hovered", "true");
-
-  await page.mouse.move(1, VIEWPORT.height / 2);
-  await expect(tripleGroup).not.toHaveAttribute("data-emphasized", "true");
-  await expect(
-    changeItem(page, changeNumber(triple.changeIds[0]))
-  ).not.toHaveAttribute("data-hovered", "true");
-
-  // 묶음 가운데 변경을 고르면 묶음 전체가 고른 상태다.
-  await changeItem(page, changeNumber(triple.changeIds[1])).click();
-  await expect(tripleGroup).toHaveAttribute("data-emphasized", "true");
-  await expect(visible).toHaveAttribute("stroke-width", STROKE_EMPHASIZED);
-  await expect(visible).toHaveClass(/stroke-diff-change/);
+  await expect(statusBar(page)).toContainText("연결선 1개");
+  await expect(connector(page, "nowhere")).toHaveCount(0);
+  await changeItem(page, 2).click();
+  const cross = connector(page, crossRow.id);
+  await expect(cross).toHaveAttribute("data-state", "shown");
+  const d =
+    (await cross.locator("path[data-part=line]").getAttribute("d")) ?? "";
+  const points = pathPoints(d);
+  const rise = Math.abs(points[0].y - points[points.length - 1].y);
+  // 두 끝이 한 행만큼 어긋난다(같은 쪽 자리 + 행 높이).
+  expect(rise).toBeCloseTo(await rowHeight(page), 0);
 });
 
 interface TagBox {
@@ -650,11 +1047,11 @@ test("작은 배율에서는 겹치는 번호 태그를 빼고, 키우면 모든
   page
 }) => {
   await openResult(page);
-  const beforePage = rowGroup(page, PORTRAIT_ROW.pages).getByRole("img", {
-    name: "A 1쪽"
-  });
-  const taggedOnPage = CHANGES.filter((change) =>
-    boxesOf(change.before).some((box) => box.page === 0)
+  const beforePage = pane(page, "A").getByRole("img", { name: "A 1쪽" });
+  const taggedOnPage = CHANGES.filter(
+    (change) =>
+      change.before.kind === "boxes" &&
+      change.before.boxes.some((box) => box.page === 0)
   ).length;
   await zoomTo(page, 25);
   await expect(beforePage.locator("[data-number-tag]").first()).toBeAttached();
@@ -667,4 +1064,147 @@ test("작은 배율에서는 겹치는 번호 태그를 빼고, 키우면 모든
     taggedOnPage
   );
   expect(overlapping(await tagBoxes(beforePage))).toEqual([]);
+});
+
+const MANY_PAGES = 20;
+const CHANGES_PER_PAGE = 10;
+const LINE_PITCH_PT = 60;
+/**
+ * 측정할 스크롤 프레임 수와 프레임마다 내리는 거리(px). 초당 720px라 virtuoso scroll seek(600px/s)에
+ * 들어가 쪽은 자리만 두지만 연결선은 계속 그린다.
+ */
+const MEASURED_FRAMES = 240;
+const SCROLL_STEP_PX = 12;
+/** 스크롤 프레임 중 연결선이 다시 그려져야 하는 비율(첫 프레임·끝 프레임 여유) */
+const REDRAWN_FRAME_RATIO = 0.9;
+
+/** 브라우저에서 돈다. rAF마다 A 패널을 조금씩 내리며(동기 스크롤로 B도) 프레임 간격과 연결선 모양 변화를 잰다. */
+interface MeasureScrollFramesArgs {
+  /** 스크롤할 패널의 스크롤 컨테이너 선택자 */
+  scrollerSelector: string;
+  frames: number;
+  step: number;
+}
+
+async function measureScrollFrames({
+  scrollerSelector,
+  frames,
+  step
+}: MeasureScrollFramesArgs) {
+  const scroller = document.querySelector<HTMLElement>(scrollerSelector);
+  if (!scroller) throw new Error("A 패널이 없습니다.");
+  const shownPaths = () =>
+    [
+      ...document.querySelectorAll<SVGGElement>(
+        "[data-connector-layer] g[data-state=shown]"
+      )
+    ].map(
+      (group) =>
+        group.querySelector("[data-part=line]")?.getAttribute("d") ?? ""
+    );
+  const intervals: number[] = [];
+  const shownCounts: number[] = [];
+  let changedFrames = 0;
+  let previousPaths = shownPaths();
+  await new Promise<void>((resolve) => {
+    let last = performance.now();
+    let count = 0;
+    const tick = (now: number) => {
+      intervals.push(now - last);
+      last = now;
+      const paths = shownPaths();
+      shownCounts.push(paths.length);
+      if (paths.join("|") !== previousPaths.join("|")) changedFrames += 1;
+      previousPaths = paths;
+      scroller.scrollTop += step;
+      count += 1;
+      if (count < frames) {
+        requestAnimationFrame(tick);
+      } else {
+        resolve();
+      }
+    };
+    requestAnimationFrame(tick);
+  });
+  const sorted = [...intervals.slice(1)].sort(
+    (first, second) => first - second
+  );
+  const at = (ratio: number) =>
+    sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * ratio))];
+  return {
+    medianMs: at(0.5),
+    p95Ms: at(0.95),
+    maxMs: sorted[sorted.length - 1],
+    maxShown: Math.max(...shownCounts),
+    changedFrames
+  };
+}
+
+test("연결선 200개: 스크롤하는 동안 프레임마다 연결선이 따라오고 프레임 시간을 잰다", async ({
+  page
+}, testInfo) => {
+  const bytesBase64 = readFileSync(
+    path.join(E2E_FIXTURE_DIRECTORY, "hundred-pages.pdf")
+  ).toString("base64");
+  const a4: PageSize = {
+    viewBox: { left: 0, bottom: 0, right: 595, top: 842 },
+    rotation: 0
+  };
+  const sizes = Array.from({ length: MANY_PAGES }, () => a4);
+  const side = (pageIndex: number, line: number, x: number) => ({
+    kind: "boxes" as const,
+    text: `${pageIndex}-${line}`,
+    boxes: [
+      { page: pageIndex, x, y: 760 - line * LINE_PITCH_PT, w: 80, h: 12 }
+    ],
+    minConfidence: null
+  });
+  const changes: Change[] = sizes.flatMap((_size, pageIndex) =>
+    Array.from({ length: CHANGES_PER_PAGE }, (_value, line) => ({
+      id: `many-${pageIndex}-${line}`,
+      kind: "replace" as const,
+      before: side(pageIndex, line, 80),
+      after: side(pageIndex, line, 300),
+      pagePair: [pageIndex, pageIndex] as [number, number],
+      needsReview: false
+    }))
+  );
+  await openResult(page, {
+    files: [
+      seedFile("many-a.pdf", bytesBase64, sizes),
+      seedFile("many-b.pdf", bytesBase64, sizes)
+    ],
+    result: {
+      changes,
+      pagePairs: sizes.map((_size, index) => [index, index]),
+      pageSizes: { before: sizes, after: sizes },
+      pageSources: {
+        before: textLayer(MANY_PAGES),
+        after: textLayer(MANY_PAGES)
+      },
+      notices: []
+    }
+  });
+  await expect(statusBar(page)).toContainText(`연결선 ${changes.length}개`);
+  await expect(overlay(page).locator("g[data-change-id]")).toHaveCount(
+    changes.length
+  );
+  await expect(
+    overlay(page).locator("g[data-state=shown]").first()
+  ).toBeAttached();
+
+  const measured = await page.evaluate(measureScrollFrames, {
+    scrollerSelector: `[aria-label="${PANE_A}"] [data-virtuoso-scroller]`,
+    frames: MEASURED_FRAMES,
+    step: SCROLL_STEP_PX
+  });
+  testInfo.annotations.push({
+    type: "connector-scroll-frames",
+    description: JSON.stringify(measured)
+  });
+  // 스크롤하는 동안(멈춘 뒤가 아니라) 거의 모든 프레임에서 보이는 연결선이 다시 그려진다.
+  expect(measured.maxShown).toBeGreaterThan(0);
+  expect(measured.changedFrames).toBeGreaterThan(
+    MEASURED_FRAMES * REDRAWN_FRAME_RATIO
+  );
 });

@@ -26,6 +26,9 @@
 - placement-a.pdf·placement-b.pdf·placement-blank.pdf(Step 28-b): 앵커 사례(문서 맨 앞·줄 가운데·
   줄 경계·쪽 경계·문서 맨 끝 삽입, 줄 가운데 삭제)와 같은 줄 상자 병합 사례(한 줄 두 낱말, 줄을 넘는
   삽입, 같은 높이 두 단에 걸친 삽입)를 둔 3쪽 짝과, 반대쪽이 빈 쪽인 사례에 쓰는 글자 없는 한 쪽.
+- connector-geometry-a.pdf·connector-geometry-b.pdf(Step 28-c): 연결선 끝점·모양 사례(한 줄·상자 여럿인
+  한 줄·두 줄 치환, 세 줄 치환·삽입 띠, 앵커 삽입·삭제, 쪽을 넘는 치환)를 회전 0·90·180·270과 CropBox
+  오프셋·MediaBox 원점 쪽에 둔 4쪽 짝.
 
     python3 crates/pdf-core/tests/fixtures/generate_compare_fixtures.py
 
@@ -1144,6 +1147,116 @@ def blank_pdf() -> bytes:
     return build_document([PageSpec(media_box=A4_MEDIA_BOX, runs=[])], HELVETICA, pdf_literal)
 
 
+# --- 연결선 끝점·띠(Step 28-c) -------------------------------------------------------
+
+# A·B가 같은 쪽 상자·회전을 쓰고 글자만 다르다. 쪽마다 회전·상자가 달라 화면 끝점 변환(회전 0·90·180·270,
+# CropBox 오프셋, MediaBox 원점)을 모두 거친다. 글자는 사용자 공간에서 가로로 그린다(병합 회전처럼
+# /Rotate로만 돌린 쪽). 사례: 한 줄 치환, 한 줄에 상자가 여럿인 치환(글자 diff), 두 줄 치환(선의 끝),
+# 세 줄 치환·세 줄 삽입(띠, 삽입은 앵커 쪽), 줄 가운데·줄 경계 삽입과 삭제(앵커), 쪽 경계를 넘는
+# 치환(첫 쪽 상자만 끝이 된다).
+@dataclass
+class GeometryPage:
+    """연결선 끝점 픽스처 한 쪽의 상자·회전과 첫 줄 기준선 시작점(절대 사용자 공간)"""
+
+    media_box: tuple
+    crop_box: tuple | None
+    rotate: int | None
+    left: float
+    top: float
+
+
+CONNECTOR_GEOMETRY_PAGES = [
+    # 0: 회전 0 + CropBox 오프셋
+    GeometryPage(A4_MEDIA_BOX, (30, 40, 565, 812), None, 60, 760),
+    # 1: /Rotate 90 + CropBox 오프셋
+    GeometryPage(A4_MEDIA_BOX, (20, 30, 575, 820), 90, 60, 760),
+    # 2: /Rotate 180
+    GeometryPage(A4_MEDIA_BOX, None, 180, 60, 760),
+    # 3: /Rotate 270 + MediaBox 원점 오프셋
+    GeometryPage((30, 40, 625, 882), None, 270, 90, 800),
+]
+CONNECTOR_GEOMETRY_BEFORE = [
+    [
+        "제1조(대금) 계약 금액은 금 1,000,000원으로 한다.",
+        "기간은 2026년 1월 2일부터 3월 4일까지다.",
+        "을은 산출물을 갑에게",
+        "넘긴다. 그 뒤에 갑이 검수한다.",
+        "하자 보증 기간은 일 년이다.",
+        "보증금은 대금의 오 퍼센트다.",
+        "지체상금은 하루 천분의 일이다.",
+        "제2조(해지) 서면으로 통지한다.",
+        "이 계약서는 두 통을 만든다.",
+    ],
+    [
+        "제3조(검수) 발주자는 산출물을 받은 날부터",
+        "열흘 안에 결과를 알린다.",
+        "검수에 떨어지면 을이 고친다.",
+        "고친 산출물은 다시 검수한다.",
+    ],
+    [
+        "제4조(비밀) 을은 알게 된 정보를",
+        "남에게 알리지 아니한다.",
+        "이 의무는 삼 년간 이어진다.",
+        "제5조(손해) 위반한 쪽이 손해를 물어 준다.",
+    ],
+    [
+        "다만 고의가 없으면 줄인다.",
+        "제6조(관할) 분쟁은 갑의 주소지 법원이 맡는다.",
+        "이 계약은 서명한 날부터 효력이 생긴다.",
+    ],
+]
+CONNECTOR_GEOMETRY_AFTER = [
+    [
+        "제1조(대금) 계약 금액은 금 1,500,000원으로 한다.",
+        "기간은 2027년 5월 6일부터 7월 8일까지다.",
+        "을은 산출물을 병에게",
+        "보낸다. 그 뒤에 갑이 검수한다.",
+        "유지 보수 범위는 별첨에 따른다.",
+        "보수 요청은 문서로 낸다.",
+        "응답 시한은 사흘로 정한다.",
+        "제2조(해지) 상대방에게 서면으로 통지한다.",
+        "이 계약서는 통을 만든다.",
+    ],
+    [
+        "제3조(검수) 발주자는 산출물을 받은 날부터",
+        "이레 안에 결과를 알린다.",
+        "검수에 떨어지면 을이 바로 고친다.",
+        "수정 내역은 별도 대장에",
+        "날짜와 담당자를 적어",
+        "발주자에게 함께 보인다.",
+        "고친 산출물은 검수한다.",
+    ],
+    [
+        "제4조(비밀) 을은 알게 된 정보를",
+        "알리지 아니한다.",
+        "이 의무는 오 년간 이어진다.",
+        "제5조(손해) 위반한 쪽이 손해를 물어 낸다.",
+    ],
+    [
+        "단 고의가 없으면 줄인다.",
+        "제6조(관할) 분쟁은 을의 주소지 법원이 맡는다.",
+        "이 계약은 양측이 서명한 날부터 효력이 생긴다.",
+    ],
+]
+
+
+def connector_geometry_pdf(pages: list[list[str]]) -> bytes:
+    specs = [
+        PageSpec(
+            media_box=page.media_box,
+            crop_box=page.crop_box,
+            rotate=page.rotate,
+            runs=[
+                TextRun(page.left, page.top - index * TOKENIZE_LINE_GAP, line, TOKENIZE_FONT_SIZE)
+                for index, line in enumerate(lines)
+            ],
+        )
+        for page, lines in zip(CONNECTOR_GEOMETRY_PAGES, pages)
+    ]
+    font = korean_font(specs)
+    return build_document(specs, font.objects, font.encode)
+
+
 def main() -> None:
     fixtures = {
         "text-geometry.pdf": text_geometry_pdf(),
@@ -1164,6 +1277,8 @@ def main() -> None:
         "placement-a.pdf": placement_pdf(PLACEMENT_BEFORE_PAGES, PLACEMENT_BEFORE_COLUMNS),
         "placement-b.pdf": placement_pdf(PLACEMENT_AFTER_PAGES, PLACEMENT_AFTER_COLUMNS),
         "placement-blank.pdf": blank_pdf(),
+        "connector-geometry-a.pdf": connector_geometry_pdf(CONNECTOR_GEOMETRY_BEFORE),
+        "connector-geometry-b.pdf": connector_geometry_pdf(CONNECTOR_GEOMETRY_AFTER),
     }
     for name, data in fixtures.items():
         (OUTPUT_DIR / name).write_bytes(data)

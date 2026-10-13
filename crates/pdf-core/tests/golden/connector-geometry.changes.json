@@ -1,0 +1,394 @@
+[
+  {
+    "id": "edc57ec3dc407055",
+    "kind": "replace",
+    "before": {
+      "kind": "boxes",
+      "text": "1,000,000원으로",
+      "boxes": [
+        {"page":0,"x":204.79202,"y":759.868,"w":5.7599945,"h":8.783997}
+      ],
+      "minConfidence": null
+    },
+    "after": {
+      "kind": "boxes",
+      "text": "1,500,000원으로",
+      "boxes": [
+        {"page":0,"x":204.99602,"y":759.868,"w":5.4360046,"h":8.627991}
+      ],
+      "minConfidence": null
+    },
+    "pagePair": [
+      0,
+      0
+    ],
+    "needsReview": false
+  },
+  {
+    "id": "28845c6288acb793",
+    "kind": "replace",
+    "before": {
+      "kind": "boxes",
+      "text": "2026년 1월 2일부터 3월 4일까지다.",
+      "boxes": [
+        {"page":0,"x":117.34801,"y":737.868,"w":5.5919952,"h":8.627991},
+        {"page":0,"x":137.892,"y":738.0,"w":5.952011,"h":8.495972},
+        {"page":0,"x":158.84401,"y":738.0,"w":5.567993,"h":8.651978},
+        {"page":0,"x":200.664,"y":737.868,"w":5.5559998,"h":8.783997},
+        {"page":0,"x":221.35199,"y":738.0,"w":6.2160034,"h":8.495972}
+      ],
+      "minConfidence": null
+    },
+    "after": {
+      "kind": "boxes",
+      "text": "2027년 5월 6일부터 7월 8일까지다.",
+      "boxes": [
+        {"page":0,"x":117.372,"y":738.0,"w":5.496002,"h":8.495972},
+        {"page":0,"x":138.20401,"y":737.868,"w":5.4360046,"h":8.627991},
+        {"page":0,"x":158.82,"y":737.868,"w":5.5919952,"h":8.627991},
+        {"page":0,"x":200.988,"y":738.0,"w":5.496002,"h":8.495972},
+        {"page":0,"x":221.592,"y":737.868,"w":5.8079987,"h":8.783997}
+      ],
+      "minConfidence": null
+    },
+    "pagePair": [
+      0,
+      0
+    ],
+    "needsReview": false
+  },
+  {
+    "id": "9e9a4932fc94b833",
+    "kind": "replace",
+    "before": {
+      "kind": "boxes",
+      "text": "갑에게 넘긴다.",
+      "boxes": [
+        {"page":0,"x":130.56,"y":714.392,"w":9.900009,"h":10.97998},
+        {"page":0,"x":61.14,"y":692.392,"w":19.223999,"h":10.97998}
+      ],
+      "minConfidence": null
+    },
+    "after": {
+      "kind": "boxes",
+      "text": "병에게 보낸다.",
+      "boxes": [
+        {"page":0,"x":130.87201,"y":714.236,"w":8.519989,"h":11.135986},
+        {"page":0,"x":60.456,"y":692.596,"w":20.183998,"h":10.776001}
+      ],
+      "minConfidence": null
+    },
+    "pagePair": [
+      0,
+      0
+    ],
+    "needsReview": false
+  },
+  {
+    "id": "c2aad3bc3f92fbeb",
+    "kind": "replace",
+    "before": {
+      "kind": "boxes",
+      "text": "하자 보증 기간은 일 년이다. 보증금은 대금의 오 퍼센트다. 지체상금은 하루 천분의 일이다.",
+      "boxes": [
+        {"page":0,"x":60.396,"y":670.8,"w":20.868,"h":10.536011},
+        {"page":0,"x":95.4,"y":670.176,"w":81.64802,"h":11.195984},
+        {"page":0,"x":71.16,"y":648.176,"w":20.496002,"h":10.847961},
+        {"page":0,"x":106.584,"y":648.416,"w":79.20003,"h":10.955994},
+        {"page":0,"x":60.684,"y":626.236,"w":41.676003,"h":11.135986},
+        {"page":0,"x":116.748,"y":626.332,"w":78.87602,"h":11.040039}
+      ],
+      "minConfidence": null
+    },
+    "after": {
+      "kind": "boxes",
+      "text": "유지 보수 범위는 별첨에 따른다. 보수 요청은 문서로 낸다. 응답 시한은 사흘로 정한다.",
+      "boxes": [
+        {"page":0,"x":60.456,"y":670.464,"w":19.631996,"h":10.90802},
+        {"page":0,"x":95.4,"y":670.332,"w":103.92002,"h":11.040039},
+        {"page":0,"x":71.16,"y":648.2,"w":33.287994,"h":11.171997},
+        {"page":0,"x":119.64001,"y":648.536,"w":44.424004,"h":10.835999},
+        {"page":0,"x":60.456,"y":626.176,"w":45.059998,"h":11.195984},
+        {"page":0,"x":119.532005,"y":626.236,"w":55.872017,"h":11.171997}
+      ],
+      "minConfidence": null
+    },
+    "pagePair": [
+      0,
+      0
+    ],
+    "needsReview": false
+  },
+  {
+    "id": "8f5ec846c41e2307",
+    "kind": "insert",
+    "before": {
+      "kind": "anchor",
+      "page": 0,
+      "x": 117.06,
+      "y": 604.368,
+      "h": 11.004028
+    },
+    "after": {
+      "kind": "boxes",
+      "text": "상대방에게",
+      "boxes": [
+        {"page":0,"x":121.308,"y":604.236,"w":52.10402,"h":11.135986}
+      ],
+      "minConfidence": null
+    },
+    "pagePair": [
+      null,
+      0
+    ],
+    "needsReview": false
+  },
+  {
+    "id": "3a5aa6487caf603f",
+    "kind": "delete",
+    "before": {
+      "kind": "boxes",
+      "text": "두",
+      "boxes": [
+        {"page":0,"x":119.64001,"y":582.404,"w":9.792,"h":10.5720215}
+      ],
+      "minConfidence": null
+    },
+    "after": {
+      "kind": "anchor",
+      "page": 0,
+      "x": 115.896,
+      "y": 582.296,
+      "h": 11.075989
+    },
+    "pagePair": [
+      0,
+      null
+    ],
+    "needsReview": false
+  },
+  {
+    "id": "04541349f5623623",
+    "kind": "replace",
+    "before": {
+      "kind": "boxes",
+      "text": "열흘",
+      "boxes": [
+        {"page":1,"x":60.744,"y":736.296,"w":20.207996,"h":11.1119995}
+      ],
+      "minConfidence": null
+    },
+    "after": {
+      "kind": "boxes",
+      "text": "이레",
+      "boxes": [
+        {"page":1,"x":60.768,"y":736.824,"w":19.644001,"h":10.548035}
+      ],
+      "minConfidence": null
+    },
+    "pagePair": [
+      1,
+      1
+    ],
+    "needsReview": false
+  },
+  {
+    "id": "11df5bcc693535dc",
+    "kind": "insert",
+    "before": {
+      "kind": "anchor",
+      "page": 1,
+      "x": 160.68002,
+      "y": 714.332,
+      "h": 11.040039
+    },
+    "after": {
+      "kind": "boxes",
+      "text": "바로",
+      "boxes": [
+        {"page":1,"x":165.64801,"y":714.8,"w":20.136017,"h":10.536011}
+      ],
+      "minConfidence": null
+    },
+    "pagePair": [
+      null,
+      1
+    ],
+    "needsReview": false
+  },
+  {
+    "id": "6ddd99f761790288",
+    "kind": "insert",
+    "before": {
+      "kind": "anchor",
+      "page": 1,
+      "x": 199.30801,
+      "y": 714.596,
+      "h": 10.776001
+    },
+    "after": {
+      "kind": "boxes",
+      "text": "수정 내역은 별도 대장에 날짜와 담당자를 적어 발주자에게 함께 보인다.",
+      "boxes": [
+        {"page":1,"x":60.456,"y":692.236,"w":114.08401,"h":11.135986},
+        {"page":1,"x":60.912,"y":670.236,"w":99.780014,"h":11.135986},
+        {"page":1,"x":60.816,"y":648.332,"w":114.25202,"h":11.040039}
+      ],
+      "minConfidence": null
+    },
+    "pagePair": [
+      null,
+      1
+    ],
+    "needsReview": false
+  },
+  {
+    "id": "5adc51c9840140bc",
+    "kind": "delete",
+    "before": {
+      "kind": "boxes",
+      "text": "다시",
+      "boxes": [
+        {"page":1,"x":130.81201,"y":692.8,"w":19.164001,"h":10.5720215}
+      ],
+      "minConfidence": null
+    },
+    "after": {
+      "kind": "anchor",
+      "page": 1,
+      "x": 126.600006,
+      "y": 626.296,
+      "h": 11.075989
+    },
+    "pagePair": [
+      1,
+      null
+    ],
+    "needsReview": false
+  },
+  {
+    "id": "367b25e312f36718",
+    "kind": "delete",
+    "before": {
+      "kind": "boxes",
+      "text": "남에게",
+      "boxes": [
+        {"page":2,"x":60.912,"y":736.392,"w":30.203999,"h":10.97998}
+      ],
+      "minConfidence": null
+    },
+    "after": {
+      "kind": "anchor",
+      "page": 2,
+      "x": 214.56001,
+      "y": 758.236,
+      "h": 11.135986
+    },
+    "pagePair": [
+      2,
+      null
+    ],
+    "needsReview": false
+  },
+  {
+    "id": "790ded9ed4f4234e",
+    "kind": "replace",
+    "before": {
+      "kind": "boxes",
+      "text": "삼",
+      "boxes": [
+        {"page":2,"x":108.9,"y":714.392,"w":10.152,"h":10.97998}
+      ],
+      "minConfidence": null
+    },
+    "after": {
+      "kind": "boxes",
+      "text": "오",
+      "boxes": [
+        {"page":2,"x":108.936005,"y":716.0,"w":9.792,"h":8.976013}
+      ],
+      "minConfidence": null
+    },
+    "pagePair": [
+      2,
+      2
+    ],
+    "needsReview": false
+  },
+  {
+    "id": "931ba5020ede4696",
+    "kind": "replace",
+    "before": {
+      "kind": "boxes",
+      "text": "준다. 다만",
+      "boxes": [
+        {"page":2,"x":239.71199,"y":692.56,"w":9.792007,"h":10.367981},
+        {"page":3,"x":90.924,"y":798.596,"w":20.351997,"h":10.776001}
+      ],
+      "minConfidence": null
+    },
+    "after": {
+      "kind": "boxes",
+      "text": "낸다. 단",
+      "boxes": [
+        {"page":2,"x":240.216,"y":692.596,"w":8.975998,"h":10.776001},
+        {"page":3,"x":90.876,"y":798.596,"w":9.695999,"h":10.776001}
+      ],
+      "minConfidence": null
+    },
+    "pagePair": [
+      2,
+      2
+    ],
+    "needsReview": false
+  },
+  {
+    "id": "dca58d0db7126824",
+    "kind": "replace",
+    "before": {
+      "kind": "boxes",
+      "text": "갑의",
+      "boxes": [
+        {"page":3,"x":186.504,"y":776.392,"w":9.900009,"h":10.97998}
+      ],
+      "minConfidence": null
+    },
+    "after": {
+      "kind": "boxes",
+      "text": "을의",
+      "boxes": [
+        {"page":3,"x":186.28801,"y":776.332,"w":9.792007,"h":11.040039}
+      ],
+      "minConfidence": null
+    },
+    "pagePair": [
+      3,
+      3
+    ],
+    "needsReview": false
+  },
+  {
+    "id": "b3b30a1b63a3c18a",
+    "kind": "insert",
+    "before": {
+      "kind": "anchor",
+      "page": 3,
+      "x": 135.192,
+      "y": 754.296,
+      "h": 11.075989
+    },
+    "after": {
+      "kind": "boxes",
+      "text": "양측이",
+      "boxes": [
+        {"page":3,"x":139.032,"y":754.236,"w":30.240005,"h":11.135986}
+      ],
+      "minConfidence": null
+    },
+    "pagePair": [
+      null,
+      3
+    ],
+    "needsReview": false
+  }
+]

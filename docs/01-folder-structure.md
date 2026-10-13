@@ -62,8 +62,11 @@ project-root/
 │  │  ├─ retry.rs              # 재시도(1·2·4초, retry-after)와 HTTP 상태 → 오류 코드
 │  │  ├─ http.rs, http/tests.rs # 전송 trait와 reqwest(native-tls) 어댑터, 로컬 mock 서버 테스트
 │  │  ├─ key.rs, error.rs, usage.rs # ApiKey(Debug 가림·형식 검사), API 오류 코드, 사용 토큰
+│  │  ├─ runner.rs, runner/    # 실행기(run_translation): 이어하기로 남은 묶음만 보내기·취소(cancel.rs)·쪽별 결과(arrange.rs)
+│  │  ├─ progress.rs           # 진행 이벤트(3단계 가중치·1% 단위·정수 내림)
+│  │  ├─ record.rs, record_key.rs # 이어하기 기록 파일(임시 파일 + rename·20개 상한)과 문단 키·기록 키
 │  │  └─ script.rs, per_mille.rs # 글자 갈래(한자·라틴) 판정, 천분율 비율 상수
-│  └─ tests/                   # 묶음·예상치·언어 감지·용어집, 요청 golden(golden/)·응답 검증·재시도(가짜 전송)·키 보호(cargo test -p translate, pdfium·네트워크 없이)
+│  └─ tests/                   # 묶음·예상치·언어 감지·용어집, 요청 golden(golden/)·응답 검증·재시도(가짜 전송)·키 보호, 문단 키·기록 키·실행기(진행·취소·이어하기·기록)(cargo test -p translate, pdfium·네트워크 없이)
 │
 ├─ src-tauri/                  # 어댑터: Tauri 셸
 │  ├─ src/
@@ -133,7 +136,7 @@ project-root/
 | 위치                | 역할                         | 예시                              |
 | ------------------- | ---------------------------- | --------------------------------- |
 | `crates/pdf-core`   | 처리 규칙 (도메인)           | 병합, 회전 정규화, TIFF 변환      |
-| `crates/translate`  | 번역 규칙·API 클라이언트     | 묶음·예상치, 요청·응답 검증·재시도 |
+| `crates/translate`  | 번역 규칙·API 클라이언트·실행기 | 묶음·예상치, 요청·응답 검증·재시도, 이어하기 기록 |
 | `src-tauri`         | 커맨드·경로 검증·작업 큐     | `merge_pdfs`, `open_files`        |
 | `renderer/shared`   | 공통 유틸·UI·플랫폼 어댑터   | `DesktopPlatform`, 바인딩         |
 | `renderer/entities` | 읽기·표시                    | 병합 계획 스토어, 진행 오버레이   |

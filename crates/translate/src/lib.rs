@@ -10,9 +10,13 @@ mod key;
 mod language;
 mod models;
 mod per_mille;
+mod progress;
+mod record;
+mod record_key;
 mod request;
 mod response;
 mod retry;
+mod runner;
 mod script;
 mod source;
 mod usage;
@@ -31,7 +35,13 @@ pub use http::{
 pub use key::{ApiKey, InvalidApiKey};
 pub use language::{DetectedLanguage, Language, detect_language};
 pub use models::{ModelSpec, Thinking, TranslateModel};
+pub use progress::{ProgressReporter, TranslateProgress, TranslateStage};
+pub use record_key::{TranslationOptions, paragraph_key};
 pub use request::PROMPT_VERSION;
 pub use response::ScanParagraph;
+pub use runner::{
+    PageFailure, PageKind, ParagraphStatus, RunError, ScanRenderer, TranslatedPage,
+    TranslatedParagraph, TranslationJob, TranslationOutput, run_translation,
+};
 pub use source::{ScanImage, SourcePage, SourcePageContent, SourceParagraph};
 pub use usage::TokenUsage;

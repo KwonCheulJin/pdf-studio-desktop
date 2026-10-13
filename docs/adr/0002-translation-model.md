@@ -1,7 +1,7 @@
 # ADR 0002. 번역 결과 모델(`TranslationResult`)과 Messages API 요청 규칙
 
 - 상태: 채택 (2026-10-13, Step 35 / 계획서 P6-0, §9.1.9 Q1~Q17, §11 D18~D28). 응답 형식은 Step 35에서 공식 문서를 확인한 뒤 사용자가 Q13을 C(structured outputs, 두 모델 통일)로 다시 정했다(2026-10-13, §5). Sonnet 5.5가 도구 강제를 400으로 거부하기 때문이다.
-- 코드(쓸 곳): 문단 추출은 `crates/pdf-core/src/paragraphs.rs`, 번역 규칙은 새 크레이트 `crates/translate`(`models.rs` 모델 표, `chunk.rs` 묶음·예상치, `request.rs`·`response.rs` 요청·응답, `client.rs` 묶음 보내기·나눠 다시, `retry.rs` 재시도·상태 짝, `http.rs` 전송 trait·reqwest 어댑터, `key.rs` `ApiKey`, `error.rs` API 오류 코드, `runner.rs` 실행기, `record.rs` 이어하기 기록), 어댑터는 `src-tauri/src/translate.rs`·`secrets.rs`, 계약 미러는 `src-tauri/src/contract.rs`
+- 코드(쓸 곳): 문단 추출은 `crates/pdf-core/src/paragraphs.rs`, 번역 규칙은 새 크레이트 `crates/translate`(`models.rs` 모델 표, `chunk.rs` 묶음·예상치, `request.rs`·`response.rs` 요청·응답, `client.rs` 묶음 보내기·나눠 다시, `retry.rs` 재시도·상태 짝, `http.rs` 전송 trait·reqwest 어댑터, `key.rs` `ApiKey`, `error.rs` API 오류 코드, `runner.rs`·`runner/` 실행기·취소·결과 조립, `progress.rs` 진행, `record.rs` 이어하기 기록, `record_key.rs` 문단 키·기록 키), 어댑터는 `src-tauri/src/translate.rs`·`secrets.rs`, 계약 미러는 `src-tauri/src/contract.rs`
 - 관련: 계획서 §9.1(범위·아키텍처·계약·보안·테스트·화면), ADR 0001 §8(추출 글자)·§9(하이픈)·§15(진행 공식·pdfium 잠금)·§16(커맨드 관례)
 
 ## 맥락
@@ -278,6 +278,12 @@ HTTP 200 응답만 여기로 온다(그 밖은 §7). 사용량은 모든 200 응
 - `target`·`edited`는 둘 다 `string | null`이고 적어도 하나는 있다. `edited`가 있으면 상태는 `edited`이고 화면 글은 `edited`다. 실패한 문단을 직접 고치면 `target: null, edited: "…"`다.
 - `usage`는 이 기록에 대해 지금까지 쓴 토큰의 누적(모든 실행과 다시 번역)이다. 취소로 끊긴 요청의 사용량은 알 수 없어 넣지 않는다.
 - 키와 문서 원문(텍스트 쪽)은 담지 않는다. 스캔 쪽 `source`는 Claude가 받아 적은 글이라 다시 만들 수 없어 담는다.
+- **Step 40 구현에서 정한 것**(`record.rs`·`record_key.rs`):
+  - 기록 폴더는 실행기 인자(`TranslationJob.record_dir`)다. `app_data_dir/translations`로 정하는 것은 Step 41이다. 문단 키는 `paragraph_key(page, number, text)`, 기록 키는 `TranslationOptions::record_key()`이고, ⑤는 `include_scan_pages && document_has_scan_pages`다(문서 전체에 스캔 쪽이 있는지는 부르는 쪽이 넘긴다).
+  - 임시 파일은 같은 폴더의 `.record-<기록 키>-<pid>-<nanos>-<순번>.tmp`(`create_new`)이고, 쓰고 `sync_all`한 뒤 닫고 rename한다. 실패하면 임시 파일을 지운다. 상한은 폴더의 `.json` 파일만 세고 방금 쓴 기록은 지우지 않는다.
+  - 읽기에서 `target`·`edited`가 둘 다 없는 문단은 버리고, 그런 문단이 든 스캔 쪽은 쪽째 버린다(그 쪽은 다시 보낸다). `scanPages` 키가 쪽 번호가 아니면 JSON이 맞지 않는 것으로 보고 기록 전체를 버린다.
+  - "문단이 하나도 끝나지 않았다" = 기록에 문단도 스캔 쪽도 없다(글이 없는 스캔 쪽 `[]`도 끝난 쪽이다). 기록이 비지 않았으면 보낸 묶음이 끝날 때마다 쓴다(실패·거절만 나온 묶음도 사용량이 늘어 쓴다).
+  - API 오류로 멈춘 묶음에서 받은 200 응답의 사용량(나눈 요청 중 끝난 것)은 메모리의 기록에 더하지만 파일은 쓰지 않는다. 기록은 묶음이 끝날 때만 쓴다.
 
 ### 9. 진행 단계 (Step 40)
 
@@ -295,6 +301,14 @@ HTTP 200 응답만 여기로 온다(그 밖은 §7). 사용량은 모든 200 응
 - 범위 오류는 이벤트 없이 `INVALID_RANGE`다. 키가 없으면 이벤트 없이 `API_KEY_MISSING`이다.
 - **취소:** 묶음 사이, 요청을 기다리는 동안(전송 future와 취소 토큰을 함께 기다려 취소면 요청을 버리고 연결을 끊는다), 재시도 대기 중에 본다. 결과는 `CANCELLED`다. 끝난 묶음은 이미 기록에 있다. 끊긴 요청의 사용량은 더하지 않는다.
 - 스캔 쪽 렌더는 그 묶음을 보내기 직전에 pdfium 잠금 안에서 하고, 전송은 잠금 밖이다(ADR 0001 §15).
+- **Step 40 구현에서 정한 것**(`runner.rs`·`progress.rs`):
+  - 실행기 `run_translation(job, transport, key, renderer, reporter, cancel)`은 이미 추출한 범위 쪽(`SourcePage`)을 받는다(translate는 pdf-core를 모른다). 스캔 쪽 그림은 `ScanRenderer` trait로 보내기 직전에 받는다. 결과 `TranslationOutput`은 범위 안 쪽만 담고(`OutOfRange` 쪽은 문서 쪽 수를 아는 Step 41이 채운다), `usage`는 기록 누적이다.
+  - `readDocument`: 부르는 쪽(Step 41)이 검사(범위·원문 언어·번역할 것·키)를 통과한 뒤 `ProgressReporter::read_document_started(범위 쪽 수)`로 0%(문단 수·사용량 0)를 내고 문단 추출·파일 해시를 한다. 100%는 실행기가 기록을 읽은 뒤 낸다(이때부터 문단 수를 싣는다). 추출에는 쪽 단위 진행이 없어 추출 캐시 적중이든 아니든 0%·100% 두 이벤트다.
+  - `translate`: 첫 이벤트는 이어하기로 끝난 묶음 수를 `done`에 담는다. 남은 항목만 담은 텍스트 묶음은 원래 묶음의 용어집·예상치(`max_tokens`)를 그대로 쓴다(보낼 때 그 항목에 나오는 용어만 싣는다, §6 Step 39). `arrange`: 쪽 하나를 만들 때마다 알리고, 100%는 쓴 용어(`glossary_used`)까지 만든 뒤 낸다.
+  - 긴 문단: 조각이 모두 끝나야 문단이 정해진다. 조각이 모두 번역이면 공백 하나로 잇고, 아니면 문서 순서로 처음 실패한 조각의 상태(실패 사유·거절)다.
+  - 취소 토큰은 `src-tauri` 작업 등록과 같은 `AtomicBool`이다. 묶음을 보내기 전에 보고, 렌더·요청·재시도 대기를 기다리는 동안 `CANCEL_POLL_INTERVAL`(50ms)마다 본다. 취소면 기다리던 future를 버린다(연결이 끊긴다). 일과 취소가 함께 준비되면 끝난 일을 받는다. 결과는 `RunError::Cancelled`다.
+  - 취소로 버린 묶음은 나눈 요청 중 이미 받은 200 응답의 사용량도 잃는다. Step 39가 남긴 "진행 중 사용량을 밖으로 받는 길"은 두지 않았다: 취소는 결과·이벤트 없이 `CANCELLED`로 끝나 그 값을 쓸 곳이 없다(위 "끊긴 요청의 사용량은 더하지 않는다"와 같은 한계).
+  - 스캔 쪽 그림을 만들지 못하면 작업을 멈춘다(`RunError::Render`, 렌더러의 오류를 그대로 담는다. Step 41이 pdf-core 오류 코드로 짝짓는다). 끝난 묶음은 기록에 있다.
 
 ### 10. 커맨드와 계약 타입 (Step 41)
 

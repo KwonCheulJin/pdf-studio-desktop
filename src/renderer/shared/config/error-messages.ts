@@ -20,6 +20,8 @@ const ERROR_MESSAGES: Record<PlatformErrorCode, string> = {
     "PDF 처리 엔진을 불러오지 못했습니다. 앱을 다시 시작해 주세요.",
   NOT_READY: "앱이 아직 준비되지 않았습니다. 잠시 후 다시 시도해 주세요.",
   TASK_FAILED: "작업을 처리하지 못했습니다.",
+  RESOURCE_UNAVAILABLE:
+    "앱에 함께 들어 있는 파일을 읽지 못했습니다. 앱을 다시 설치해 주세요.",
   NOT_FOUND: "파일을 찾을 수 없습니다. 옮겨졌거나 지워졌습니다.",
   FILE_UNREADABLE: "파일을 읽을 수 없습니다.",
   INPUT_TOO_LARGE: "파일이 너무 커서 열 수 없습니다.",

@@ -13,7 +13,7 @@ import type { NativeFileDropEvent } from "../src/renderer/shared/platform";
 
 /**
  * 창 밖에서 끌어온 파일 추가(계획서 P0-6 B2·B8).
- * - B2: 빈 화면에 TIFF를 놓으면 `openFiles`가 PDF로 바꾼 결과(`pdfPath`)로 병합한다.
+ * - B2: 첫 화면(홈)의 병합 카드에 TIFF를 놓으면 `openFiles`가 PDF로 바꾼 결과(`pdfPath`)로 병합한다.
  *   mock도 Rust처럼 병합 소스는 PDF만 받으므로 TIFF 경로를 보내면 병합이 실패한다.
  * - B8: 놓은 파일의 원본 회전(`/Rotate`)이 스토어(썸네일 회전)와 병합 요청에 들어간다.
  */
@@ -110,6 +110,22 @@ async function dropAt(
   await dropFiles(page, { type: "drop", paths, position });
 }
 
+interface Point {
+  x: number;
+  y: number;
+}
+
+/** 홈의 "PDF 병합" 카드 가운데(CSS 픽셀) */
+async function mergeCardCenter(page: Page): Promise<Point> {
+  const box = await page
+    .getByRole("region", { name: "PDF 병합", exact: true })
+    .boundingBox();
+  if (!box) {
+    throw new Error("병합 카드가 화면에 없습니다.");
+  }
+  return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+}
+
 function documentCard(page: Page, file: E2eMockFile): Locator {
   return page.getByRole("button", {
     name: `${file.displayName} 문서`,
@@ -136,15 +152,14 @@ async function readThumbnailRotation(card: Locator): Promise<number> {
   return Number(match?.[1]);
 }
 
-test("빈 화면에 TIFF를 놓으면 변환된 PDF로 추가되고 그 PDF로 병합된다(B2)", async ({
+test("홈 병합 카드에 TIFF를 놓으면 변환된 PDF로 추가되고 그 PDF로 병합된다(B2)", async ({
   page
 }) => {
   await openEmptyWorkspace(page, [TIFF_FILE]);
 
   await dropAt(page, {
     paths: [TIFF_FILE.path],
-    x: VIEWPORT.width / 2,
-    y: VIEWPORT.height / 2
+    ...(await mergeCardCenter(page))
   });
 
   await expect(documentCard(page, TIFF_FILE)).toBeVisible();
@@ -163,16 +178,15 @@ test("빈 화면에 TIFF를 놓으면 변환된 PDF로 추가되고 그 PDF로 �
   ]);
 });
 
-test("놓은 파일의 원본 회전은 빈 화면·그리드 어디에 놓아도 스토어와 병합 요청에 들어간다(B8)", async ({
+test("놓은 파일의 원본 회전은 홈 카드·그리드 어디에 놓아도 스토어와 병합 요청에 들어간다(B8)", async ({
   page
 }) => {
   await openEmptyWorkspace(page, [ROTATED_FILE, PLAIN_FILE]);
 
-  // 빈 화면에 놓기(useDroppedFiles)
+  // 홈 병합 카드에 놓기(빈 병합 화면에 놓기는 app-mode.spec.ts)
   await dropAt(page, {
     paths: [ROTATED_FILE.path],
-    x: VIEWPORT.width / 2,
-    y: VIEWPORT.height / 2
+    ...(await mergeCardCenter(page))
   });
   const rotatedCard = documentCard(page, ROTATED_FILE);
   await expect(rotatedCard).toBeVisible();

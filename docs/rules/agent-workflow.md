@@ -5,7 +5,7 @@
 ## Step 자율 진행 (진행 가이드 `docs/plans/2026-10-step-guide.md`)
 
 - **골격 구간(Step 1~15, Tauri·FSD 마이그레이션 완료까지):** 계획 확인 없이 진행하고, 커밋·PR 생성·병합(`gh pr merge --merge --delete-branch`)까지 승인 없이 한다. 기존 lint·test 실패는 병합을 막지 않는다. 단, 이 Step에서 새로 생긴 lint·typecheck 오류와 새로 깨진 테스트는 고친 뒤 병합한다.
-- **Step 16 이후:** `pnpm validate`(+ `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`)가 **모두 통과할 때만** 승인 없이 커밋·PR·병합한다. 하나라도 실패하면 병합하지 않고 보고한다.
+- **Step 16 이후:** `pnpm validate`(+ `pnpm test:e2e`, `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`)가 **모두 통과할 때만** 승인 없이 커밋·PR·병합한다. 하나라도 실패하면 병합하지 않고 보고한다. 프론트(`src/renderer`, `e2e/`, `index.html`, Vite·Playwright 설정)를 건드리지 않은 Rust·문서 전용 Step은 `pnpm test:e2e`를 건너뛸 수 있다.
 - **멈추고 보고하는 경우:** Step 8 pdfium 스파이크 실패(게이트), 계획서와 다르게 가야 하는 설계 결정, 되돌리기 어려운 작업(번들 ID 변경, 사용자 데이터·원격 이력 삭제), 병합 충돌.
 - 한 Step = 브랜치 하나 = PR 하나. 끝나면 진행 가이드의 체크박스를 같은 PR에서 체크하고, 다음 Step은 최신 `main`에서 시작한다.
 - 커밋 단위는 진행 가이드를 따른다.

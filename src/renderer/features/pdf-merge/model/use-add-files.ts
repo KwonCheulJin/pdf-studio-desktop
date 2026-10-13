@@ -54,7 +54,8 @@ function useOpenPaths(): OpenPaths {
 }
 
 interface UseAddFilesResult {
-  handleAddFiles: () => Promise<void>;
+  /** 작업 공간에 넣은 문서 수. 다이얼로그를 취소했거나 모두 열지 못하면 0 */
+  handleAddFiles: () => Promise<number>;
 }
 
 /**
@@ -76,11 +77,13 @@ export function useAddFiles(): UseAddFilesResult {
         error: toPlatformError(error),
         context: "파일 선택 다이얼로그 실패"
       });
-      return;
+      return 0;
     }
-    if (filePaths.length === 0) return;
+    if (filePaths.length === 0) return 0;
 
-    addFiles(await openPaths(filePaths));
+    const documents = await openPaths(filePaths);
+    addFiles(documents);
+    return documents.length;
   }, [addFiles, openPaths]);
 
   return { handleAddFiles };
@@ -92,10 +95,10 @@ export interface AddDroppedFilesParams {
   targetPageId: string | null;
 }
 
-/** 창에 드롭한 파일을 열어 드롭한 자리에 넣는다. */
+/** 창에 드롭한 파일을 열어 드롭한 자리에 넣는다. 넣은 문서 수를 돌려준다. */
 export function useAddDroppedFiles(): (
   params: AddDroppedFilesParams
-) => Promise<void> {
+) => Promise<number> {
   const addFiles = useMergeStore((state) => state.addFiles);
   const insertFileAtPosition = useMergeStore(
     (state) => state.insertFileAtPosition
@@ -106,11 +109,13 @@ export function useAddDroppedFiles(): (
     async ({ paths, targetPageId }) => {
       const documents = await openPaths(paths);
       addFiles(documents);
-      if (targetPageId === null) return;
-      // 같은 페이지 앞에 차례로 넣으면 드롭한 순서가 유지된다.
-      for (const document of documents) {
-        insertFileAtPosition({ fileId: document.id, targetPageId });
+      if (targetPageId !== null) {
+        // 같은 페이지 앞에 차례로 넣으면 드롭한 순서가 유지된다.
+        for (const document of documents) {
+          insertFileAtPosition({ fileId: document.id, targetPageId });
+        }
       }
+      return documents.length;
     },
     [addFiles, insertFileAtPosition, openPaths]
   );

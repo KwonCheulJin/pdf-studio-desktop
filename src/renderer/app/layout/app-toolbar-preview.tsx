@@ -17,6 +17,7 @@ import {
   DialogTitle
 } from "@/renderer/shared/ui";
 import { getPlatform, LOG_LEVEL } from "@/renderer/shared/platform";
+import { ModeTabs } from "./mode-tabs";
 
 export function AppToolbarPreview() {
   const mergedDocument = useMergedDocument();
@@ -70,25 +71,32 @@ export function AppToolbarPreview() {
   return (
     <>
       <header className="border-border bg-card flex h-16 shrink-0 items-center justify-between border-b px-6">
-        <Tooltip content="작업 공간으로 돌아가기" side="right">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleRequestBack}
-            aria-label="작업 공간으로 돌아가기"
-          >
-            <ArrowLeft size={24} />
-          </Button>
-        </Tooltip>
+        <div className="flex flex-1 items-center gap-2">
+          <div className="mr-2">
+            <ModeTabs />
+          </div>
+          <Tooltip content="작업 공간으로 돌아가기" side="right">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleRequestBack}
+              aria-label="작업 공간으로 돌아가기"
+            >
+              <ArrowLeft size={24} />
+            </Button>
+          </Tooltip>
+        </div>
         <span className="text-foreground text-sm font-semibold">
           병합 결과 미리보기
         </span>
-        <Tooltip content="병합된 PDF 저장">
-          <Button onClick={handleDownload} disabled={!mergedDocument}>
-            <Download size={18} />
-            <span>다운로드</span>
-          </Button>
-        </Tooltip>
+        <div className="flex flex-1 justify-end">
+          <Tooltip content="병합된 PDF 저장">
+            <Button onClick={handleDownload} disabled={!mergedDocument}>
+              <Download size={18} />
+              <span>다운로드</span>
+            </Button>
+          </Tooltip>
+        </div>
       </header>
 
       <Dialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>

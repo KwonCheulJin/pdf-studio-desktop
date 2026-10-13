@@ -24,8 +24,14 @@ project-root/
 ├─ vite.config.ts              # 렌더러 빌드 (dev 서버 1420, dist/ 출력)
 ├─ vitest.config.mts
 ├─ index.html
+├─ docs/                       # 계획서(plans/), 규칙(rules/), 결정 기록(adr/)
+├─ LICENSE                     # MIT (앱 번들에도 넣는다)
+├─ THIRD_PARTY_NOTICES.md      # 제3자 고지 (pnpm licenses:generate 생성물, 앱 번들에 넣는다)
 ├─ scripts/
 │  ├─ fetch-pdfium.mjs         # 버전 고정 pdfium 받기 (src-tauri/pdfium/<target>/, gitignore)
+│  ├─ generate-notices.mjs     # THIRD_PARTY_NOTICES.md 생성 (pnpm licenses:generate)
+│  ├─ check-licenses.mjs       # 허용 목록 밖 라이선스·낡은 고지면 실패 (pnpm licenses:check)
+│  ├─ third-party/             # 의존성 수집, 허용 목록·예외(policy.mjs), 번들 자산 고정 목록
 │  └─ release.mjs
 │
 ├─ crates/pdf-core/            # 도메인: Tauri 의존 없음
@@ -33,10 +39,12 @@ project-root/
 │  │  ├─ engine.rs             # pdfium 라이브러리 경로 결정(PDFIUM_LIB_PATH 우선)과 바인딩
 │  │  ├─ document.rs           # 문서 열기, 에러 타입
 │  │  ├─ info.rs               # 페이지 수·크기·회전 정규화
+│  │  ├─ compare.rs, compare/  # PDF 비교(결과 모델·추출·토큰화·diff·리포트 내보내기 규칙은 ADR 0001)
+│  │  ├─ ocr/                  # 스캔 쪽 OCR(렌더·검출·인식, 런타임 경로, 디스크 캐시). 비교 연결은 compare/pipeline.rs(ADR 0001 §11)
 │  │  ├─ merge.rs, merge/      # 병합(회전 절대값), 진행률
 │  │  ├─ tiff.rs, tiff/        # TIFF → PDF (CCITT 포함)
 │  │  └─ output.rs             # 원자적 쓰기(임시 파일 + rename)
-│  └─ tests/                   # 통합 테스트, fixtures/
+│  └─ tests/                   # 통합 테스트, fixtures/(생성 스크립트 포함), golden/(비교 엔진 기대 JSON)
 │
 ├─ src-tauri/                  # 어댑터: Tauri 셸
 │  ├─ src/
@@ -47,6 +55,7 @@ project-root/
 │  │  ├─ files.rs, merge.rs    # 파일 열기, 병합 처리(경로 검증 후 pdf-core 위임)
 │  │  ├─ jobs.rs               # 작업 ID·취소 토큰
 │  │  ├─ pdf_engine.rs         # 번들 pdfium 바인딩, 엔진을 앱 상태로
+│  │  ├─ notices.rs            # 번들한 제3자 고지 읽기(리소스 폴더 고정 파일)
 │  │  └─ error.rs              # 커맨드 에러 → { code, message, path }
 │  ├─ capabilities/            # main 창 권한
 │  ├─ icons/
@@ -54,20 +63,25 @@ project-root/
 │  └─ tauri.conf.json
 │
 └─ src/renderer/               # 화면: React 19 + FSD
-   ├─ app/                     # 부팅, 프로바이더(플랫폼 주입), 레이아웃, 전역 스타일
+   ├─ app/                     # 부팅, 프로바이더(플랫폼 주입), 레이아웃, 전역 스타일, 모드 스토어
    │  ├─ index.tsx
-   │  ├─ layout/               # app-shell, 툴바, 상태바
+   │  ├─ layout/               # app-shell(모드별 화면), 툴바·모드 탭(mode-tabs), 상태바
+   │  ├─ model/                # 앱 모드 home|merge|compare (라우터 없음)
    │  ├─ providers/            # 플랫폼·오류 보고 주입, 테마 적용(theme-provider), 오류 경계
    │  └─ styles/               # index.css, tokens.css, theme.css, base.css
    ├─ pages/
+   │  ├─ home/                 # 첫 화면: 작업 고르기 카드(병합·비교), 카드 위 드롭
+   │  ├─ compare/              # 비교 화면(지금은 A·B 자리표시)
    │  └─ merged-preview/       # 병합 결과 미리보기 화면
    ├─ widgets/
    │  └─ merge-workspace/      # 병합 작업 영역 조합
    ├─ features/                # 사용자 행동
    │  ├─ pdf-merge/            # 파일 추가·선택·회전·병합·다운로드
+   │  ├─ pdf-compare/          # 비교 세션(A·B 문서), 비교할 파일 받기
    │  ├─ pdf-preview/          # 미리보기 모달
    │  ├─ theme-toggle/         # 테마 system|light|dark 선택·저장
-   │  └─ error-reporting/      # 오류 보고 켜기·끄기, 첫 실행 안내
+   │  ├─ error-reporting/      # 오류 보고 켜기·끄기, 첫 실행 안내
+   │  └─ third-party-notices/  # 앱 정보: 상태 바에서 제3자 고지 대화상자 열기
    ├─ entities/                # 읽기·표시
    │  └─ merge-plan/           # 병합 대상 문서·페이지 상태(merge-store), 진행 오버레이
    └─ shared/                  # 도메인을 모른다

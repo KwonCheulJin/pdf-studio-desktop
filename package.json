@@ -20,7 +20,10 @@
     "dev:web": "vite",
     "build:web": "vite build",
     "tauri": "tauri",
-    "fetch:pdfium": "node scripts/fetch-pdfium.mjs"
+    "fetch:pdfium": "node scripts/fetch-pdfium.mjs",
+    "fetch:ocr": "node scripts/fetch-ocr.mjs",
+    "licenses:generate": "node scripts/generate-notices.mjs",
+    "licenses:check": "node scripts/check-licenses.mjs"
   },
   "keywords": [],
   "author": {

@@ -1,0 +1,38 @@
+[
+  {
+    "id": "83ddcf194ad5ed09",
+    "kind": "delete",
+    "before": {
+      "text": "제2조(계약 기간) 계약 기간은 2026년 1월 1일부터 2026년 12월 31일까지로 한다.",
+      "boxes": [
+        {"page":0,"x":60.42,"y":734.296,"w":244.96797,"h":11.075989},
+        {"page":0,"x":60.828,"y":712.296,"w":153.26399,"h":11.075989}
+      ],
+      "minConfidence": null
+    },
+    "after": null,
+    "pagePair": [
+      0,
+      null
+    ],
+    "needsReview": false
+  },
+  {
+    "id": "ff59f5e723c77631",
+    "kind": "insert",
+    "before": null,
+    "after": {
+      "text": "제2조(계약 기간) 계약 기간은 2026년 1월 1일부터 2026년 12월 31일까지로 한다.",
+      "boxes": [
+        {"page":1,"x":60.42,"y":734.296,"w":244.96797,"h":11.075989},
+        {"page":1,"x":60.828,"y":712.296,"w":153.26399,"h":11.075989}
+      ],
+      "minConfidence": null
+    },
+    "pagePair": [
+      null,
+      1
+    ],
+    "needsReview": false
+  }
+]

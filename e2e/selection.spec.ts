@@ -95,7 +95,7 @@ async function openWorkspace(page: Page): Promise<void> {
     window.__E2E_MOCK_SEED__ = { files };
   }, SEED_FILES);
   await page.goto("/");
-  await page.getByRole("button", { name: "파일 선택" }).click();
+  await page.getByRole("button", { name: "파일 선택", exact: true }).click();
   await expect(page.getByTestId("document-card")).toHaveCount(
     SEED_FILES.length
   );
@@ -398,7 +398,7 @@ test("카드를 집은 채로 전체 삭제해도 파일을 다시 넣으면 선
   await page.getByRole("button", { name: "전체 삭제" }).click();
   await expect(page.getByTestId("document-card")).toHaveCount(0);
 
-  await page.getByRole("button", { name: "파일 선택" }).click();
+  await page.getByRole("button", { name: "파일 선택", exact: true }).click();
   await expect(page.getByTestId("document-card")).toHaveCount(
     SEED_FILES.length
   );

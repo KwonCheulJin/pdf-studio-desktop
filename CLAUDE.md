@@ -53,7 +53,7 @@ pnpm tauri build                    # Tauri 빌드
 - 커밋 메시지는 `feat:`·`fix:`·`refactor:`·`docs:`·`chore:`·`test:` 접두어 + 한국어 요약이다. 병합은 `gh pr merge --merge --delete-branch`(merge commit).
 - `Co-Authored-By: Claude` 등 **AI 기여자 표시 절대 금지**
 - 공개(MIT) 레포다. 회사 코드·상수·문구·내부 정보를 코드·문서·커밋에 남기지 않는다(계획서 §1.1 클린룸). 의존성은 MIT/BSD/Apache-2.0/ISC/Zlib만, GPL/AGPL 금지.
-- 커밋 전 `pnpm validate`(+ `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`)를 통과시킨다.
+- 커밋 전 `pnpm validate`(+ 프론트 변경 시 `pnpm test:e2e`, `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`)를 통과시킨다.
 - 작업 완료 후 제거: `console.log`, `dbg!`, 미사용 변수/import, 주석 처리된 코드. `eslint-disable`·`#[allow(...)]` 남용 금지.
 
 ## 문서 지도
@@ -68,5 +68,6 @@ pnpm tauri build                    # Tauri 빌드
 | `docs/rules/typescript-react.md` | `src/renderer`의 TS/TSX 작성 |
 | `docs/rules/testing.md` | 테스트 작성·수정·삭제 |
 | `docs/06-design-system.md` | UI 토큰·FSD 세부 배치 |
+| `docs/resource/design/` | 화면 작업(Phase 3 이후). 시안 캡처 PNG이고, 정본 HTML은 로컬 `design-files/`(git 제외) |
 
 `docs/01-folder-structure.md`는 현재 폴더 배치다. `docs/04-ui-component-tree.md`·`docs/05-naming-conventions.md`는 전환 전에 쓴 문서라 다르면 계획서와 `docs/rules`가 우선한다. Tauri 커맨드 목록은 계획서 §5 P1-3 표와 생성 바인딩(`src/renderer/shared/api/bindings.ts`)이 정본이다.

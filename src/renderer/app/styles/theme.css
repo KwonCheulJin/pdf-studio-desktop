@@ -6,6 +6,7 @@
   --color-foreground: var(--foreground);
   --color-canvas: var(--canvas);
   --color-paper: var(--paper);
+  --color-paper-line: var(--paper-line);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
   --color-muted: var(--muted);
@@ -70,6 +71,8 @@
   --shadow-xl:
     0px 2px 3px 0px hsl(0 0% 0% / 0.16), 0px 8px 10px -1px hsl(0 0% 0% / 0.16);
   --shadow-2xl: 0px 2px 3px 0px hsl(0 0% 0% / 0.4);
+  --shadow-paper:
+    0px 0px 0px 1px rgba(0, 0, 0, 0.06), 0px 1px 2px 0px rgba(0, 0, 0, 0.12);
 
   --tracking-normal: -0.025em;
   --tracking-tighter: calc(var(--tracking-normal) - 0.05em);

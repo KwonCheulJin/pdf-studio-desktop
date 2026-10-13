@@ -23,7 +23,7 @@ use tiff::tags::{CompressionMethod, ResolutionUnit, Tag};
 use tiff::{TiffError, TiffUnsupportedError};
 
 use crate::document::{
-    DocumentError, MAX_INPUT_FILE_BYTES, classify_io_error, ensure_within_limit,
+    DocumentError, MAX_INPUT_FILE_BYTES, classify_io_error, ensure_within_limit, load_exclusively,
 };
 use crate::engine::PdfEngine;
 use crate::output::{SaveError, ensure_output_directory, save_atomically, unique_file_name};
@@ -262,8 +262,8 @@ fn append_ccitt_page(
     size: PageSize,
 ) -> Result<(), TiffConversionError> {
     let image = ccitt::read_image(decoder, page)?;
-    let source = pdfium
-        .load_pdf_from_byte_vec(ccitt::single_page_pdf(&image, size), None)
+    let bytes = ccitt::single_page_pdf(&image, size);
+    let source = load_exclusively(|| pdfium.load_pdf_from_byte_vec(bytes, None))
         .map_err(|source| pdfium_error(page.path, source))?;
     document
         .pages_mut()

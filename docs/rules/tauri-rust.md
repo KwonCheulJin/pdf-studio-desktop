@@ -1,6 +1,6 @@
 # Tauri·Rust 규칙
 
-언제 읽는가: `src-tauri`나 `crates/`를 고칠 때, Tauri 플러그인·권한·설정을 건드릴 때, pdfium을 다룰 때.
+언제 읽는가: `src-tauri`나 `crates/`를 고칠 때, Tauri 플러그인·권한·설정을 건드릴 때, pdfium·OCR 런타임을 다룰 때.
 
 ## Tauri 규칙
 
@@ -20,6 +20,7 @@
 - **경로·플랫폼:** TS는 `@tauri-apps/api/path`, Rust는 `PathBuf`만. 문자열로 `/`·`\`를 다루지 않는다. 단축키는 `isMac ? metaKey : ctrlKey`
 - **버전:** `tauri.conf.json`의 `version`은 `../package.json`을 가리킨다(단일 소스). <!-- docs-path-check: ignore -->
 - **pdfium:** 라이브러리 경로 결정은 `pdf-core` 한 곳에서. 개발·테스트는 `PDFIUM_LIB_PATH` 환경변수를 우선한다.
+- **ONNX Runtime·OCR 모델:** 경로 결정은 `pdf-core`(`ocr/runtime.rs`) 한 곳에서. 개발·테스트는 `ONNXRUNTIME_LIB_PATH`·`OCR_MODEL_DIR`을 우선한다.
 
 ## pdfium 준비와 Rust 테스트
 
@@ -27,6 +28,14 @@
 - `PDFIUM_LIB_PATH`는 폴더가 아니라 **라이브러리 파일 경로**다(`crates/pdf-core/src/engine.rs`). 비어 있으면 번들 폴더의 플랫폼별 파일(`libpdfium.dylib`/`pdfium.dll`/`libpdfium.so`)을 쓴다.
 - macOS arm64 예: `PDFIUM_LIB_PATH=$PWD/src-tauri/pdfium/aarch64-apple-darwin/libpdfium.dylib cargo test -p pdf-core`
 - `src-tauri/pdfium/` 안의 파일은 읽지 않는다(컨텍스트 낭비).
+
+## OCR 런타임·모델 준비 (계획서 §6.4)
+
+- `pnpm fetch:ocr`이 버전을 고정한 ONNX Runtime 동적 라이브러리를 `src-tauri/onnxruntime/<target-triple>/`에, PP-OCRv5 검출·한국어 인식 모델과 사전을 `src-tauri/ocr-models/`에 받고 SHA-256을 검증한다(`scripts/fetch-ocr.mjs`, 둘 다 gitignore). `--target <target-triple>`로 다른 플랫폼 것을 받는다.
+- 경로 결정은 `crates/pdf-core/src/ocr/runtime.rs` 한 곳에서 한다. `ONNXRUNTIME_LIB_PATH`는 **라이브러리 파일 경로**, `OCR_MODEL_DIR`은 모델 **폴더**이고, 비어 있으면 번들 폴더를 쓴다.
+- OCR 테스트(`crates/pdf-core/tests/ocr.rs`)는 두 환경변수가 없으면 건너뛴다. macOS arm64 예: `ONNXRUNTIME_LIB_PATH=$PWD/src-tauri/onnxruntime/aarch64-apple-darwin/libonnxruntime.dylib OCR_MODEL_DIR=$PWD/src-tauri/ocr-models PDFIUM_LIB_PATH=… cargo test -p pdf-core`
+- 측정 하네스: 같은 환경변수로 `cargo run --release -p pdf-core --example ocr_spike`. 픽스처는 `python3 crates/pdf-core/tests/fixtures/generate_ocr_fixtures.py`(fontTools·Pillow·`PDFIUM_LIB_PATH` 필요)로 다시 만든다.
+- `src-tauri/onnxruntime/`·`src-tauri/ocr-models/` 안의 파일은 읽지 않는다.
 
 ## Rust 규칙
 
@@ -36,4 +45,5 @@
 - 공개 API(`pub`)는 최소로 하고 나머지는 `pub(crate)`.
 - 명명: 함수·변수 `snake_case`, 타입·트레이트 `PascalCase`, 상수 `UPPER_SNAKE_CASE`. 축약 금지는 TS와 같다.
 - 의존성은 계획서 §1.2 라이선스 화이트리스트(MIT/BSD/Apache-2.0/ISC/Zlib) 안에서만 고른다. GPL/AGPL 금지
+- 의존성(Rust·npm)이나 번들 바이너리를 바꾸면 `pnpm licenses:generate`로 `THIRD_PARTY_NOTICES.md`를 다시 만들고 `pnpm licenses:check`를 통과시킨다. 둘 다 pdfium 원문을 `src-tauri/pdfium/aarch64-apple-darwin/`에서 읽으므로 다른 OS에서는 `node scripts/fetch-pdfium.mjs --target aarch64-apple-darwin`을 먼저 돌린다. 허용 목록 밖이 나오면 계획서 §1.2 예외 표와 `scripts/third-party/policy.mjs`를 근거와 함께 고친다
 - `#[allow(...)]` 남용 금지

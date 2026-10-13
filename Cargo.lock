@@ -5157,6 +5157,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "translate"
+version = "0.1.0"
+dependencies = [
+ "unicode-normalization",
+]
+
+[[package]]
 name = "tray-icon"
 version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

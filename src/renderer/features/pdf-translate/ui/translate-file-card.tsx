@@ -7,6 +7,7 @@ import {
 import type { TranslationPlan } from "@/renderer/shared/api/bindings";
 import { formatFileSize } from "@/renderer/shared/lib/format-file-size";
 import { useRenderedPage } from "@/renderer/shared/lib/pdfjs";
+import { cn } from "@/renderer/shared/lib/utils";
 import { TRANSLATE_THUMBNAIL_RENDER } from "../config/translate-files";
 import {
   TRANSLATE_OPTIONS_TEXT,
@@ -104,9 +105,12 @@ export function TranslateFileCard() {
     <section
       ref={cardRef}
       aria-label="번역할 문서"
-      className={`bg-card border-border flex items-center gap-5 rounded-xl border px-6 py-5 transition-shadow ${
-        isDropTarget ? "ring-primary ring-2" : ""
-      }`}
+      className={cn(
+        "bg-card border-border flex items-center gap-5 rounded-xl border px-6 py-5 transition-shadow",
+        // 비어 있으면 왼쪽 열의 남는 높이를 채운다(번역 옵션 카드는 열 아래에 붙는다)
+        !file && "grow items-stretch",
+        isDropTarget && "ring-primary ring-2"
+      )}
     >
       {file ? (
         <>

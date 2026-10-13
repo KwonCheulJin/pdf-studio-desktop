@@ -572,6 +572,9 @@ pub(crate) fn edit<T>(
 }
 
 #[cfg(test)]
+mod live_check;
+
+#[cfg(test)]
 mod tests {
     use std::sync::atomic::AtomicBool;
 
@@ -726,7 +729,7 @@ mod tests {
 
     /// 고르지 않은 파일은 문서를 읽기 전에 거부한다. 계획은 문서 전체 쪽 수(글자층·스캔)와 범위 쪽·문단·묶음을
     /// 세고 전송을 부르지 않는다. 묶음: 스캔 쪽을 보내면 스캔 쪽이 텍스트 묶음을 끊어 0쪽 · 1쪽(스캔) · 2쪽 셋,
-    /// 0쪽만이면 하나(문단 15개 글 토큰 531 + 고정 600 < 2,500, Python으로 셈).
+    /// 0쪽만이면 하나(문단 15개 글 토큰 531 + 고정 1,100 < 2,500, Python으로 셈).
     #[test]
     fn plan_counts_the_document_and_range_without_calling_the_api() {
         let setup = Setup::new("translate-plan");
@@ -809,7 +812,7 @@ mod tests {
 
     /// 범위 밖 쪽은 `outOfRange`로 채워 결과가 문서 전체 쪽(색인 = 쪽 번호)이다. 기록 키의 스캔 옵션은 범위가 아니라
     /// 문서에 스캔 쪽이 있는지로 정한다(0쪽만 보내도 문서 1쪽이 스캔이라 `1`). 기대 기록 키는 Python `hashlib`로
-    /// 셈한 값이다(픽스처 SHA-256, `zh`, `claude-sonnet-5-5`, 빈 용어집, `1`, `PROMPT_VERSION` `1`).
+    /// 셈한 값이다(픽스처 SHA-256, `zh`, `claude-sonnet-5-5`, 빈 용어집, `1`, `PROMPT_VERSION` `2`).
     #[test]
     fn result_covers_every_page_and_keys_the_record_by_the_whole_document() {
         let setup = Setup::new("translate-result");
@@ -821,7 +824,7 @@ mod tests {
         );
 
         let result = translated.result.expect("translated");
-        assert_eq!(result.record_id, "637c42de9c23a11ea2ba47f4acf22631");
+        assert_eq!(result.record_id, "3075cd9e0ff6344fb7376300b6d0d278");
         assert_eq!(result.path, setup.path);
         assert_eq!(result.language, DetectedLanguage::ZhHans);
         let kinds: Vec<PageKind> = result.pages.iter().map(|page| page.kind).collect();

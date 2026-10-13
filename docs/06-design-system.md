@@ -39,6 +39,7 @@
 | `paper-line` | `oklch(0.88 0.006 285)` | 같음 | **추가**(Step 24), 종이(`paper`) 위 그림 속 글줄. 종이가 두 테마 모두 흰색이라 값도 같다 |
 | `card` | `oklch(1 0 0)` | `oklch(0.245 0.009 285)` | 값 변경 |
 | `card-foreground` | = `foreground` | = `foreground` | |
+| `card-inset` | `oklch(0.975 0.003 285)` | `oklch(0.26 0.009 285)` | **추가**(Step 25), 카드 안에 들어간 옅은 면(파일 슬롯 바탕, 표 머리). 다크 값은 아래 주석 |
 | `muted` | `oklch(0.955 0.005 285)` | `oklch(0.27 0.01 285)` | 값 변경 |
 | `muted-foreground` | `oklch(0.47 0.014 285)` | `oklch(0.72 0.01 285)` | 값 변경 |
 | `secondary` | `oklch(0.94 0.006 285)` | `oklch(0.29 0.011 285)` | 값 변경 |
@@ -53,6 +54,7 @@
 | `destructive` | `oklch(0.56 0.2 25)` | `oklch(0.70 0.17 22)` | 값 변경 |
 | `destructive-foreground` | `oklch(1 0 0)` | `oklch(0.18 0.03 25)` | 다크 값 변경 |
 | `success` / `-foreground` | `oklch(0.52 0.12 155)` / 흰색 | `oklch(0.76 0.14 155)` / `oklch(0.18 0.03 155)` | **추가** |
+| `success-subtle` / `-foreground` | `oklch(0.95 0.04 155)` / `oklch(0.42 0.1 155)` | `oklch(0.3 0.05 155)` / `oklch(0.84 0.1 155)` | **추가**(Step 25), "준비됨" 같은 옅은 성공 배지(바탕·글자). `success`는 채움 전용이라 따로 둔다 |
 | `warning` / `-foreground` | `oklch(0.80 0.15 80)` / `oklch(0.25 0.06 70)` | 같음(`warning`만 C 0.14) | **추가**, 채움 전용 |
 | `scrim` | `#00000080` | `#000000a6` | **추가**, `bg-black/50` 대체 |
 | `media-scrim` / `media-foreground` | `#00000099` / `#ffffff` | 같음 | **추가**, 썸네일 위 컨트롤 |
@@ -62,6 +64,8 @@
 | `diff-change` / `-fill` | `#a67a00` / `#e0a80040` | 같음 | **추가**, 비교: 변경 |
 
 **제거**: `chart-1`~`chart-5`, `sidebar*`, `popover`, `popover-foreground`(코드에서 쓰지 않음), `--font-serif`(Lora, 쓰지 않음), `--shadow-x/y/blur/spread/opacity/color`(합성용 중간값, 쓰지 않음).
+
+> 다크 값 근거(Step 25): 시안에 다크 화면이 없어 기존 다크 팔레트 규칙에서 정했다. 다크 팔레트는 카드 위의 면(`muted` 0.27, `secondary` 0.29)을 카드(0.245)보다 **밝게** 올리고, 그 간격은 라이트(카드 1 → `muted` 0.955, 0.045)의 약 절반(0.025)이다. `card-inset`은 라이트에서 카드와 `muted` 사이(카드에서 0.025)이므로 다크도 같은 비율로 카드에서 0.014 올린 0.26(채도는 카드와 같은 0.009)이다. `success-subtle`은 옅은 primary 면인 `accent`의 다크 규칙(바탕 L 0.30·낮은 채도, 글자 L 0.84)을 hue 155에 그대로 옮겼다. 글자 대비는 라이트·다크 모두 4.5:1을 넘는다.
 
 > 주의: `success`와 `destructive`는 밝기가 비슷하다. 상태는 반드시 아이콘이나 낱말과 함께 표시한다. 비교 색은 파랑(추가)·주황(삭제)으로 색각 이상에서도 구분되며, 변경은 점선으로 구분한다.
 
@@ -148,6 +152,7 @@ src/renderer/
   --paper-line: oklch(0.88 0.006 285);
   --card: oklch(1 0 0);
   --card-foreground: var(--foreground);
+  --card-inset: oklch(0.975 0.003 285);
   --muted: oklch(0.955 0.005 285);
   --muted-foreground: oklch(0.47 0.014 285);
   --secondary: oklch(0.94 0.006 285);
@@ -163,6 +168,8 @@ src/renderer/
   --destructive-foreground: oklch(1 0 0);
   --success: oklch(0.52 0.12 155);
   --success-foreground: oklch(1 0 0);
+  --success-subtle: oklch(0.95 0.04 155);
+  --success-subtle-foreground: oklch(0.42 0.1 155);
   --warning: oklch(0.8 0.15 80);
   --warning-foreground: oklch(0.25 0.06 70);
   --scrim: #00000080;
@@ -186,6 +193,7 @@ src/renderer/
   --foreground: oklch(0.96 0.004 285);
   --canvas: oklch(0.175 0.007 285);
   --card: oklch(0.245 0.009 285);
+  --card-inset: oklch(0.26 0.009 285);
   --muted: oklch(0.27 0.01 285);
   --muted-foreground: oklch(0.72 0.01 285);
   --secondary: oklch(0.29 0.011 285);
@@ -199,6 +207,8 @@ src/renderer/
   --destructive-foreground: oklch(0.18 0.03 25);
   --success: oklch(0.76 0.14 155);
   --success-foreground: oklch(0.18 0.03 155);
+  --success-subtle: oklch(0.3 0.05 155);
+  --success-subtle-foreground: oklch(0.84 0.1 155);
   --warning: oklch(0.8 0.14 80);
   --scrim: #000000a6;
 }
@@ -235,7 +245,7 @@ src/renderer/
 - **모서리**: 임의값 `rounded-[4px]`는 같은 4px인 `rounded-xs`로만 바꿨다. §2.3 "쓰는 곳"과 다른 곳이 남아 있다 — 버튼 `rounded-lg`(12px, 문서는 `md` 8px), 다이얼로그 `rounded-xs`(4px, 문서는 `xl` 16px), 페이지 썸네일 `rounded-paper` 미사용.
 - **팔레트 클래스 → 토큰** (실제 팔레트 클래스 34개, 임의값 14개): `bg-black/60` → `bg-media-scrim`, `bg-black/50` → `bg-scrim`, `text-white`·`bg-white/20`(썸네일 위 버튼) → `media-foreground`, 오류 화면의 `red-*`·`gray-*` → `destructive`·`muted-foreground`, `group-colors.ts` → `shared/config/theme.ts`의 `GROUP_COLOR_CLASSES`(`border-group-1`~`5`).
 - **모양이 바뀐 곳**: 썸네일 위 삭제 버튼 hover는 빨간 글자(`text-red-400`) 대신 `bg-destructive` + `text-destructive-foreground` 채움이다(어두운 막 위에서 라이트 `destructive` 글자는 대비가 모자람). 공용 체크박스 테두리는 `border-white/50` 대신 `border-input`이고(툴바 체크박스가 라이트에서 보이게), 썸네일 위 체크박스만 `border-media-foreground/50`을 넘긴다.
-- **남은 임의값**: 크기·위치 계산용 `max-h-[70vh]`, `h-[80vh]`, `h-[calc(100%-48px)]`, `max-w-[calc(100%-2rem)]`, `transition-[left,top]`. 글자 크기 `text-[15px]/5.5`(§2.2 `heading` 15/22, 홈 상단바 앱 이름·비교 자리표시 파일 이름 — 글자 스타일 토큰이 없어서). 색 임의값은 없다. 크기 토큰은 §5대로 화면을 잰 뒤 정한다.
+- **남은 임의값**: 크기·위치 계산용 `max-h-[70vh]`, `h-[80vh]`, `h-[calc(100%-48px)]`, `max-w-[calc(100%-2rem)]`, `transition-[left,top]`. 글자 크기 `text-[15px]/5.5`(§2.2 `heading` 15/22, 홈 상단바 앱 이름·비교 슬롯 파일 이름 — 글자 스타일 토큰이 없어서), `text-[13px]`(비교 슬롯 "교체", 시안 13px — §6.1 표의 글자 13px). 색 임의값은 없다. 크기 토큰은 §5대로 화면을 잰 뒤 정한다.
 - **간격**: 그리드 카드 크기·간격은 JS 상수(`shared/constants/grid-layout.ts`, px)라 `--spacing` 변경과 상관없다. Tailwind 간격(패딩·높이)만 약 7.4% 줄었다.
 - **검증**: `e2e/design-tokens.spec.ts` — 본문 글꼴과 실제 로드, 라이트·다크 본문 대비 4.5:1 이상, 키보드 포커스 링(링 색과 배경 3:1 이상).
 
@@ -254,14 +264,16 @@ src/renderer/
 | `0 0 0 1px rgba(0,0,0,.06)`(테두리만) | 1, 7, 8 | 뒤에 깔린 종이, 진행·실패 화면의 유령 카드 | 넣지 않음. 홈은 `shadow-paper`로 대신(아래 그림자가 1px 더 있다) |
 | `oklch(0.92 0.005 285)`, `oklch(0.85 0.008 285)` | 2, 5, 6 | 병합 카드·내보내기 미리보기의 가짜 썸네일 글줄 | 넣지 않음. 실제 화면은 pdf.js로 그린 페이지라 필요 없다 |
 | `oklch(0.9 0.005 285)`, `oklch(0.82 0.008 285)`, `oklch(0.85 0.006 285)` | 3, 4, 5 | 반복 줄 제외 미니 그림, 리포트 미리보기 글줄 | 그 화면(Step 26·29)에서 `paper-line`으로 모을지 정한다 |
-| `oklch(0.975 0.003 285)` | 3, 4 | 파일 슬롯 바탕, 옵션 표 머리, 차이 목록 묶음 머리(옅은 면) | 없음. 가까운 값은 `background` 0.985·`muted` 0.955. 파일 슬롯(Step 25)에서 정한다 |
-| `oklch(0.95 0.04 155)` / `oklch(0.42 0.1 155)` | 3 | "준비됨" 배지(옅은 성공 바탕·글자) | 없음(`success`는 채움 전용). Step 25 |
+| `oklch(0.975 0.003 285)` | 3, 4 | 파일 슬롯 바탕, 옵션 표 머리, 차이 목록 묶음 머리(옅은 면) | `card-inset`으로 **추가**(Step 25, §2.1). 옵션 표·차이 목록도 이 토큰을 쓴다 |
+| `oklch(0.95 0.04 155)` / `oklch(0.42 0.1 155)` | 3 | "준비됨" 배지(옅은 성공 바탕·글자) | `success-subtle` / `-foreground`로 **추가**(Step 25, §2.1) |
 | `oklch(0.95 0.03 25)` | 8 | 실패 아이콘 원 바탕(옅은 `destructive`) | 없음 |
 | `oklch(0.62 0.13 285)` + 불투명도 0.45 | 4 | 연결선 평상시 색(계획서 §7.1 "중립 마커색") | 없음. 연결선(Step 28) |
 | 모서리 3px | 3 | 페이지 범위 입력칸의 A·B 배지(16px) | 없음 |
 | 글자 13px, mono 28/32 | 2, 3, 6, 7 | 툴바 작은 버튼·"전체 선택"·"교체", 진행률 큰 숫자 | §2.2 글자 스타일에 없음 |
 | 자간 0(본문), `-0.01em`(홈 제목) | 전체 | 본문 | 앱은 전역 `--tracking-normal: -0.025em`이라 글자가 조금 더 좁다(§6 "그대로 둔 값") |
 | 루트 글자 14/21 | 전체 | 본문 | §2.2 `body`와 같다. 앱은 `body`에 크기를 두지 않아(16px) 화면마다 `text-sm/5.25`로 맞춘다 |
+
+**시안에 있지만 넣지 않은 것** — 비교 화면 머리(시안 3)의 "최근 결과" 버튼. 지금은 열어 볼 비교 결과가 없어(결과 화면은 Step 27) 누를 곳이 없는 버튼이 되므로 결과 화면과 함께 넣는다.
 
 ### 6.2 병합 화면: 시안 2·6·7·8과 지금 화면 (Step 24, 고치지 않음)
 
@@ -306,3 +318,13 @@ src/renderer/
 - 버튼: 시안 "이 파일 빼기"(ghost) · "닫기"(테두리) · "다시 시도". 앱 "닫기"(ghost) · "이 파일 빼기"(회색) · "다시 시도".
 - 막: 진행 화면과 같다(시안은 어둡고 앱은 밝다).
 - 토스트: 시안은 흰 카드 + 경고 아이콘 + ✕ "scan_0412.tif를 열지 못해 건너뛰었어요". 앱은 sonner 오류 토스트 `"<이름>" 파일을 열 수 없습니다.` + 코드 문구 설명.
+
+### 6.3 비교 파일 슬롯: 시안 3 위쪽과 지금 화면 (Step 25)
+
+Playwright 헤드리스(WebKit, 1280×800) 캡처를 시안 PNG와 나란히 보고, 시안 HTML을 같은 브라우저로 그려 상자 위치를 잰 값과 앱을 맞췄다.
+
+- **같은 곳**: 머리(높이 64px, 모드 탭·"새 비교"·안내 글), 문서 카드(x 24·y 84, 1232×274, 모서리 16px), 슬롯 머리(A·B 22px 배지 모서리 4px, 제목 굵게, "준비됨" 배지 `success-subtle`), 슬롯 몸통(555×202, 모서리 12px, `card-inset` 바탕, `border` 테두리), 썸네일 자리(44×62, `paper`·`radius-paper`·`shadow-paper`), 이름(15/22 굵게, 넘치면 말줄임), 크기·쪽수(mono 12/16 `muted-foreground`, "1.1 MB · 18쪽"), "교체"(높이 28px, 모서리 6px, 13px), 맞바꾸기(40px 원, x 620·y 233), 상태바 왼쪽 "A 18쪽 | B 19쪽".
+- **슬롯 높이**: 시안 HTML은 `box-sizing` 기본값(content-box)이라 `min-height: 168px`에 패딩 32px·테두리 2px가 더해져 202px로 그려진다. 앱(border-box)은 202px(`min-h-50.5`)로 맞췄다.
+- **다른 곳**: 모드 탭에 번역이 없다(§6.2와 같다). "최근 결과" 버튼이 없다(§6.1). 썸네일은 시안의 빈 종이 대신 첫 쪽을 그린다. 상태바 오른쪽에 "오픈소스 라이선스" 버튼이 더 있다(모든 화면). 아래 "실행 전 옵션" 카드와 실행 줄은 Step 26에서 더한다. 자간은 앱 전역 `-0.025em`이라 이름이 시안보다 조금 좁다(§6.1).
+- **시안에 없는 상태(앱이 정함)**: 빈 슬롯은 같은 크기의 점선 버튼(테두리 `input` — 누르는 컨트롤이라 3:1, 바탕 `card-inset`, 아이콘 + "PDF 고르기" + "또는 여기에 끌어다 놓기")이고 "준비됨" 배지가 없다. 파일을 끌어 슬롯 위에 올리면 그 슬롯만 `primary` 테두리 + `accent` 바탕이다. 둘 다 비면 맞바꾸기 버튼은 흐리게 막힌다. 상태바의 빈 슬롯은 "A 비어 있음"이다.
+

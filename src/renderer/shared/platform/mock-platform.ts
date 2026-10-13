@@ -24,6 +24,8 @@ export interface MockPdfFile {
   pages: PageInfo[];
   title?: string;
   bytes?: Uint8Array;
+  /** `openFiles`가 돌려줄 파일 크기(바이트). 없으면 `bytes` 길이, 그것도 없으면 0 */
+  sizeBytes?: number;
   /**
    * TIFF처럼 열 때 PDF로 변환되는 파일이면 `openFiles`가 `pdfPath`로 돌려줄 변환 결과 경로.
    * Rust의 앱 캐시 폴더처럼 고르지 않아도 읽을 수 있고, 바이트는 `bytes`를 쓴다.
@@ -37,6 +39,11 @@ export type MockMergeOutput = Pick<MergeResult, "outputPath" | "fileName">;
 export interface MockPlatformOptions {
   /** 열기 다이얼로그가 고르는 파일들. 드롭으로도 열 수 있다. */
   files?: MockPdfFile[];
+  /**
+   * 열기 다이얼로그를 열 때마다 앞에서부터 하나씩 쓰는, 그때 고를 경로 목록(빈 목록은 취소).
+   * 다 쓰면(또는 없으면) `files`를 모두 고른다.
+   */
+  dialogPicks?: string[][];
   /** 있으면 `temp` 출력 병합이 이 경로에 쓴다. 없으면 작업 ID로 이름을 만든다. */
   mergeOutput?: MockMergeOutput;
   /** `readThirdPartyNotices`가 돌려줄 고지 원문. 없으면 번들에 파일이 없을 때처럼 실패한다. */
@@ -113,6 +120,7 @@ function missingFile(path: string): AppError {
  */
 export function createMockPlatform({
   files = [],
+  dialogPicks = [],
   mergeOutput,
   thirdPartyNotices
 }: MockPlatformOptions = {}): MockPlatform {
@@ -122,6 +130,7 @@ export function createMockPlatform({
       file.convertedPath ? [[file.convertedPath, file] as const] : []
     )
   );
+  const pendingDialogPicks = [...dialogPicks];
   const pickedPaths = new Set<string>();
   const dropHandlers = new Set<FileDropHandler>();
   /** 저장 다이얼로그에서 고른 경로 → 그 파일 이름 */
@@ -194,6 +203,7 @@ export function createMockPlatform({
       sourcePath: path,
       pdfPath: file.convertedPath ?? path,
       displayName: file.displayName,
+      sizeBytes: file.sizeBytes ?? file.bytes?.length ?? 0,
       info: {
         pageCount: file.pages.length,
         title: file.title ?? null,
@@ -204,10 +214,12 @@ export function createMockPlatform({
 
   return {
     pickFiles: async () => {
-      for (const file of files) {
-        pickedPaths.add(file.path);
+      const picked =
+        pendingDialogPicks.shift() ?? files.map((file) => file.path);
+      for (const path of picked) {
+        pickedPaths.add(path);
       }
-      return files.map((file) => file.path);
+      return picked;
     },
     pickSavePath: async ({ fileName }) => {
       const path = `${MOCK_DIRECTORY.SAVE}/${fileName}`;

@@ -5,6 +5,7 @@ import {
   toGlossaryTerms,
   type GlossaryRow
 } from "@/renderer/entities/glossary";
+import { TRANSLATE_MODEL } from "@/renderer/entities/translation";
 import type { TranslateModel } from "@/renderer/shared/api/bindings";
 import {
   getPlatform,
@@ -13,7 +14,6 @@ import {
 } from "@/renderer/shared/platform";
 import {
   DEFAULT_TRANSLATE_SETTINGS,
-  TRANSLATE_MODEL,
   TRANSLATE_SETTING_KEY
 } from "../config/translate-settings";
 

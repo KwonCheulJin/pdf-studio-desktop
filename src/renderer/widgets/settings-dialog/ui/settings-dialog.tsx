@@ -56,12 +56,19 @@ function TabContent({ tab, onEditGlossary }: TabContentProps) {
   }
 }
 
-/** 모달 안 내용. 모달이 닫히면 함께 사라져 다음에 열면 첫 탭부터다. */
-function SettingsBody() {
+interface SettingsBodyProps {
+  /** 열 때 고를 탭. 없거나 이 빌드에 없는 탭이면 첫 탭 */
+  initialTab?: SettingsTab;
+}
+
+/** 모달 안 내용. 모달이 닫히면 함께 사라져 다음에 열면 처음 탭부터다. */
+function SettingsBody({ initialTab }: SettingsBodyProps) {
   const idPrefix = useId();
   const panelId = `${idPrefix}-panel`;
   const tabs = availableTabs();
-  const [selectedTab, setSelectedTab] = useState<SettingsTab>(tabs[0]);
+  const [selectedTab, setSelectedTab] = useState<SettingsTab>(() =>
+    initialTab !== undefined && tabs.includes(initialTab) ? initialTab : tabs[0]
+  );
   const [isEditingGlossary, setIsEditingGlossary] = useState(false);
   const tabId = (tab: SettingsTab) => `${idPrefix}-${tab}`;
 
@@ -130,7 +137,7 @@ function SettingsBody() {
   );
 }
 
-interface SettingsDialogProps {
+interface SettingsDialogProps extends SettingsBodyProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
 }
@@ -139,7 +146,11 @@ interface SettingsDialogProps {
  * 설정 모달(시안 14, 760×480): 왼쪽 탭(일반·번역·오류 보고·정보) + 오른쪽 내용과 닫기 ✕(Esc).
  * 바꾸면 바로 저장한다(저장 버튼이 없다).
  */
-export function SettingsDialog({ isOpen, onOpenChange }: SettingsDialogProps) {
+export function SettingsDialog({
+  isOpen,
+  onOpenChange,
+  initialTab
+}: SettingsDialogProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent
@@ -147,7 +158,7 @@ export function SettingsDialog({ isOpen, onOpenChange }: SettingsDialogProps) {
         aria-describedby={undefined}
         className="bg-card flex h-120 max-h-[calc(100%-3rem)] max-w-[calc(100%-3rem)] flex-row gap-0 overflow-hidden rounded-xl border-0 p-0 text-sm/5.25 shadow-xl sm:max-w-190"
       >
-        <SettingsBody />
+        <SettingsBody initialTab={initialTab} />
       </DialogContent>
     </Dialog>
   );

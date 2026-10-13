@@ -5,7 +5,11 @@ import { HomePage } from "@/renderer/pages/home";
 import { MergedPreviewPage } from "@/renderer/pages/merged-preview";
 import { TranslatePage } from "@/renderer/pages/translate";
 import { MergeWorkspace } from "@/renderer/widgets/merge-workspace";
-import { SettingsDialog } from "@/renderer/widgets/settings-dialog";
+import {
+  SETTINGS_TAB,
+  SettingsDialog,
+  type SettingsTab
+} from "@/renderer/widgets/settings-dialog";
 import { useCompareFilePaths } from "@/renderer/features/pdf-compare";
 import { MergeProgressOverlay } from "@/renderer/features/pdf-merge";
 import { useTranslateFilePaths } from "@/renderer/features/pdf-translate";
@@ -105,9 +109,17 @@ export function AppShell() {
     () => setMode(APP_MODE.HOME),
     [setMode]
   );
-  // 설정 모달은 홈·번역 머리 톱니와 모든 화면의 ⌘,/Ctrl+,로 연다(Q16).
+  // 설정 모달은 홈·번역 머리 톱니와 모든 화면의 ⌘,/Ctrl+,로 연다(Q16). 번역 옵션 화면은 번역 탭으로 연다.
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const handleOpenSettings = useCallback(() => setIsSettingsOpen(true), []);
+  const [settingsTab, setSettingsTab] = useState<SettingsTab | undefined>();
+  const handleOpenSettings = useCallback(() => {
+    setSettingsTab(undefined);
+    setIsSettingsOpen(true);
+  }, []);
+  const handleOpenTranslateSettings = useCallback(() => {
+    setSettingsTab(SETTINGS_TAB.TRANSLATE);
+    setIsSettingsOpen(true);
+  }, []);
   useSettingsShortcut(handleOpenSettings);
 
   const renderContent = () => {
@@ -123,7 +135,11 @@ export function AppShell() {
       case APP_MODE.COMPARE:
         return <ComparePage onExit={handleExitCompare} />;
       case APP_MODE.TRANSLATE:
-        return <TranslatePage />;
+        return (
+          <TranslatePage
+            onOpenTranslateSettings={handleOpenTranslateSettings}
+          />
+        );
       default:
         return view === MERGE_VIEW.PREVIEW ? (
           <MergedPreviewPage />
@@ -146,6 +162,7 @@ export function AppShell() {
       <SettingsDialog
         isOpen={isSettingsOpen}
         onOpenChange={setIsSettingsOpen}
+        initialTab={settingsTab}
       />
     </div>
   );

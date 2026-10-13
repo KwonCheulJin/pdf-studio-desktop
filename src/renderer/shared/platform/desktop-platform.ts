@@ -2,11 +2,16 @@ import type {
   CompareProgress,
   CompareRequest,
   CompareResult,
+  ExportAnnotatedPdfRequest,
+  ExportComparePdfRequest,
+  ExportedFile,
   MergeOutput,
   MergeProgress,
   MergeRequest,
   MergeResult,
-  OpenedFile
+  OpenedFile,
+  PreviewCompareReportRequest,
+  ReportPreview
 } from "@/renderer/shared/api/bindings";
 import type { ValueOf } from "@/renderer/shared/types/common";
 
@@ -26,6 +31,11 @@ export const MERGE_OUTPUT_KIND = {
 export interface PickSavePathOptions {
   /** 저장 다이얼로그에 처음 보일 파일 이름. 처음 보일 폴더는 플랫폼이 정한다. */
   fileName: string;
+}
+
+export interface PickSaveDirectoryOptions {
+  /** 폴더 다이얼로그가 처음 보일 폴더. `null`이면 플랫폼이 정한다(문서 폴더). */
+  defaultDirectory: string | null;
 }
 
 export type MergeProgressHandler = (progress: MergeProgress) => void;
@@ -117,6 +127,8 @@ export interface DesktopPlatform {
   pickFiles(): Promise<string[]>;
   /** 저장 다이얼로그. 취소하면 `null` */
   pickSavePath(options: PickSavePathOptions): Promise<string | null>;
+  /** 내보내기 폴더를 고르는 다이얼로그. 고른 폴더 바로 안에만 새 파일을 만들 수 있다. 취소하면 `null` */
+  pickSaveDirectory(options: PickSaveDirectoryOptions): Promise<string | null>;
   /** 확장자 판별·TIFF 변환·정보 조회. 입력 순서대로 파일별 결과 */
   openFiles(paths: string[]): Promise<OpenedFile[]>;
   /**
@@ -129,6 +141,17 @@ export interface DesktopPlatform {
   mergePdfs(params: MergePdfsParams): Promise<MergeResult>;
   /** 두 PDF 비교. 원본은 읽기만 한다. 취소는 `cancelJob(request.jobId)` */
   comparePdfs(params: ComparePdfsParams): Promise<CompareResult>;
+  /** 비교 PDF의 앞 몇 장 그림(PNG base64)과 전체 장 수. 넣을 장이 없으면 `EMPTY_REPORT`로 실패한다. */
+  previewCompareReport(
+    request: PreviewCompareReportRequest
+  ): Promise<ReportPreview>;
+  /**
+   * 비교 PDF를 고른 폴더에 만든다. 같은 이름이 있으면 번호를 붙인 새 이름으로 만든다.
+   * 취소는 `cancelJob(request.jobId)`
+   */
+  exportComparePdf(request: ExportComparePdfRequest): Promise<ExportedFile>;
+  /** B 사본에 차이를 주석으로 단 PDF를 고른 폴더에 만든다. 취소는 `cancelJob(request.jobId)` */
+  exportAnnotatedPdf(request: ExportAnnotatedPdfRequest): Promise<ExportedFile>;
   /** 이미 끝났거나 없는 작업이면 아무 일도 하지 않는다. */
   cancelJob(jobId: string): Promise<void>;
   /** 병합 미리보기 결과를 저장 다이얼로그에서 고른 경로로 복사 */

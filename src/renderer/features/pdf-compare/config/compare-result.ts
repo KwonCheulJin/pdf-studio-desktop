@@ -25,7 +25,6 @@ export const COMPARE_VIEW_MODE_LABEL: Record<CompareViewMode, string> = {
 export const COMPARE_RESULT_TEXT = {
   BACK_TO_OPTIONS: "옵션으로 돌아가기",
   NEW_COMPARE: "새 비교",
-  EXPORT: "내보내기",
   MORE: "더 보기",
   RERUN: "다시 실행",
   RECENT_RESULT: "최근 결과",

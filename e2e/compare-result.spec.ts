@@ -261,7 +261,7 @@ test("결과 화면: 머리·칩·안내 띠·쪽별 목록·페이지 행이 �
   await expect(header).toContainText("B diff-edit.pdf · 2쪽");
   await expect(header.getByText(/^\d+\.\d초 만에 완료$/)).toBeVisible();
   await expect(header.getByRole("button", { name: "새 비교" })).toBeEnabled();
-  await expect(header.getByRole("button", { name: "내보내기" })).toBeDisabled();
+  await expect(header.getByRole("button", { name: "내보내기" })).toBeEnabled();
   await expect(header.getByRole("button", { name: "더 보기" })).toBeVisible();
 
   // 종류 칩은 그 종류의 차이 수(golden: 변경 4 · 삭제 1 · 추가 2), 확인 필요가 없으면 칩이 없다.

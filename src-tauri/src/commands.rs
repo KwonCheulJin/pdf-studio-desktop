@@ -1,4 +1,4 @@
-//! Tauri 커맨드. 입력을 받아 처리 함수(`files`, `merge`, `compare`)에 넘기기만 한다.
+//! Tauri 커맨드. 입력을 받아 처리 함수(`files`, `merge`, `compare`, `report`)에 넘기기만 한다.
 //! pdfium·파일 작업은 `spawn_blocking` 스레드에서 돌려 UI 스레드와 async 런타임을 막지 않는다.
 
 use std::path::PathBuf;
@@ -14,13 +14,14 @@ use tauri_specta::collect_commands;
 use crate::access::{OPENABLE_EXTENSIONS, PDF_EXTENSION, PathAccess};
 use crate::compare::CompareState;
 use crate::contract::{
-    CompareProgress, CompareRequest, CompareResult, MergeProgress, MergeRequest, MergeResult,
-    OpenedFile, SaveDialogOptions,
+    CompareProgress, CompareRequest, CompareResult, ExportAnnotatedPdfRequest,
+    ExportComparePdfRequest, ExportedFile, MergeProgress, MergeRequest, MergeResult, OpenedFile,
+    PreviewCompareReportRequest, ReportPreview, SaveDialogOptions, SaveDirectoryDialogOptions,
 };
 use crate::error::{AppError, CommandError};
 use crate::jobs::JobRegistry;
 use crate::notices::THIRD_PARTY_NOTICES_FILE;
-use crate::{compare, files, merge, notices};
+use crate::{compare, files, merge, notices, report};
 
 /// 열기 다이얼로그의 형식 필터 이름. 언어와 무관한 형식 이름만 쓴다.
 const OPENABLE_FILTER_NAME: &str = "PDF, TIFF";
@@ -47,10 +48,14 @@ pub(crate) fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         .commands(collect_commands![
             pick_files,
             pick_save_path,
+            pick_save_directory,
             open_files,
             read_pdf,
             merge_pdfs,
             compare_pdfs,
+            preview_compare_report,
+            export_compare_pdf,
+            export_annotated_pdf,
             cancel_job,
             copy_file,
             discard_temp,
@@ -108,6 +113,28 @@ pub(crate) async fn pick_save_path(
         };
         let access = path_access(app)?;
         access.allow_save_target(&local_path(picked)?).map(Some)
+    })
+    .await
+}
+
+/// 폴더 다이얼로그를 열고, 고른 폴더를 내보내기 폴더로 허용 경로 목록에 기록한 뒤 canonical 경로를
+/// 돌려준다. 취소하면 `null`이다.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn pick_save_directory(
+    app: AppHandle,
+    options: SaveDirectoryDialogOptions,
+) -> Result<Option<PathBuf>, AppError> {
+    run_blocking(app, move |app| {
+        let mut dialog = app.dialog().file();
+        if let Some(directory) = &options.default_directory {
+            dialog = dialog.set_directory(directory);
+        }
+        let Some(picked) = dialog.blocking_pick_folder() else {
+            return Ok(None);
+        };
+        let access = path_access(app)?;
+        access.allow_save_directory(&local_path(picked)?).map(Some)
     })
     .await
 }
@@ -193,6 +220,61 @@ pub(crate) async fn compare_pdfs(
     .await
 }
 
+/// 비교 PDF 미리보기(앞 몇 장의 PNG와 전체 장 수). 파일은 쓰지 않는다.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn preview_compare_report(
+    app: AppHandle,
+    request: PreviewCompareReportRequest,
+) -> Result<ReportPreview, AppError> {
+    run_blocking(app, move |app| {
+        report::preview_compare_report(engine(app)?.inner(), path_access(app)?.inner(), request)
+    })
+    .await
+}
+
+/// 비교 PDF 내보내기. 취소는 `cancel_job(request.jobId)`로 한다.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn export_compare_pdf(
+    app: AppHandle,
+    jobs: State<'_, JobRegistry>,
+    request: ExportComparePdfRequest,
+) -> Result<ExportedFile, AppError> {
+    let job = jobs.start(&request.job_id)?;
+    let cancel = job.token();
+    run_blocking(app, move |app| {
+        report::export_compare_pdf(
+            engine(app)?.inner(),
+            path_access(app)?.inner(),
+            request,
+            &cancel,
+        )
+    })
+    .await
+}
+
+/// 주석 PDF 내보내기. 취소는 `cancel_job(request.jobId)`로 한다.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn export_annotated_pdf(
+    app: AppHandle,
+    jobs: State<'_, JobRegistry>,
+    request: ExportAnnotatedPdfRequest,
+) -> Result<ExportedFile, AppError> {
+    let job = jobs.start(&request.job_id)?;
+    let cancel = job.token();
+    run_blocking(app, move |app| {
+        report::export_annotated_pdf(
+            engine(app)?.inner(),
+            path_access(app)?.inner(),
+            request,
+            &cancel,
+        )
+    })
+    .await
+}
+
 /// 작업 취소. 이미 끝났거나 없는 작업이면 아무 일도 하지 않는다.
 #[tauri::command]
 #[specta::specta]
@@ -263,8 +345,8 @@ impl specta::Type for PdfBytes {
     }
 }
 
-/// `work`를 blocking 스레드에서 돌린다. pdf-core는 `thread_safe` pdfium 바인딩을 쓰므로
-/// 여러 스레드에서 불러도 pdfium 호출이 전역 잠금으로 하나씩 실행된다.
+/// `work`를 blocking 스레드에서 돌린다. 여러 작업이 동시에 돌아도 pdf-core 공개 함수가 pdfium을 쓰는
+/// 동안 프로세스 잠금을 잡아 pdfium 호출은 하나씩 실행된다(ADR 0001 §15 "pdfium 잠금").
 async fn run_blocking<T, F>(app: AppHandle, work: F) -> Result<T, AppError>
 where
     T: Send + 'static,

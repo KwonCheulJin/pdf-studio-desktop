@@ -6,7 +6,8 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use pdf_core::{
-    CompareError, CompareOptionsError, DocumentError, MergeError, SaveError, TiffConversionError,
+    CompareError, CompareOptionsError, DocumentError, MergeError, ReportError, SaveError,
+    TiffConversionError,
 };
 use serde::Serialize;
 
@@ -43,6 +44,9 @@ pub(crate) enum ErrorCode {
     Cancelled,
     // pdf-core 비교
     InvalidRange,
+    // pdf-core 리포트 내보내기
+    EmptyReport,
+    ImageEncodeFailed,
     // pdf-core TIFF 변환
     InvalidTiff,
     UnsupportedTiffCompression,
@@ -99,6 +103,8 @@ pub(crate) enum CommandError {
     Tiff(#[from] TiffConversionError),
     #[error(transparent)]
     Compare(#[from] CompareError),
+    #[error(transparent)]
+    Report(#[from] ReportError),
 }
 
 impl CommandError {
@@ -120,6 +126,7 @@ impl CommandError {
             Self::Merge(error) => merge_code(error),
             Self::Tiff(error) => tiff_code(error),
             Self::Compare(error) => compare_code(error),
+            Self::Report(error) => report_code(error),
         }
     }
 
@@ -131,6 +138,7 @@ impl CommandError {
             Self::Merge(error) => merge_input_path(error),
             Self::Tiff(error) => tiff_input_path(error),
             Self::Compare(error) => compare_input_path(error),
+            Self::Report(error) => report_input_path(error),
             Self::PathNotAllowed { .. }
             | Self::UnsupportedFileType { .. }
             | Self::OutputIsSource { .. }
@@ -206,6 +214,19 @@ fn compare_code(error: &CompareError) -> ErrorCode {
     }
 }
 
+fn report_code(error: &ReportError) -> ErrorCode {
+    match error {
+        ReportError::OutputIsSource { .. } => ErrorCode::OutputIsSource,
+        ReportError::InvalidPage { .. } => ErrorCode::InvalidPage,
+        ReportError::EmptyReport => ErrorCode::EmptyReport,
+        ReportError::Cancelled => ErrorCode::Cancelled,
+        ReportError::Compose { .. } => ErrorCode::PdfiumFailure,
+        ReportError::Encode { .. } => ErrorCode::ImageEncodeFailed,
+        ReportError::Document(error) => document_code(error),
+        ReportError::Save(error) => save_code(error),
+    }
+}
+
 fn document_path(error: &DocumentError) -> &Path {
     match error {
         DocumentError::NotFound { path }
@@ -244,6 +265,21 @@ fn compare_input_path(error: &CompareError) -> Option<&Path> {
     match error {
         CompareError::Document(error) => Some(document_path(error)),
         CompareError::Options(_) | CompareError::Cancelled => None,
+    }
+}
+
+/// 결과의 쪽 번호가 문서 밖이면 그 문서(다른 파일을 넘겼다)를 싣는다. 출력이 원본인 거부와 새 문서
+/// 조립·그림·저장 실패는 입력 파일 탓이 아니다.
+fn report_input_path(error: &ReportError) -> Option<&Path> {
+    match error {
+        ReportError::InvalidPage { path, .. } => Some(path),
+        ReportError::Document(error) => Some(document_path(error)),
+        ReportError::OutputIsSource { .. }
+        | ReportError::EmptyReport
+        | ReportError::Cancelled
+        | ReportError::Compose { .. }
+        | ReportError::Encode { .. }
+        | ReportError::Save(_) => None,
     }
 }
 

@@ -37,6 +37,8 @@ const ERROR_MESSAGES: Record<PlatformErrorCode, string> = {
   CANCELLED: "작업을 취소했어요.",
   INVALID_RANGE:
     "페이지 범위가 올바르지 않아요. 문서 쪽수 안에서 1,3-5처럼 써 주세요.",
+  EMPTY_REPORT: "지금 필터로는 내보낼 쪽이 없어요.",
+  IMAGE_ENCODE_FAILED: "미리보기 그림을 만들지 못했어요.",
   INVALID_TIFF: "TIFF 파일이 손상되었거나 형식이 올바르지 않아요.",
   UNSUPPORTED_TIFF_COMPRESSION: "지원하지 않는 압축 방식의 TIFF 파일이에요.",
   UNSUPPORTED_TIFF_FORMAT: "지원하지 않는 형식의 TIFF 파일이에요.",

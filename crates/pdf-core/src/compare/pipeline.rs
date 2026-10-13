@@ -13,7 +13,7 @@ use std::time::Duration;
 use pdfium_render::prelude::PdfDocument;
 
 use super::diff::diff_tokens;
-use super::extract::{ExtractedPage, extract_text_layer};
+use super::extract::{ExtractedPage, read_text_layer};
 use super::model::{Change, NoTextReason, Notice, PageSizes, PageSources, Side, TextSource};
 use super::ocr_text::ocr_chars;
 use super::options::CompareOptionsError;
@@ -21,7 +21,7 @@ use super::tokenize::{
     NormalizeOptions, Token, UnicodeForm, has_low_text_confidence, tokenize_pages,
 };
 use crate::document::{DocumentError, open_document};
-use crate::engine::PdfEngine;
+use crate::engine::{PdfEngine, PdfiumSession};
 use crate::ocr::{FileDigest, OcrCache, OcrEngine, OcrPage, render_page};
 
 #[derive(Debug, thiserror::Error)]
@@ -74,7 +74,8 @@ pub fn read_document_text(
     cache: Option<&OcrCache>,
     cancel: &AtomicBool,
 ) -> Result<DocumentText, CompareError> {
-    let mut pages = extract_text_layer(engine, path)?;
+    let pdfium = engine.session();
+    let mut pages = read_text_layer(&pdfium, path)?;
     let mut sources = vec![TextSource::TextLayer; pages.len()];
     let mut ocr_failures = Vec::new();
     let targets: Vec<u32> = (0_u32..)
@@ -90,10 +91,13 @@ pub fn read_document_text(
         });
     }
 
-    // 파일을 읽지 못하면 캐시 없이 계속한다(문서는 이미 열었다).
-    let cache = cache.and_then(|cache| Some((cache, FileDigest::of_file(path).ok()?)));
+    // 파일을 읽지 못하면 캐시 없이 계속한다(문서는 이미 열었다). 해시는 pdfium을 쓰지 않아 잠금 밖에서 센다.
+    let cache = cache.and_then(|cache| {
+        let digest = pdfium.unlocked(|| FileDigest::of_file(path)).ok()?;
+        Some((cache, digest))
+    });
     let document = match ocr {
-        Some(_) => Some(open_document(engine.pdfium(), path)?),
+        Some(_) => Some(open_document(&pdfium, path)?),
         None => None,
     };
     let mut wrote_cache = false;
@@ -103,7 +107,8 @@ pub fn read_document_text(
         let result = match (cached, ocr.as_deref_mut(), &document) {
             (Some(cached), _, _) => Ok(cached),
             (None, Some(ocr), Some(document)) => {
-                let result = recognize_and_store(document, path, page_number, ocr, cache, cancel)?;
+                let result =
+                    recognize_and_store(&pdfium, document, path, page_number, ocr, cache, cancel)?;
                 wrote_cache |= result.is_ok() && cache.is_some();
                 result
             }
@@ -132,8 +137,9 @@ pub fn read_document_text(
 }
 
 /// 쪽 하나를 렌더·인식하고, 성공하면 `cache`(파일 해시와 함께)에 쓴다. 취소는 `Err`, 렌더·추론
-/// 실패는 `Ok(Err(OcrFailed))`다.
+/// 실패는 `Ok(Err(OcrFailed))`다. `document`는 `pdfium` 세션으로 연 문서다.
 pub(super) fn recognize_and_store(
+    pdfium: &PdfiumSession,
     document: &PdfDocument,
     path: &Path,
     page_number: u32,
@@ -141,15 +147,18 @@ pub(super) fn recognize_and_store(
     cache: Option<(&OcrCache, FileDigest)>,
     cancel: &AtomicBool,
 ) -> Result<Result<OcrPage, NoTextReason>, CompareError> {
-    let result = recognize_page(document, path, page_number, ocr, cancel)?;
+    let result = recognize_page(pdfium, document, path, page_number, ocr, cancel)?;
     if let (Ok(page), Some((cache, digest))) = (&result, cache) {
         cache.put(digest, page_number, page);
     }
     Ok(result)
 }
 
-/// 쪽 하나를 렌더하고 인식한다. 취소는 `Err`, 렌더·추론 실패는 `Ok(Err(OcrFailed))`다.
+/// 쪽 하나를 렌더하고 인식한다. 취소는 `Err`, 렌더·추론 실패는 `Ok(Err(OcrFailed))`다. 추론(ONNX
+/// Runtime)은 pdfium을 쓰지 않으므로 잠금 밖에서 돌려, 쪽마다 수백 ms인 추론이 다른 작업(병합·내보내기)의
+/// pdfium 사용을 막지 않게 한다(ADR 0001 §15).
 fn recognize_page(
+    pdfium: &PdfiumSession,
     document: &PdfDocument,
     path: &Path,
     page_number: u32,
@@ -164,7 +173,7 @@ fn recognize_page(
     let Some(image) = image else {
         return Ok(Err(NoTextReason::OcrFailed));
     };
-    let lines = ocr.recognize(&image);
+    let lines = pdfium.unlocked(|| ocr.recognize(&image));
     ensure_not_cancelled(cancel)?;
     Ok(lines
         .map(|lines| OcrPage {

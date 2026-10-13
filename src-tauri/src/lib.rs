@@ -8,6 +8,7 @@ mod jobs;
 mod merge;
 mod notices;
 mod pdf_engine;
+mod report;
 #[cfg(test)]
 mod test_support;
 

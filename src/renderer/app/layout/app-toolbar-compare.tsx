@@ -5,6 +5,7 @@ import {
   useCompareRunStatus,
   useCompareScreen
 } from "@/renderer/features/pdf-compare";
+import { CompareExportAction } from "./compare-export-action";
 import { ModeTabs } from "./mode-tabs";
 
 interface ToolbarHeading {
@@ -34,7 +35,7 @@ export function AppToolbarCompare() {
     <header className="border-border bg-card flex min-h-16 shrink-0 flex-wrap items-center gap-3 border-b px-6 py-2">
       <ModeTabs />
       {screen === COMPARE_SCREEN.RESULT ? (
-        <CompareResultHeading />
+        <CompareResultHeading exportAction={<CompareExportAction />} />
       ) : (
         <>
           <h1 className="ml-2 text-lg/6.5 font-semibold">{title}</h1>

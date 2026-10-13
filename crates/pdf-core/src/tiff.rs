@@ -23,7 +23,7 @@ use tiff::tags::{CompressionMethod, ResolutionUnit, Tag};
 use tiff::{TiffError, TiffUnsupportedError};
 
 use crate::document::{
-    DocumentError, MAX_INPUT_FILE_BYTES, classify_io_error, ensure_within_limit, load_exclusively,
+    DocumentError, MAX_INPUT_FILE_BYTES, classify_io_error, ensure_within_limit,
 };
 use crate::engine::PdfEngine;
 use crate::output::{SaveError, ensure_output_directory, save_atomically, unique_file_name};
@@ -119,7 +119,7 @@ pub fn convert_tiff(
     let pdf_path = output_directory.join(unique_file_name(OUTPUT_FILE_PREFIX, PDF_EXTENSION));
     ensure_output_directory(&pdf_path)?;
     let mut decoder = open_decoder(tiff_path)?;
-    let pdfium = engine.pdfium();
+    let pdfium = engine.session();
     let mut document = pdfium
         .create_new_pdf()
         .map_err(|source| pdfium_error(tiff_path, source))?;
@@ -127,7 +127,7 @@ pub fn convert_tiff(
     let mut page_index = 0;
     loop {
         ensure_not_cancelled(cancel)?;
-        append_page(pdfium, &mut document, &mut decoder, tiff_path, page_index)?;
+        append_page(&pdfium, &mut document, &mut decoder, tiff_path, page_index)?;
         if !decoder.more_images() {
             break;
         }
@@ -263,7 +263,8 @@ fn append_ccitt_page(
 ) -> Result<(), TiffConversionError> {
     let image = ccitt::read_image(decoder, page)?;
     let bytes = ccitt::single_page_pdf(&image, size);
-    let source = load_exclusively(|| pdfium.load_pdf_from_byte_vec(bytes, None))
+    let source = pdfium
+        .load_pdf_from_byte_vec(bytes, None)
         .map_err(|source| pdfium_error(page.path, source))?;
     document
         .pages_mut()

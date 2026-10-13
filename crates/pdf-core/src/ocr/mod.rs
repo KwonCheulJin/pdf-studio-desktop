@@ -202,7 +202,8 @@ pub fn render_page_for_ocr(
     path: &Path,
     page_index: u16,
 ) -> Result<RgbImage, OcrError> {
-    let document = open_document(engine.pdfium(), path)?;
+    let pdfium = engine.session();
+    let document = open_document(&pdfium, path)?;
     let page = document
         .pages()
         .get(i32::from(page_index))

@@ -12,6 +12,11 @@ export const commands = {
 	pickFiles: () => typedError<string[], AppError>(__TAURI_INVOKE("pick_files")),
 	/**  저장 다이얼로그를 열고, 고른 경로를 허용 경로 목록에 기록한 뒤 돌려준다. 취소하면 `null`이다. */
 	pickSavePath: (options: SaveDialogOptions) => typedError<string | null, AppError>(__TAURI_INVOKE("pick_save_path", { options })),
+	/**
+	 *  폴더 다이얼로그를 열고, 고른 폴더를 내보내기 폴더로 허용 경로 목록에 기록한 뒤 canonical 경로를
+	 *  돌려준다. 취소하면 `null`이다.
+	 */
+	pickSaveDirectory: (options: SaveDirectoryDialogOptions) => typedError<string | null, AppError>(__TAURI_INVOKE("pick_save_directory", { options })),
 	/**  파일 추가. 파일별 성공/오류를 입력 순서대로 돌려준다. */
 	openFiles: (paths: string[]) => typedError<OpenedFile[], AppError>(__TAURI_INVOKE("open_files", { paths })),
 	/**  pdf.js 표시용 PDF 바이트 */
@@ -20,6 +25,12 @@ export const commands = {
 	mergePdfs: (request: MergeRequest, onProgress: Channel<MergeProgress>) => typedError<MergeResult, AppError>(__TAURI_INVOKE("merge_pdfs", { request, onProgress })),
 	/**  두 PDF 비교. 진행률은 `on_progress`로, 취소는 `cancel_job(request.jobId)`로 한다. */
 	comparePdfs: (request: CompareRequest, onProgress: Channel<CompareProgress>) => typedError<CompareResult, AppError>(__TAURI_INVOKE("compare_pdfs", { request, onProgress })),
+	/**  비교 PDF 미리보기(앞 몇 장의 PNG와 전체 장 수). 파일은 쓰지 않는다. */
+	previewCompareReport: (request: PreviewCompareReportRequest) => typedError<ReportPreview, AppError>(__TAURI_INVOKE("preview_compare_report", { request })),
+	/**  비교 PDF 내보내기. 취소는 `cancel_job(request.jobId)`로 한다. */
+	exportComparePdf: (request: ExportComparePdfRequest) => typedError<ExportedFile, AppError>(__TAURI_INVOKE("export_compare_pdf", { request })),
+	/**  주석 PDF 내보내기. 취소는 `cancel_job(request.jobId)`로 한다. */
+	exportAnnotatedPdf: (request: ExportAnnotatedPdfRequest) => typedError<ExportedFile, AppError>(__TAURI_INVOKE("export_annotated_pdf", { request })),
 	/**  작업 취소. 이미 끝났거나 없는 작업이면 아무 일도 하지 않는다. */
 	cancelJob: (jobId: string) => __TAURI_INVOKE<void>("cancel_job", { jobId }),
 	/**  이 실행의 병합 미리보기 결과를 저장 다이얼로그에서 고른 경로로 복사한다. */
@@ -94,6 +105,17 @@ export type CompareProgress = {
 	detail: ProgressDetail | null,
 };
 
+/**  비교 PDF 옵션(ADR 0001 §14). 연결선은 따로 고르지 않는다(나란히 + 색 상자일 때 그린다). */
+export type CompareReportOptions = {
+	layout: ReportLayout,
+	/**  그 장에 보이는 쪽에 (숨기지 않은) 변경 상자가 있는 장만 넣는다. */
+	changedPagesOnly: boolean,
+	/**  변경 상자를 색 사각형으로 그린다. */
+	drawBoxes: boolean,
+	/**  화면 필터에서 끈 종류. 이 종류의 변경은 그리지 않고 차이 있는 쪽 판정에도 쓰지 않는다. */
+	hiddenKinds: ChangeKind[],
+};
+
 export type CompareRequest = {
 	/**  프론트가 만든 작업 ID. `cancel_job`에 같은 값을 넘긴다. */
 	jobId: string,
@@ -121,7 +143,49 @@ export type CompareStage = "extractA" | "extractB" | "ocr" | "normalize" | "diff
  *  화면 문구를 고르는 오류 코드. 직렬화 값(`PATH_NOT_ALLOWED` 등)이 바인딩의 문자열 union이 되고,
  *  변형의 이름이 바뀌어도 값은 유지한다.
  */
-export type ErrorCode = "PATH_NOT_ALLOWED" | "UNSUPPORTED_FILE_TYPE" | "OUTPUT_IS_SOURCE" | "JOB_ALREADY_RUNNING" | "INVALID_DIALOG_PATH" | "ENGINE_UNAVAILABLE" | "NOT_READY" | "TASK_FAILED" | "RESOURCE_UNAVAILABLE" | "NOT_FOUND" | "FILE_UNREADABLE" | "INPUT_TOO_LARGE" | "INVALID_PDF" | "PASSWORD_PROTECTED" | "PDFIUM_FAILURE" | "OUTPUT_DIRECTORY_NOT_FOUND" | "WRITE_FAILED" | "EMPTY_REQUEST" | "TOO_MANY_FILES" | "EMPTY_SOURCE" | "INVALID_PAGE" | "CANCELLED" | "INVALID_RANGE" | "INVALID_TIFF" | "UNSUPPORTED_TIFF_COMPRESSION" | "UNSUPPORTED_TIFF_FORMAT" | "IMAGE_TOO_LARGE";
+export type ErrorCode = "PATH_NOT_ALLOWED" | "UNSUPPORTED_FILE_TYPE" | "OUTPUT_IS_SOURCE" | "JOB_ALREADY_RUNNING" | "INVALID_DIALOG_PATH" | "ENGINE_UNAVAILABLE" | "NOT_READY" | "TASK_FAILED" | "RESOURCE_UNAVAILABLE" | "NOT_FOUND" | "FILE_UNREADABLE" | "INPUT_TOO_LARGE" | "INVALID_PDF" | "PASSWORD_PROTECTED" | "PDFIUM_FAILURE" | "OUTPUT_DIRECTORY_NOT_FOUND" | "WRITE_FAILED" | "EMPTY_REQUEST" | "TOO_MANY_FILES" | "EMPTY_SOURCE" | "INVALID_PAGE" | "CANCELLED" | "INVALID_RANGE" | "EMPTY_REPORT" | "IMAGE_ENCODE_FAILED" | "INVALID_TIFF" | "UNSUPPORTED_TIFF_COMPRESSION" | "UNSUPPORTED_TIFF_FORMAT" | "IMAGE_TOO_LARGE";
+
+/**  B 문서 사본에 차이를 주석으로 단 PDF */
+export type ExportAnnotatedPdfRequest = {
+	/**  프론트가 만든 작업 ID. `cancel_job`에 같은 값을 넘긴다. */
+	jobId: string,
+	result: CompareResult,
+	/**  결과를 만든 B(이후) 문서. 이 사본에 주석을 단다. */
+	after: string,
+	/**  화면 필터에서 끈 종류. 이 종류의 변경은 달지 않는다. */
+	hiddenKinds: ChangeKind[],
+	output: ExportOutput,
+};
+
+export type ExportComparePdfRequest = {
+	/**  프론트가 만든 작업 ID. `cancel_job`에 같은 값을 넘긴다. */
+	jobId: string,
+	/**  비교 커맨드가 돌려준 결과 그대로 */
+	result: CompareResult,
+	/**  결과를 만든 A(이전) 문서 */
+	before: string,
+	/**  결과를 만든 B(이후) 문서 */
+	after: string,
+	options: CompareReportOptions,
+	output: ExportOutput,
+};
+
+/**
+ *  내보낼 파일을 둘 곳: 폴더 다이얼로그(`pick_save_directory`)에서 고른 폴더와 그 안에 만들 이름.
+ *  같은 이름의 파일이 있으면 덮어쓰지 않고 `이름 (2).pdf`처럼 번호를 붙인다.
+ */
+export type ExportOutput = {
+	directory: string,
+	/**  확장자(`.pdf`)까지 포함한 파일 이름 하나. 경로 구분자는 받지 않는다. */
+	fileName: string,
+};
+
+/**  내보낸 파일 하나 */
+export type ExportedFile = {
+	outputPath: string,
+	/**  실제로 만든 이름(같은 이름이 있었으면 번호가 붙는다). 프론트가 경로 문자열을 나누지 않게 한다. */
+	fileName: string,
+};
 
 /**  병합 결과를 쓸 곳 */
 export type MergeOutput = 
@@ -191,7 +255,7 @@ sizeBytes: number; info: PdfInfo } | { status: "error"; sourcePath: string; erro
 /**
  *  페이지 상자. PDF 사용자 공간 좌표(pt, 원점은 왼쪽 아래)이며 회전 전 값이다.
  *  좌표·크기는 pdfium이 돌려준 유한한 값이라 JSON `null`(NaN·무한대)이 되지 않는다.
- *  그래서 TS 타입을 `number | null`이 아닌 `number`로 내보낸다.
+ *  그래서 TS 타입을 `number | null`이 아닌 `number`로 내보낸다. 비교 결과의 쪽 크기로 다시 받기도 한다.
  */
 export type PageBox = {
 	left: number,
@@ -234,10 +298,30 @@ export type PdfInfo = {
 	pages: PageInfo[],
 };
 
+export type PreviewCompareReportRequest = {
+	result: CompareResult,
+	before: string,
+	after: string,
+	options: CompareReportOptions,
+	/**  그림 너비(px). Rust가 1 ~ 2400으로 자른다. */
+	widthPx: number,
+};
+
 /**  `done`·`total`로 알 수 없는 덧붙임 정보 */
 export type ProgressDetail = 
 /**  이 단계를 앞선 실행의 캐시로 바로 끝냈다. */
 "cached";
+
+/**  비교 PDF 한 장에 쪽을 놓는 방식(화면의 `A·B 나란히 | A만 | B만`) */
+export type ReportLayout = "sideBySide" | "aOnly" | "bOnly";
+
+/**  비교 PDF 미리보기: 첫 장부터 몇 장의 그림과 내보낼 때의 전체 장 수 */
+export type ReportPreview = {
+	/**  같은 옵션으로 내보낼 때의 전체 장 수(그린 장 수가 아니다) */
+	sheetCount: number,
+	/**  첫 장부터 차례로, 장마다 PNG를 base64로 쓴 문자열(`data:image/png;base64,` 뒤에 그대로 붙인다) */
+	images: string[],
+};
 
 /**  페이지 회전(도). 0·90·180·270만 받는다. */
 export type Rotation = number;
@@ -245,6 +329,12 @@ export type Rotation = number;
 export type SaveDialogOptions = {
 	/**  다이얼로그가 처음 보일 폴더와 파일 이름 */
 	defaultPath: string | null,
+};
+
+/**  폴더 다이얼로그 옵션 */
+export type SaveDirectoryDialogOptions = {
+	/**  다이얼로그가 처음 보일 폴더 */
+	defaultDirectory: string | null,
 };
 
 /**  비교하는 두 문서 중 한쪽. `before`가 A(왼쪽), `after`가 B(오른쪽)다. */

@@ -60,6 +60,10 @@ Windows(NSIS 설치 파일)를 빌드해 Draft Release에 올린다. 워크플�
   또는 `xattr -dr com.apple.quarantine "/Applications/PDF Studio.app"`.
 - Windows 설치 파일은 서명하지 않아 SmartScreen 경고가 뜬다.
 - 로컬 서명 검사: `pnpm tauri build --bundles app` 뒤 `node scripts/verify-macos-signature.mjs`.
+- 자동 업데이트: release 워크플로가 업데이트 파일·서명과 `latest.json`을 같은 Draft에 올린다.
+  앱은 시작할 때 `releases/latest/download/latest.json`을 확인하므로 Draft를 공개해야
+  설치된 앱이 새 버전을 찾는다. 서명 키는 리포 시크릿 `TAURI_SIGNING_PRIVATE_KEY`·
+  `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`에만 있다(공개 키는 `tauri.conf.json`).
 
 ## 프로젝트 구조 (요약)
 

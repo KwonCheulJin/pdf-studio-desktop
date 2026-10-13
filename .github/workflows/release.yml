@@ -1,0 +1,124 @@
+name: Release
+
+# v* 태그 푸시: macOS(aarch64 .dmg·.app)와 Windows(NSIS)를 빌드해 그 태그의 Draft Release에 올린다(계획서 P4-2).
+# workflow_dispatch(입력 없음): 같은 빌드를 돌리되 릴리스는 만들지 않고 워크플로 아티팩트로만 올린다(검증용).
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  # Draft Release 생성과 자산 업로드
+  contents: write
+  # @kwoncheulJin/error-snapshot (GitHub Packages) 설치
+  packages: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            tauri-args: --bundles app,dmg
+          # pdfium.dll·onnxruntime.dll은 아래 단계가 만드는 config로 설치 폴더(resource_dir)에 넣는다(ci.yml과 같다).
+          - os: windows-latest
+            tauri-args: --bundles nsis --config target/windows-bundle.conf.json
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .tool-versions
+          cache: pnpm
+
+      # 앱 버전(tauri.conf.json → package.json)과 태그가 다르면 잘못된 이름의 릴리스가 생긴다.
+      - name: 태그와 앱 버전 일치 확인
+        if: github.event_name == 'push'
+        run: |
+          expected="v$(node -p "require('./package.json').version")"
+          if [ "$expected" != "${{ github.ref_name }}" ]; then
+            echo "태그 ${{ github.ref_name }}가 package.json 버전 $expected와 다르다" >&2
+            exit 1
+          fi
+
+      # .npmrc의 @kwoncheulJin 스코프 레지스트리에 토큰을 붙인다(값은 환경변수로만 들어간다).
+      - name: GitHub Packages 인증
+        run:
+          echo "//npm.pkg.github.com/:_authToken=\${NODE_AUTH_TOKEN}" >>
+          "$HOME/.npmrc"
+
+      - run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: pdfium 캐시
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/pdfium
+          key:
+            pdfium-${{ runner.os }}-${{ runner.arch }}-${{
+            hashFiles('scripts/fetch-pdfium.mjs') }}
+
+      - run: pnpm fetch:pdfium
+
+      # tauri-build가 OCR 모델과 macOS 프레임워크(ONNX Runtime dylib)를 번들에 복사한다(계획서 §6.4 배포).
+      - name: OCR 런타임·모델 캐시
+        uses: actions/cache@v4
+        with:
+          path: |
+            src-tauri/onnxruntime
+            src-tauri/ocr-models
+          key:
+            ocr-${{ runner.os }}-${{ runner.arch }}-${{
+            hashFiles('scripts/fetch-ocr.mjs') }}
+
+      - run: pnpm fetch:ocr
+
+      # JSON을 인자로 넘기면 Windows 셸 인용에 깨지므로 파일로 넘긴다.
+      - name: Windows 번들 리소스 config
+        if: runner.os == 'Windows'
+        run: |
+          mkdir -p target
+          echo '{"bundle":{"resources":{"pdfium/x86_64-pc-windows-msvc/pdfium.dll":"pdfium.dll","onnxruntime/x86_64-pc-windows-msvc/onnxruntime.dll":"onnxruntime.dll"}}}' > target/windows-bundle.conf.json
+
+      # macOS는 tauri.conf.json의 signingIdentity "-"로 ad-hoc 서명한다(Frameworks의 dylib → 실행 파일 → 앱 순).
+      # 태그가 없으면(workflow_dispatch) 릴리스를 건너뛰고 uploadWorkflowArtifacts로만 올린다.
+      - name: 빌드·업로드 (tauri-action)
+        uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.event_name == 'push' && github.ref_name || '' }}
+          releaseName: PDF Studio v__VERSION__
+          releaseBody: |
+            macOS(Apple Silicon)는 ad-hoc 서명이라 처음 열 때 Gatekeeper 경고가 뜬다. Finder에서 우클릭 → 열기, 또는 `xattr -dr com.apple.quarantine "/Applications/PDF Studio.app"`.
+            Windows 설치 파일은 서명하지 않아 SmartScreen 경고가 뜬다(추가 정보 → 실행).
+          releaseDraft: true
+          # 자동 업데이트(P4-4)는 아직 없다.
+          uploadUpdaterJson: false
+          uploadWorkflowArtifacts:
+            ${{ github.event_name == 'workflow_dispatch' }}
+          args: ${{ matrix.tauri-args }}
+
+      # 앱과 Frameworks의 libpdfium·libonnxruntime이 같은 identity로 서명됐는지 본다(계획서 P4-3).
+      # 태그 빌드에서는 업로드 뒤에 돌므로, 실패하면 Draft를 공개하지 말고 지운다.
+      - name: macOS 서명 검사
+        if: runner.os == 'macOS'
+        run: node scripts/verify-macos-signature.mjs

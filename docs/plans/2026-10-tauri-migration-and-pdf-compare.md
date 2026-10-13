@@ -941,6 +941,13 @@ Step 28(PR #47)은 행(페이지 쌍) 안에서 `Replace`만 잇고 가까운 �
 ### P4-2 릴리스 흐름 정리 (T1)
 - 기존 Electron용 워크플로(`build.yml`, `release.yml`, `auto-version.yml`)는 Step 1에서 모두 제거했다. 여기서 새로 만든다: `pnpm release:*` → 태그 푸시 → `release.yml`이 tauri-action으로 Draft Release를 만들고 아티팩트를 업로드한다.
 
+정한 것(Step 31, 2026-10-13):
+- `pnpm release:patch|minor|major`(`scripts/release.mjs`)는 `main`·깨끗한 작업 트리에서만 돈다. `pnpm version <단계> --no-git-tag-version`으로 `package.json`을 올리고(앱 버전의 단일 소스) `chore: release v<버전>` 커밋과 annotated 태그 `v<버전>`을 만든 뒤 멈춘다. **푸시는 사용자가 한다**(`git push origin main --follow-tags`. `--follow-tags`가 annotated 태그만 올리므로 `-a`로 만든다). 이전 스크립트는 경량 태그라 태그가 올라가지 않았다.
+- `.github/workflows/release.yml`: `v*` 태그 푸시와 `workflow_dispatch`(입력 없음)로 돈다. 매트릭스는 `macos-latest`(aarch64, `--bundles app,dmg`)와 `windows-latest`(`--bundles nsis`, `pdfium.dll`·`onnxruntime.dll`은 ci.yml과 같은 `--config` 파일). 설치·캐시·`fetch:pdfium`·`fetch:ocr`·`NODE_AUTH_TOKEN`은 ci.yml과 같고, lint·테스트는 CI 몫이라 돌지 않는다.
+- `tauri-apps/tauri-action`은 v1.0.0 커밋 SHA로 고정한다. 태그 푸시면 그 태그의 Draft Release(`releaseDraft: true`)를 만들거나 찾아 올리고, `workflow_dispatch`면 `tagName`이 비어 릴리스를 건너뛰고 `uploadWorkflowArtifacts`로 워크플로 아티팩트만 올린다. 자동 업데이트(P4-4)가 없으므로 `uploadUpdaterJson: false`.
+- 태그 푸시면 먼저 태그와 `package.json` 버전이 같은지 보고 다르면 실패한다.
+- macOS 잡은 빌드 뒤 `node scripts/verify-macos-signature.mjs`로 서명을 검사한다(P4-3). tauri-action은 빌드와 업로드가 한 단계라 태그 빌드에서는 이 검사가 업로드 뒤에 돈다. 실패하면 Draft를 공개하지 않고 지운다.
+
 ### P4-3 서명
 | 옵션 | 비용 | 사용자 경험 |
 |---|---|---|
@@ -948,6 +955,12 @@ Step 28(PR #47)은 행(페이지 쌍) 안에서 `Replace`만 잇고 가까운 �
 | Developer ID + 공증 | Apple Developer 연 $99 | 경고가 없다. tauri-action에 `APPLE_CERTIFICATE`, `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` 시크릿을 넣는다. |
 | Windows | 미서명 | SmartScreen 경고가 뜬다. 개인용으로는 허용한다. |
 - 어느 옵션이든 **`Frameworks/libpdfium.dylib`와 ONNX Runtime dylib(§6.4)도 앱과 같은 identity로 서명**돼야 한다. `codesign --verify --deep --strict`로 확인한다.
+
+정한 것(Step 32, 2026-10-13):
+- macOS는 ad-hoc으로 간다. `tauri.conf.json`의 `bundle.macOS.signingIdentity: "-"`, `entitlements: ./Entitlements.plist`(`disable-library-validation`), hardened runtime은 Tauri 기본값(켜짐)을 그대로 쓴다. Windows는 미서명.
+- 후처리 서명은 두지 않는다. Tauri 번들러가 `bundle.macOS.frameworks`의 dylib를 먼저, 실행 파일, 앱 순서로 같은 identity로 서명한다(`pnpm tauri build --bundles app` 로그와 `codesign -dv`로 확인: 앱 `flags=0x10002(adhoc,runtime)`, 두 dylib `Signature=adhoc`·`TeamIdentifier=not set`, `--verify --deep --strict` valid).
+- 검사는 `scripts/verify-macos-signature.mjs` 한 곳이다(release 워크플로와 로컬이 같은 기준). `--verify --deep --strict`, 앱의 hardened runtime 플래그, `disable-library-validation` entitlement, `libpdfium.dylib`·`libonnxruntime.dylib`의 서명 주체(`Signature=adhoc` 또는 첫 `Authority`)와 Team ID가 앱과 같은지 본다.
+- Developer ID로 바꿀 때: 리포 시크릿 `APPLE_CERTIFICATE`(p12 base64)·`APPLE_CERTIFICATE_PASSWORD`·`APPLE_SIGNING_IDENTITY`·`APPLE_ID`·`APPLE_PASSWORD`(앱 전용 암호)·`APPLE_TEAM_ID`를 release.yml의 tauri-action `env`로 넘기고, `signingIdentity: "-"`를 지우거나 `APPLE_SIGNING_IDENTITY`로 덮는다. 앱과 dylib가 같은 Team ID가 되면 `disable-library-validation`을 빼고(§5 P1-0) 검사 스크립트의 entitlement 확인도 함께 고친다. 인증서·암호는 레포에 넣지 않는다.
 
 ### P4-4 (선택) 자동 업데이트
 - `pnpm tauri add updater`로 플러그인을 넣고, 서명 키는 `pnpm tauri signer generate -w ~/.tauri/pdfstudio.key`로 만든다(개인 키는 레포에 넣지 않고 GitHub 시크릿 `TAURI_SIGNING_PRIVATE_KEY`로만 둔다). tauri-action이 GitHub Releases에 `latest.json`을 생성한다.

@@ -33,7 +33,8 @@ project-root/
 │  ├─ generate-notices.mjs     # THIRD_PARTY_NOTICES.md 생성 (pnpm licenses:generate)
 │  ├─ check-licenses.mjs       # 허용 목록 밖 라이선스·낡은 고지면 실패 (pnpm licenses:check)
 │  ├─ third-party/             # 의존성 수집, 허용 목록·예외(policy.mjs), 번들 자산 고정 목록
-│  └─ release.mjs
+│  ├─ verify-macos-signature.mjs # .app과 Frameworks dylib의 서명 identity 검사 (release.yml, 계획서 P4-3)
+│  └─ release.mjs              # 버전 범프 → 릴리스 커밋 → v 태그 (pnpm release:*, 푸시는 사용자)
 │
 ├─ crates/pdf-core/            # 도메인: Tauri 의존 없음
 │  ├─ src/

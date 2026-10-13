@@ -31,7 +31,9 @@ async function openEmptyScreen(
 ): Promise<void> {
   await page.emulateMedia({ colorScheme });
   await page.goto("/");
-  await expect(page.getByRole("button", { name: "파일 선택" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "파일 선택", exact: true })
+  ).toBeVisible();
   await expect
     .poll(() =>
       page.evaluate(() => document.documentElement.classList.contains("dark"))
@@ -165,15 +167,19 @@ for (const colorScheme of COLOR_SCHEMES) {
     const samples = [
       await measureContrast(page.locator("body"), FOREGROUND_SOURCE.TEXT),
       await measureContrast(
-        page.getByText("PDF 또는 TIFF 파일을 드래그 앤 드롭하세요"),
+        page.getByRole("heading", { name: "어떤 작업을 할까요?" }),
         FOREGROUND_SOURCE.TEXT
       ),
       await measureContrast(
-        page.getByText("또는 아래 버튼을 클릭하여 문서를 선택하세요"),
+        page.getByText("카드를 누르거나 파일을 카드 위에 끌어다 놓으면"),
         FOREGROUND_SOURCE.TEXT
       ),
       await measureContrast(
-        page.getByRole("button", { name: "파일 선택" }),
+        page.getByText("PDF, TIFF · 여러 개"),
+        FOREGROUND_SOURCE.TEXT
+      ),
+      await measureContrast(
+        page.getByRole("button", { name: "파일 선택", exact: true }),
         FOREGROUND_SOURCE.TEXT
       )
     ];
@@ -190,7 +196,7 @@ for (const colorScheme of COLOR_SCHEMES) {
     page
   }) => {
     await openEmptyScreen(page, colorScheme);
-    const button = page.getByRole("button", { name: "파일 선택" });
+    const button = page.getByRole("button", { name: "파일 선택", exact: true });
     const unfocusedShadow = await boxShadowOf(button);
 
     for (let press = 0; press < MAX_TAB_PRESSES; press += 1) {

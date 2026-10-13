@@ -45,7 +45,7 @@ async function openWorkspace(page: Page): Promise<void> {
     [PORTRAIT_FILE]
   );
   await page.goto("/");
-  await page.getByRole("button", { name: "파일 선택" }).click();
+  await page.getByRole("button", { name: "파일 선택", exact: true }).click();
   await expect(page.getByTestId("document-card")).toHaveCount(1);
 }
 

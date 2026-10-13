@@ -3,6 +3,7 @@
   --foreground: oklch(0.21 0.012 285);
   --canvas: oklch(0.962 0.005 285);
   --paper: #ffffff;
+  --paper-line: oklch(0.88 0.006 285);
   --card: oklch(1 0 0);
   --card-foreground: var(--foreground);
   --muted: oklch(0.955 0.005 285);

@@ -24,6 +24,7 @@ import {
 } from "../config/viewer-layout";
 import { minimapTicksOf } from "../lib/change-position";
 import { panePaddingOf } from "../lib/pane-layout";
+import { rowBandsByPage } from "../lib/row-bands";
 import {
   layoutRows,
   rowOffsetsOf,
@@ -143,6 +144,20 @@ export function CompareViewer({ completed }: CompareViewerProps) {
     }),
     [visibleChanges]
   );
+  // 연결선 끝의 줄 표시는 쪽 위에 그린다(연결선을 끄거나 패널이 하나면 없다).
+  const rowBands = useMemo(
+    () => ({
+      [COMPARE_SIDE.BEFORE]: rowBandsByPage({
+        connectors: isSplit ? connectors : null,
+        side: COMPARE_SIDE.BEFORE
+      }),
+      [COMPARE_SIDE.AFTER]: rowBandsByPage({
+        connectors: isSplit ? connectors : null,
+        side: COMPARE_SIDE.AFTER
+      })
+    }),
+    [connectors, isSplit]
+  );
   const rows = useMemo(
     () => (scale === null ? [] : layoutRows({ result, scale, viewMode })),
     [result, scale, viewMode]
@@ -190,6 +205,7 @@ export function CompareViewer({ completed }: CompareViewerProps) {
               file={files[side]}
               pageSources={result.pageSources}
               highlights={highlights[side]}
+              rowBands={rowBands[side]}
               activeChangeId={activeChangeId}
               hoveredChangeId={hoveredChangeId}
               renderScale={renderScale}
@@ -204,6 +220,7 @@ export function CompareViewer({ completed }: CompareViewerProps) {
       files,
       result.pageSources,
       highlights,
+      rowBands,
       activeChangeId,
       hoveredChangeId,
       renderScale

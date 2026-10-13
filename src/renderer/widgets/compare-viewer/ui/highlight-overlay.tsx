@@ -1,17 +1,57 @@
 import {
+  CHANGE_KIND_STYLE,
   ChangeHighlight,
   ChangeNumberTag,
   type PageHighlight,
   type Side
 } from "@/renderer/entities/comparison";
 import type { PageGeometry } from "@/renderer/shared/lib/pdfjs";
+import { cn } from "@/renderer/shared/lib/utils";
+import { ROW_BAND_STYLE } from "../config/viewer-layout";
 import { visibleTagIdsOf } from "../lib/number-tag-layout";
+import type { RowBand } from "../lib/row-bands";
 
 const PERCENT = 100;
+
+interface RowBandPathProps {
+  band: RowBand;
+  geometry: PageGeometry;
+  side: Side;
+  isEmphasized: boolean;
+}
+
+/**
+ * 연결선 끝의 줄 표시(계획서 §7.1 Step 28-d): 쪽 너비 전체 × 끝 사각형(상자 합집합 또는 앵커 막대)의 세로
+ * 범위. 높이 0(90·270도 쪽 앵커)도 선으로 보이도록 사각형 대신 닫힌 경로로 그린다.
+ */
+function RowBandPath({ band, geometry, side, isEmphasized }: RowBandPathProps) {
+  const rect = geometry.toViewportRect(band.bounds);
+  const style = CHANGE_KIND_STYLE[band.kind];
+  return (
+    <path
+      data-row-band=""
+      data-change-id={band.changeId}
+      data-side={side}
+      data-kind={band.kind}
+      data-emphasized={isEmphasized || undefined}
+      d={`M0 ${rect.top} H${geometry.width} V${rect.top + rect.height} H0 Z`}
+      className={cn(style.fill, style.stroke)}
+      fillOpacity={ROW_BAND_STYLE.FILL_OPACITY}
+      strokeWidth={
+        isEmphasized
+          ? ROW_BAND_STYLE.EMPHASIZED_STROKE_PX
+          : ROW_BAND_STYLE.STROKE_PX
+      }
+      vectorEffect="non-scaling-stroke"
+    />
+  );
+}
 
 interface HighlightOverlayProps {
   geometry: PageGeometry;
   highlights: readonly PageHighlight[];
+  /** 연결선 끝의 줄 표시(연결선이 꺼져 있으면 비어 있다). 변경 상자 아래에 그린다. */
+  rowBands: readonly RowBand[];
   side: Side;
   activeChangeId: string | null;
   /** 연결선을 가리켜 함께 강조할 변경 */
@@ -21,13 +61,15 @@ interface HighlightOverlayProps {
 }
 
 /**
- * 쪽 위 SVG 하이라이트와 번호 태그. Rust가 준 PDF 좌표를 그 쪽의 배율 1 pdf.js viewport로 바꾸고
+ * 쪽 위 SVG 하이라이트·연결선 줄 표시와 번호 태그. 줄 표시는 쪽과 함께 스크롤되도록 공용 연결선 오버레이가
+ * 아니라 여기(쪽 위)에 두고, 변경 상자보다 먼저 그려 상자가 그 위에 보이게 한다. Rust가 준 PDF 좌표를 그 쪽의 배율 1 pdf.js viewport로 바꾸고
  * (`convertToViewportRectangle`, ADR 0001 §2), SVG `viewBox`를 그 viewport 크기로 두어 쪽 크기에
  * 맞춘다. 원점·회전·`UserUnit`을 손으로 보정하지 않는다. 번호 태그는 겹치면 뒤 번호를 뺀다.
  */
 export function HighlightOverlay({
   geometry,
   highlights,
+  rowBands,
   side,
   activeChangeId,
   hoveredChangeId,
@@ -62,6 +104,18 @@ export function HighlightOverlay({
         preserveAspectRatio="none"
         className="pointer-events-none absolute inset-0 size-full overflow-visible"
       >
+        {rowBands.map((band) => (
+          <RowBandPath
+            key={band.changeId}
+            band={band}
+            geometry={geometry}
+            side={side}
+            isEmphasized={
+              band.changeId === activeChangeId ||
+              band.changeId === hoveredChangeId
+            }
+          />
+        ))}
         {placed.map(({ highlight, rect, isActive }) => (
           <ChangeHighlight
             key={`${highlight.changeId}:${highlight.box.x}:${highlight.box.y}`}

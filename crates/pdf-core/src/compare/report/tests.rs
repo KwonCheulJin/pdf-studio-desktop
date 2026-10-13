@@ -24,7 +24,7 @@ use super::super::{
     ComparedPages, Connector, ConnectorEnd, ConnectorShape, DIFF_TIME_LIMIT, NormalizeOptions,
     connectors, diff_tokens, extract_text_layer, pair_pages, tokenize,
 };
-use super::compose::MAX_SHEET_CONNECTORS;
+use super::compose::{BORDER_COLOR, MAX_SHEET_CONNECTORS, ROW_STROKE_WIDTH_PT};
 use super::sheet::{Placement, slots};
 use super::{
     CHANGE_STROKE, CompareReportOptions, ReportError, ReportLayout, ReportSources,
@@ -195,11 +195,20 @@ fn is_connector(object: &PdfPageObject) -> bool {
     })
 }
 
-/// 장에 그린 사각형 경로들(연결선 제외)
+/// 연결선 끝 줄 표시인가: 줄 표시만 이 굵기로 그린다(변경 상자 0.75·1.5pt, 쪽 테두리 0.75pt).
+fn is_row_band(object: &PdfPageObject) -> bool {
+    object.as_path_object().is_some()
+        && !is_connector(object)
+        && object
+            .stroke_width()
+            .is_ok_and(|width| width.value == ROW_STROKE_WIDTH_PT)
+}
+
+/// 장에 그린 사각형 경로들(연결선·줄 표시 제외)
 fn drawn_rects(page: &PdfPage) -> Vec<DrawnRect> {
     page.objects()
         .iter()
-        .filter(|object| !is_connector(object))
+        .filter(|object| !is_connector(object) && !is_row_band(object))
         .filter_map(|object| {
             let path = object.as_path_object()?;
             let bounds = object.bounds().expect("path bounds").to_rect();
@@ -839,32 +848,101 @@ fn drawn_connectors(page: &PdfPage) -> Vec<DrawnConnector> {
         .collect()
 }
 
-/// 끝 사각형을 놓인 쪽에 옮긴 사각형과 끝점(계획서 §7.1: 상자는 거터를 향한 변 가운데 — A 오른쪽, B
-/// 왼쪽 —, 앵커는 막대 가운데). 기대값이라 규칙을 손으로 다시 적는다.
-fn expected_end(
+/// 장에 그린 줄 표시 하나: 선 색, 채웠는가, 경로 꼭짓점으로 잰 사각형, 장 객체 순서
+#[derive(Debug)]
+struct DrawnRow {
+    stroke: (u8, u8, u8),
+    filled: bool,
+    bounds: PageBox,
+    order: usize,
+}
+
+fn drawn_rows(page: &PdfPage) -> Vec<DrawnRow> {
+    page.objects()
+        .iter()
+        .enumerate()
+        .filter(|(_, object)| is_row_band(object))
+        .map(|(order, object)| {
+            let path = object.as_path_object().expect("row band is a path");
+            let points: Vec<(f32, f32)> = path
+                .segments()
+                .iter()
+                .map(|segment| (segment.x().value, segment.y().value))
+                .collect();
+            let xs = points.iter().map(|point| point.0);
+            let ys = points.iter().map(|point| point.1);
+            DrawnRow {
+                stroke: rgb(object.stroke_color().expect("stroke color")),
+                filled: path.fill_mode().expect("fill mode") != PdfPathFillMode::None,
+                bounds: PageBox {
+                    left: xs.clone().fold(f32::INFINITY, f32::min),
+                    bottom: ys.clone().fold(f32::INFINITY, f32::min),
+                    right: xs.fold(f32::NEG_INFINITY, f32::max),
+                    top: ys.fold(f32::NEG_INFINITY, f32::max),
+                },
+                order,
+            }
+        })
+        .collect()
+}
+
+/// 장 객체 순서로 변경 상자(쪽 테두리·연결선·줄 표시가 아닌 사각형)의 (순서, 왼쪽 칸인가)
+fn mark_orders(page: &PdfPage, sheet_middle: f32) -> Vec<(usize, bool)> {
+    page.objects()
+        .iter()
+        .enumerate()
+        .filter(|(_, object)| {
+            object.as_path_object().is_some()
+                && !is_connector(object)
+                && !is_row_band(object)
+                && object
+                    .stroke_color()
+                    .is_ok_and(|color| rgb(color) != rgb(BORDER_COLOR))
+        })
+        .map(|(order, object)| {
+            let bounds = object.bounds().expect("mark bounds").to_rect();
+            (order, bounds.right().value < sheet_middle)
+        })
+        .collect()
+}
+
+/// 끝의 줄 표시를 놓인 쪽에 옮긴 사각형과 연결선이 나가는 점(계획서 §7.1 Step 28-d: 가로는 놓인 쪽
+/// 너비 전체, 세로는 끝 사각형의 범위, 나가는 점은 A 쪽 오른쪽 끝·B 쪽 왼쪽 끝의 세로 가운데). 기대값이라
+/// 규칙을 손으로 다시 적는다(줄 표시 필드를 쓰지 않고 끝 사각형과 놓인 쪽에서 세운다).
+fn expected_row(
     placement: &Placement,
     end: &ConnectorEnd,
     is_before: bool,
 ) -> (PageBox, (f32, f32)) {
     let rect = placement.map(&end.bounds);
-    let x = if end.is_anchor {
-        (rect.left + rect.right) / 2.0
-    } else if is_before {
-        rect.right
-    } else {
-        rect.left
+    let frame = placement.frame();
+    let row = PageBox {
+        left: frame.left,
+        bottom: rect.bottom,
+        right: frame.right,
+        top: rect.top,
     };
-    (rect, (x, (rect.bottom + rect.top) / 2.0))
+    let x = if is_before { frame.right } else { frame.left };
+    (row, (x, (rect.bottom + rect.top) / 2.0))
 }
 
 fn near(actual: (f32, f32), expected: (f32, f32)) -> bool {
     (actual.0 - expected.0).abs() < 0.01 && (actual.1 - expected.1).abs() < 0.01
 }
 
-/// 나란히 내보낸 비교 PDF는 장마다 두 끝이 그 장의 두 쪽에 있는 변경마다 연결선 하나를 그린다(회전
-/// 0·90·180·270·CropBox 오프셋·MediaBox 원점 쪽). 선은 종류 색이고 A 끝점에서 A 쪽 오른쪽 끝까지 수평으로
-/// 나가 B 쪽 왼쪽 끝에서 B 끝점으로 들어간다(앵커는 막대 가운데). 세 줄 넘는 변경은 두 끝의 위·아래 변을
-/// 이은 채운 띠다. 색 상자를 빼거나 한쪽 배치면 연결선이 없고, 종류를 숨기면 그 종류만 빠진다.
+fn near_box(actual: PageBox, expected: PageBox) -> bool {
+    near(
+        (actual.left, actual.bottom),
+        (expected.left, expected.bottom),
+    ) && near((actual.right, actual.top), (expected.right, expected.top))
+}
+
+/// 나란히 내보낸 비교 PDF는 장마다 두 끝이 그 장의 두 쪽에 있는 변경마다 A·B 줄 표시 하나씩과 연결선
+/// 하나를 그린다(회전 0·90·180·270·CropBox 오프셋·MediaBox 원점 쪽). 줄 표시는 놓인 쪽 너비 전체 × 끝
+/// 사각형의 세로 범위를 종류 색 테두리로 채운 사각형이고 그 쪽의 변경 상자보다 먼저(아래에) 그린다. 선은
+/// 종류 색이고 A 줄 표시의 오른쪽 끝(쪽 끝) 세로 가운데에서 A 칸 끝까지 수평으로 나가 B 칸 끝에서 B 쪽 왼쪽
+/// 끝으로 들어간다. 세 줄 넘는 변경은 두 줄 표시의 위·아래 변을 이은 채운 띠다. 색 상자를 빼거나 한쪽
+/// 배치면 줄 표시·연결선이 없고, 종류를 숨기면 그 종류만 빠진다.
 #[test]
 fn compare_pdf_draws_one_connector_per_change() {
     let directory = TestDir::new("connectors");
@@ -893,7 +971,13 @@ fn compare_pdf_draws_one_connector_per_change() {
             document
                 .pages()
                 .iter()
-                .map(|sheet| drawn_connectors(&sheet))
+                .map(|sheet| {
+                    (
+                        drawn_connectors(&sheet),
+                        drawn_rows(&sheet),
+                        mark_orders(&sheet, sheet.width().value / 2.0),
+                    )
+                })
                 .collect::<Vec<_>>()
         })
     };
@@ -903,7 +987,8 @@ fn compare_pdf_draws_one_connector_per_change() {
     let (Some(before_slot), Some(after_slot)) = slots(ReportLayout::SideBySide) else {
         panic!("side by side has two slots");
     };
-    for (&(before_page, after_page), drawn) in result.page_pairs.iter().zip(&sheets) {
+    for (&(before_page, after_page), (drawn, rows, marks)) in result.page_pairs.iter().zip(&sheets)
+    {
         let (before_page, after_page) = (before_page.expect("A page"), after_page.expect("B page"));
         let on_sheet: Vec<&Connector> = expected_connectors
             .iter()
@@ -915,12 +1000,39 @@ fn compare_pdf_draws_one_connector_per_change() {
             Placement::fit(&result.page_sizes.before[before_page as usize], before_slot);
         let after_placement =
             Placement::fit(&result.page_sizes.after[after_page as usize], after_slot);
-        let (gutter_left, gutter_right) =
-            (before_placement.frame().right, after_placement.frame().left);
+        let (gutter_left, gutter_right) = (before_slot.right, after_slot.left);
+        assert_eq!(rows.len(), on_sheet.len() * 2, "sheet {before_page} rows");
+        // 칸마다 줄 표시가 모두 그 칸의 변경 상자보다 먼저 그려진다(상자가 위에 보인다).
+        for is_left in [true, false] {
+            let row_orders = rows.iter().filter(|row| {
+                let frame = if is_left {
+                    before_placement.frame()
+                } else {
+                    after_placement.frame()
+                };
+                near((row.bounds.left, 0.0), (frame.left, 0.0))
+            });
+            let last_row = row_orders.map(|row| row.order).max().expect("rows");
+            let first_mark = marks
+                .iter()
+                .filter(|(_, left)| *left == is_left)
+                .map(|(order, _)| *order)
+                .min()
+                .expect("marks");
+            assert!(last_row < first_mark, "sheet {before_page} left {is_left}");
+        }
         for (connector, line) in on_sheet.iter().zip(drawn) {
             let message = format!("sheet {before_page} {connector:?}: {line:?}");
-            let (before_rect, start) = expected_end(&before_placement, &connector.before, true);
-            let (after_rect, end) = expected_end(&after_placement, &connector.after, false);
+            let (before_rect, start) = expected_row(&before_placement, &connector.before, true);
+            let (after_rect, end) = expected_row(&after_placement, &connector.after, false);
+            for expected in [before_rect, after_rect] {
+                let row = rows
+                    .iter()
+                    .find(|row| near_box(row.bounds, expected))
+                    .unwrap_or_else(|| panic!("{message}: row {expected:?} in {rows:?}"));
+                assert_eq!(row.stroke, rgb(kind_colors(connector.kind).0), "{message}");
+                assert!(row.filled, "{message}");
+            }
             assert_eq!(line.stroke, rgb(kind_colors(connector.kind).0), "{message}");
             let first = line.points[0];
             let last = *line.points.last().expect("points");
@@ -966,8 +1078,8 @@ fn compare_pdf_draws_one_connector_per_change() {
             },
         ),
     ] {
-        for drawn in export(name, &options) {
-            assert!(drawn.is_empty(), "{name}");
+        for (drawn, rows, _) in export(name, &options) {
+            assert!(drawn.is_empty() && rows.is_empty(), "{name}");
         }
     }
     let replace_color = rgb(kind_colors(ChangeKind::Replace).0);
@@ -978,7 +1090,10 @@ fn compare_pdf_draws_one_connector_per_change() {
             ..CompareReportOptions::default()
         },
     );
-    let remaining: Vec<&DrawnConnector> = without_replace.iter().flatten().collect();
+    let remaining: Vec<&DrawnConnector> = without_replace
+        .iter()
+        .flat_map(|(drawn, _, _)| drawn)
+        .collect();
     assert_eq!(
         remaining.len(),
         expected_connectors
@@ -989,8 +1104,8 @@ fn compare_pdf_draws_one_connector_per_change() {
     assert!(remaining.iter().all(|line| line.stroke != replace_color));
 }
 
-/// 한 장의 연결선(변경 하나에 하나)이 [`MAX_SHEET_CONNECTORS`]개면 모두 그리고, 하나라도 넘으면 그 장에는
-/// 하나도 그리지 않는다.
+/// 한 장의 연결선(변경 하나에 하나)이 [`MAX_SHEET_CONNECTORS`]개면 모두(줄 표시도 A·B 하나씩) 그리고,
+/// 하나라도 넘으면 그 장에는 연결선도 줄 표시도 그리지 않는다.
 #[test]
 fn compare_pdf_omits_connectors_over_the_sheet_limit() {
     const BOX_STEP_PT: f32 = 15.0;
@@ -1037,10 +1152,14 @@ fn compare_pdf_omits_connectors_over_the_sheet_limit() {
         )
         .expect("export");
         inspect_output(&output, |document| {
-            drawn_connectors(&document.pages().get(0).expect("sheet")).len()
+            let sheet = document.pages().get(0).expect("sheet");
+            (drawn_connectors(&sheet).len(), drawn_rows(&sheet).len())
         })
     };
 
-    assert_eq!(connector_count(MAX_SHEET_CONNECTORS), MAX_SHEET_CONNECTORS);
-    assert_eq!(connector_count(MAX_SHEET_CONNECTORS + 1), 0);
+    assert_eq!(
+        connector_count(MAX_SHEET_CONNECTORS),
+        (MAX_SHEET_CONNECTORS, MAX_SHEET_CONNECTORS * 2)
+    );
+    assert_eq!(connector_count(MAX_SHEET_CONNECTORS + 1), (0, 0));
 }

@@ -92,29 +92,35 @@ export function toOverlayRect({ rect, pane }: ToOverlayRectParams): PxRect {
   };
 }
 
-/** 연결선 한쪽 끝의 자리(px): 끝점 x, 띠 변의 위·아래 */
+/** 연결선 한쪽 끝의 자리(px): 연결선이 나가는 x, 줄 표시(띠 변)의 위·아래 */
 export interface EndSpan {
   x: number;
   top: number;
   bottom: number;
 }
 
+/** 쪽 그림의 가로 범위(px) */
+export interface PageSpan {
+  left: number;
+  right: number;
+}
+
 interface EndSpanParams {
+  /** 끝 사각형(상자 합집합 또는 앵커 막대)의 화면 사각형 */
   rect: PxRect;
-  end: ConnectorEnd;
+  /** 끝이 놓인 쪽의 가로 범위 */
+  page: PageSpan;
   side: Side;
 }
 
 /**
- * 대표점(계획서 §7.1): 상자는 합집합의 거터를 향한 변(A 오른쪽, B 왼쪽), 앵커는 막대 가운데. 끝점의
- * 세로 자리는 `top`·`bottom`의 가운데다. 90·270도 쪽 앵커 막대는 화면에서 가로로 놓이므로 막대
- * 가운데를 쓴다(높이 0인 띠 변이 된다).
+ * 끝의 자리(계획서 §7.1, Step 28-d): 끝마다 쪽 너비 전체 × 끝 사각형의 세로 범위인 줄 표시가 있고,
+ * 연결선은 줄 표시의 거터를 향한 변(A는 쪽 오른쪽 끝, B는 쪽 왼쪽 끝)의 세로 가운데에서 나간다(Rust
+ * `exit_point`). 90·270도 쪽 앵커 막대는 화면에서 가로로 놓여 높이 0인 줄 표시(띠 변)가 된다.
  */
-export function endSpanOf({ rect, end, side }: EndSpanParams): EndSpan {
-  const anchorX = (rect.left + rect.right) / HALF;
-  const boxX = side === COMPARE_SIDE.BEFORE ? rect.right : rect.left;
+export function endSpanOf({ rect, page, side }: EndSpanParams): EndSpan {
   return {
-    x: end.isAnchor ? anchorX : boxX,
+    x: side === COMPARE_SIDE.BEFORE ? page.right : page.left,
     top: rect.top,
     bottom: rect.bottom
   };
@@ -213,8 +219,8 @@ interface LinePathParams {
 }
 
 /**
- * 선 연결선: 1) A 끝점 → A 패널 끝까지 수평 stem 2) 거터 3차 베지어 `C (gl + g/2, y1) (gr − g/2, y2)
- * (gr, y2)` 3) B 패널 끝 → B 끝점까지 수평 stem
+ * 선 연결선: 1) A 줄 표시의 쪽 끝 → A 패널 끝까지 수평 2) 거터 3차 베지어 `C (gl + g/2, y1) (gr − g/2, y2)
+ * (gr, y2)` 3) B 패널 끝 → B 줄 표시의 쪽 끝까지 수평
  */
 export function connectorPath({ start, end, gutter }: LinePathParams): string {
   const gutterStart = { x: gutter.left, y: start.y };
@@ -236,8 +242,8 @@ interface BandPathParams {
 }
 
 /**
- * 띠(2줄 넘는 블록): A [위, 아래]와 B [위, 아래]를 위 변·아래 변 두 베지어로 이은 닫힌 경로. 양끝은 각
- * 끝점 x에서 수평으로 거터까지 간다.
+ * 띠(2줄 넘는 블록): A 줄 표시 [위, 아래]와 B 줄 표시 [위, 아래]를 위 변·아래 변 두 베지어로 이은 닫힌
+ * 경로. 양끝은 각 쪽 끝(줄 표시의 거터 쪽 변)에서 수평으로 거터까지 간다.
  */
 export function bandPath({ before, after, gutter }: BandPathParams): string {
   const topStart = { x: gutter.left, y: before.top };

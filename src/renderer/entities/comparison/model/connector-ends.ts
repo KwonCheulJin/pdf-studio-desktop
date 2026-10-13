@@ -26,7 +26,10 @@ const SAME_LINE_MIN_OVERLAP = 0.5;
  */
 const f32 = Math.fround;
 
-/** 연결선 한쪽 끝(Rust `ConnectorEnd`) */
+/**
+ * 연결선 한쪽 끝(Rust `ConnectorEnd`). Rust의 줄 표시(`row`, 화면 방향 pt)는 화면에서 끝 사각형을 그 쪽
+ * pdf.js 변환으로 옮겨 구한다(`widgets/compare-viewer`, ADR 0001 §2).
+ */
 export interface ConnectorEnd {
   /** 사용자 공간 사각형. 글자 쪽은 첫 상자의 쪽 상자들 합집합, 앵커는 너비 0인 막대다. */
   bounds: TextBox;

@@ -188,11 +188,21 @@ impl Placement {
     /// 사용자 공간 상자를 장 좌표로 옮긴다.
     pub(super) fn map(&self, bounds: &TextBox) -> PageBox {
         let display = to_display(bounds, &self.size);
+        self.map_display(PageBox {
+            left: display.x,
+            bottom: display.y,
+            right: display.x + display.w,
+            top: display.y + display.h,
+        })
+    }
+
+    /// 화면 방향 사각형(`view_box` 왼쪽 아래 원점, 연결선 줄 표시)을 장 좌표로 옮긴다.
+    pub(super) fn map_display(&self, display: PageBox) -> PageBox {
         PageBox {
-            left: self.left + display.x * self.scale,
-            bottom: self.bottom + display.y * self.scale,
-            right: self.left + (display.x + display.w) * self.scale,
-            top: self.bottom + (display.y + display.h) * self.scale,
+            left: self.left + display.left * self.scale,
+            bottom: self.bottom + display.bottom * self.scale,
+            right: self.left + display.right * self.scale,
+            top: self.bottom + display.top * self.scale,
         }
     }
 }

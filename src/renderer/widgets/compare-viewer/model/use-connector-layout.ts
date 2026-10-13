@@ -86,25 +86,30 @@ function placeEnd({
       ? undefined
       : rows[row]?.slots.find((candidate) => candidate.side === side);
   if (!geometry || row === undefined || !slot) return null;
+  const pageLeft = pageLeftOf({
+    paneWidthPx,
+    slotWidthPx: slot.widthPx,
+    padding: panePaddingOf({ side, isSplit: true })
+  });
   const rect = toContentRect({
     geometry,
     bounds: end.bounds,
     page: {
-      left: pageLeftOf({
-        paneWidthPx,
-        slotWidthPx: slot.widthPx,
-        padding: panePaddingOf({ side, isSplit: true })
-      }),
+      left: pageLeft,
       top: offsets[row] + VIEWER_LAYOUT.CAPTION_HEIGHT_PX,
       widthPx: slot.widthPx,
       heightPx: slot.heightPx
     }
   });
-  return endSpanOf({ rect, end, side });
+  return endSpanOf({
+    rect,
+    page: { left: pageLeft, right: pageLeft + slot.widthPx },
+    side
+  });
 }
 
 /**
- * 연결선마다 두 끝의 패널 콘텐츠 좌표(끝점 x, 띠 변 위·아래)를 결과·배율·패널 너비가 바뀔 때만
+ * 연결선마다 두 끝의 패널 콘텐츠 좌표(연결선이 나가는 쪽 끝 x, 줄 표시·띠 변 위·아래)를 결과·배율·패널 너비가 바뀔 때만
  * 계산한다(계획서 §7.1 "쪽 기준 좌표는 캐시"). 끝이 놓인 쪽의 pdf.js 화면 변환은 화면에 놓이지 않은
  * 쪽도 미리 받는다(한쪽 끝이 화면 밖인 선을 경계로 끌어오려면 그 끝의 자리를 알아야 한다).
  */

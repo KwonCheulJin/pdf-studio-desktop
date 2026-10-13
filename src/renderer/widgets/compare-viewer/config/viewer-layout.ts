@@ -34,6 +34,18 @@ export const CONNECTOR_STYLE = {
   CHEVRON_PX: 4
 } as const;
 
+/**
+ * 연결선 끝의 줄 표시(계획서 §7.1 Step 28-d, 토큰 문서 §6.6): 쪽 너비 전체를 덮는 줄 높이 사각형. 종류 선
+ * 색 얇은 테두리와 종류 `-fill`을 이 불투명도로 옅게 채운다(그 위의 변경 상자가 더 진하게 보인다).
+ * 비교 PDF의 줄 표시도 같은 비율이다(Rust `ROW_FILL_ALPHA_DIVISOR`).
+ */
+export const ROW_BAND_STYLE = {
+  STROKE_PX: 1,
+  /** 고르거나 연결선을 가리킬 때 */
+  EMPHASIZED_STROKE_PX: 2,
+  FILL_OPACITY: 0.5
+} as const;
+
 /** pdf.js 뷰어와 같은 100%: 1pt = 96/72 CSS px */
 export const CSS_PX_PER_PT = 96 / 72;
 

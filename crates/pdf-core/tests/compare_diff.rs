@@ -6,22 +6,39 @@ mod common;
 
 use common::{assert_matches_golden, engine, fixture_path};
 use pdf_core::{
-    DIFF_TIME_LIMIT, NormalizeOptions, Token, TokenDiff, diff_tokens, extract_text_layer, tokenize,
+    ComparedPages, DIFF_TIME_LIMIT, ExtractedPage, NormalizeOptions, PageSizes, TokenDiff,
+    diff_tokens, extract_text_layer, tokenize,
 };
 
 const BASE: &str = "diff-base.pdf";
 /// golden 깊이: 변경 배열 → 변경 → 쪽(`before`/`after`) → `boxes`. 상자 하나가 한 줄이다.
 const CHANGES_GOLDEN_DEPTH: usize = 4;
 
-fn fixture_tokens(name: &str) -> Vec<Token> {
-    let pages = extract_text_layer(engine(), &fixture_path(name)).expect("extract text layer");
-    tokenize(&pages, NormalizeOptions::default())
+fn fixture_pages(name: &str) -> Vec<ExtractedPage> {
+    extract_text_layer(engine(), &fixture_path(name)).expect("extract text layer")
+}
+
+/// 문서의 모든 쪽 번호(비교 범위 = 전체)
+fn page_numbers(pages: &[ExtractedPage]) -> Vec<u32> {
+    (0..u32::try_from(pages.len()).expect("page count fits u32")).collect()
 }
 
 fn diff_with_base(variant: &str) -> TokenDiff {
+    let (before, after) = (fixture_pages(BASE), fixture_pages(variant));
+    let sizes = |pages: &[ExtractedPage]| pages.iter().map(|page| page.size).collect();
+    let page_sizes = PageSizes {
+        before: sizes(&before),
+        after: sizes(&after),
+    };
+    let (before_pages, after_pages) = (page_numbers(&before), page_numbers(&after));
     let diff = diff_tokens(
-        &fixture_tokens(BASE),
-        &fixture_tokens(variant),
+        &tokenize(&before, NormalizeOptions::default()),
+        &tokenize(&after, NormalizeOptions::default()),
+        &ComparedPages {
+            before: &before_pages,
+            after: &after_pages,
+            sizes: &page_sizes,
+        },
         DIFF_TIME_LIMIT,
     );
     assert_eq!(

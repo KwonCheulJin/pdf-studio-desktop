@@ -69,7 +69,7 @@ pub struct NormalizeOptions {
 pub struct Token {
     /// 비교 키: 옵션의 정규화 형식, `ignore_case`면 소문자. diff는 이 값만 본다.
     pub key: String,
-    /// 원문: NFC만 적용하고 대소문자를 그대로 둔 글자(`ChangeSide.text` 재료)
+    /// 원문: NFC만 적용하고 대소문자를 그대로 둔 글자(`Placement::Boxes`의 `text` 재료)
     pub text: String,
     /// `key`의 글자마다 하나(같은 순서). 그 글자를 낸 원본 글자(클러스터)의 상자이고, 쪽은
     /// 상자의 `page`다. 하이픈으로 이은 토큰은 쪽이 바뀔 수 있다.

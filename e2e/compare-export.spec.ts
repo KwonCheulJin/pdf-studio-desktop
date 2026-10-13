@@ -11,6 +11,7 @@ import type {
   CompareReportOptions,
   CompareResult,
   PageSize,
+  Placement,
   PreviewCompareReportRequest,
   TextSource
 } from "../src/renderer/shared/api/bindings";
@@ -85,12 +86,18 @@ const OTHER_DIRECTORY = "/Users/e2e/reports";
 const COMPARE_FILE_NAME = "pages-base-insert_비교.pdf";
 const ANNOTATED_FILE_NAME = "pages-base-insert_주석.pdf";
 
-function side(page: number, text: string): NonNullable<Change["before"]> {
+function side(page: number, text: string): Placement {
   return {
+    kind: "boxes",
     text,
     boxes: [{ page, x: 72, y: 700, w: 160, h: 14 }],
     minConfidence: null
   };
+}
+
+/** 반대쪽에 글자가 없는 변경의 들어갈 자리(ADR 0001 §4). 상자가 없어 장 고르기에 들지 않는다. */
+function anchor(page: number): Placement {
+  return { kind: "anchor", page, x: 232, y: 700, h: 14 };
 }
 
 const CHANGES: Change[] = [
@@ -105,7 +112,7 @@ const CHANGES: Change[] = [
   {
     id: "insert-new-page",
     kind: "insert",
-    before: null,
+    before: anchor(1),
     after: side(2, "새 조항"),
     pagePair: [null, 2],
     needsReview: false
@@ -114,7 +121,7 @@ const CHANGES: Change[] = [
     id: "delete-on-fourth-page",
     kind: "delete",
     before: side(3, "지체상금"),
-    after: null,
+    after: anchor(4),
     pagePair: [3, null],
     needsReview: false
   }

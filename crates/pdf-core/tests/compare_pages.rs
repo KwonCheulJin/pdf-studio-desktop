@@ -8,30 +8,40 @@ use std::time::Duration;
 
 use common::{assert_matches_golden, engine, fixture_path};
 use pdf_core::{
-    DIFF_TIME_LIMIT, NormalizeOptions, PagePair, Token, diff_tokens, extract_text_layer,
-    pair_pages, tokenize,
+    ComparedPages, DIFF_TIME_LIMIT, NormalizeOptions, PagePair, PageSize, PageSizes, Token,
+    diff_tokens, extract_text_layer, pair_pages, tokenize,
 };
 
 const BASE: &str = "pages-base.pdf";
 /// golden 깊이: 행 배열 → 행. 행 하나가 한 줄이다.
 const PAGE_PAIRS_GOLDEN_DEPTH: usize = 1;
 
-/// 문서의 모든 쪽 번호(비교 범위 = 전체)와 토큰열
-fn fixture_pages(name: &str) -> (Vec<u32>, Vec<Token>) {
+/// 문서의 모든 쪽 번호(비교 범위 = 전체)와 토큰열, 쪽 크기
+fn fixture_pages(name: &str) -> (Vec<u32>, Vec<Token>, Vec<PageSize>) {
     let pages = extract_text_layer(engine(), &fixture_path(name)).expect("extract text layer");
     let page_count = u32::try_from(pages.len()).expect("page count fits u32");
     (
         (0..page_count).collect(),
         tokenize(&pages, NormalizeOptions::default()),
+        pages.iter().map(|page| page.size).collect(),
     )
 }
 
 /// 원본과 변형을 diff한 공통 토큰 짝으로 쪽을 짝짓는다. 짝짓기가 기대는 `matches` 계약(같은 키끼리,
 /// 두 색인이 함께 늘어난다)과 ADR 0001 §3의 `page_pairs` 불변식도 함께 확인한다.
 fn pair_with_base(variant: &str, time_limit: Duration) -> (Vec<PagePair>, bool) {
-    let (before_pages, before) = fixture_pages(BASE);
-    let (after_pages, after) = fixture_pages(variant);
-    let diff = diff_tokens(&before, &after, time_limit);
+    let (before_pages, before, before_sizes) = fixture_pages(BASE);
+    let (after_pages, after, after_sizes) = fixture_pages(variant);
+    let sizes = PageSizes {
+        before: before_sizes,
+        after: after_sizes,
+    };
+    let pages = ComparedPages {
+        before: &before_pages,
+        after: &after_pages,
+        sizes: &sizes,
+    };
+    let diff = diff_tokens(&before, &after, &pages, time_limit);
     for &(before_index, after_index) in &diff.matches {
         assert_eq!(before[before_index].key, after[after_index].key);
     }

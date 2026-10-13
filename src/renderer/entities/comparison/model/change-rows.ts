@@ -1,12 +1,12 @@
 import type {
   Change,
   ChangeKind,
-  ChangeSide,
   CompareResult,
+  Placement,
   Side,
   TextBox
 } from "@/renderer/shared/api/bindings";
-import { COMPARE_SIDE } from "../config/change-kind";
+import { COMPARE_SIDE, PLACEMENT_KIND } from "../config/change-kind";
 
 /** 한 행에 나란히 놓이는 쪽 짝 `[A 쪽, B 쪽]`. `null`은 그 문서에 짝이 없다(ADR 0001 §3). */
 export type PagePair = CompareResult["pagePairs"][number];
@@ -38,16 +38,24 @@ export function indexPagePairs(pagePairs: readonly PagePair[]): RowLookup {
   };
 }
 
+/** 그 쪽에 변경 글자가 있는 `Placement`(상자와 글자) */
+export type BoxesPlacement = Extract<
+  Placement,
+  { kind: typeof PLACEMENT_KIND.BOXES }
+>;
+
 interface ChangeSideParams {
   change: Change;
   side: Side;
 }
 
+/** 변경의 그 쪽 글자와 상자. 그 쪽에 글자가 없으면(앵커) `null`이다(앵커는 아직 그리지 않는다). */
 export function changeSideOf({
   change,
   side
-}: ChangeSideParams): ChangeSide | null {
-  return side === COMPARE_SIDE.BEFORE ? change.before : change.after;
+}: ChangeSideParams): BoxesPlacement | null {
+  const placement = side === COMPARE_SIDE.BEFORE ? change.before : change.after;
+  return placement.kind === PLACEMENT_KIND.BOXES ? placement : null;
 }
 
 interface RowOfChangeParams {

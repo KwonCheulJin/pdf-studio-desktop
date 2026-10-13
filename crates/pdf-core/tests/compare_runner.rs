@@ -381,8 +381,8 @@ impl<'a> ChangeText<'a> {
     fn of(change: &'a Change) -> Self {
         Self {
             kind: change.kind,
-            before: change.before.as_ref().map(|side| side.text.as_str()),
-            after: change.after.as_ref().map(|side| side.text.as_str()),
+            before: change.before.text(),
+            after: change.after.text(),
             needs_review: change.needs_review,
         }
     }

@@ -4,7 +4,7 @@
 use pdf_core::{
     ChangeKind, DIFF_TIME_LIMIT, DocumentText, ExtractedChar, ExtractedPage, Glyph,
     NormalizeOptions, OCR_MIN_CONFIDENCE, OCR_MIN_CONFIDENCE_NUMERIC, PageBox, PageRotation,
-    PageSize, TextBox, TextSource, compare_texts,
+    PageSize, Placement, TextBox, TextSource, compare_texts,
 };
 
 const GLYPH_WIDTH: f32 = 10.0;
@@ -78,17 +78,17 @@ fn changes(
         .changes
         .into_iter()
         .map(|change| {
-            let text = |side: &Option<pdf_core::ChangeSide>| {
-                side.as_ref()
-                    .map(|side| side.text.clone())
-                    .unwrap_or_default()
+            let text = |side: &Placement| side.text().unwrap_or_default().to_owned();
+            let after_confidence = match change.after {
+                Placement::Boxes { min_confidence, .. } => min_confidence,
+                Placement::Anchor { .. } => None,
             };
             (
                 change.kind,
                 text(&change.before),
                 text(&change.after),
                 change.needs_review,
-                change.after.and_then(|side| side.min_confidence),
+                after_confidence,
             )
         })
         .collect()

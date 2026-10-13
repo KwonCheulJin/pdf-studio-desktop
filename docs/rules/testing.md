@@ -2,12 +2,13 @@
 
 언제 읽는가: 테스트를 쓰거나 고칠 때, 리팩터링 전에 동작을 고정할 때, 어떤 테스트를 둘지 판단할 때.
 
-- **Rust는 핵심 동작만 테스트한다.** 결과가 바뀌면 깨지는 규칙이 대상이다: 병합(페이지 순서·회전 절대값·북마크), 정보 읽기, TIFF 변환, 비교 엔진(추출·토큰화·diff·쪽 짝짓기·연결선 묶기·리포트 내보내기), 경로 검증, 진행률 계산. `crates/pdf-core`와 `src-tauri`의 순수 로직에 적용한다.
+- **Rust는 핵심 동작만 테스트한다.** 결과가 바뀌면 깨지는 규칙이 대상이다: 병합(페이지 순서·회전 절대값·북마크), 정보 읽기, TIFF 변환, 비교 엔진(추출·토큰화·diff·앵커·쪽 짝짓기·연결선 묶기·리포트 내보내기), 경로 검증, 진행률 계산. `crates/pdf-core`와 `src-tauri`의 순수 로직에 적용한다.
 - **Rust에서 쓰지 않는 테스트:** 상수 값 확인, 단순 getter, 자명한 enum↔문자열 매핑, 라이브러리(pdfium 등) 자체 동작, 다른 테스트와 같은 것을 다시 확인하는 중복. 「이 테스트를 실패시킬 production 변경」을 한 줄로 말할 수 없으면 쓰지 않는다.
 - Rust 핵심 코어는 **Red → Green → Refactor.** 실패하는 테스트를 먼저 쓰고, 통과시키는 최소 코드를 쓰고, 그다음 정리한다. 버그는 재현 테스트부터 쓴다.
 - 비교 엔진·연결선 묶기는 golden JSON 픽스처로 Rust에서 검증한다.
   - golden은 `crates/pdf-core/tests/golden/`에 둔다. 픽스처나 규칙을 바꾸면 `UPDATE_GOLDEN=1 PDFIUM_LIB_PATH=<라이브러리 파일> cargo test -p pdf-core --test <테스트 파일>`로 다시 쓰고, 바뀐 값을 눈으로 확인한 뒤 E2E까지 통과시킨다. 비교 픽스처는 `crates/pdf-core/tests/fixtures/generate_compare_fixtures.py`로 만든다(한글 글꼴을 `node_modules`의 OFL 글꼴에서 읽으므로 `pnpm install` 뒤에 돌린다).
   - 좌표 golden 픽스처는 글꼴을 임베드한다(OS 글꼴 대체로 tight box가 달라짐).
+  - 앵커·같은 줄 상자 병합(Step 28-b, ADR 0001 §4·§10)은 `compare_placement.rs`가 golden(`placement.changes.json`)과 함께 확인한다. 기대 앵커·상자는 추출 글자(`extract_text_layer`)의 tight 상자를 테스트 안에서 합쳐 세운다(토큰화·diff·앵커 코드를 거치지 않은 값). `diff_tokens`를 직접 부르는 테스트는 비교 범위 쪽과 쪽 크기(`ComparedPages`)를 함께 넘긴다.
   - 시간에 따라 달라지는 동작(diff 시간 제한)은 이미 지난 제한(`Duration::ZERO`)으로 결정적으로 확인한다. 실제 시간을 재서 단언하는 테스트는 두지 않고, 측정값은 ADR·상수 주석에 남긴다.
   - 해시처럼 규칙으로 계산하는 값(`Change.id`)은 기대값을 테스트 대상 코드가 아닌 다른 구현(Python `hashlib` 등)으로 구해 리터럴로 둔다.
 - OCR 비교 테스트(`crates/pdf-core/tests/compare_ocr.rs`, 실행기의 스캔 쪽 테스트 `compare_runner.rs`)는 `tests/ocr.rs`처럼 `ONNXRUNTIME_LIB_PATH`·`OCR_MODEL_DIR`이 없으면 건너뛴다(런타임 없이 도는 `OcrUnavailable` 테스트만 남는다). OCR golden(`ocr-edit.changes.json`)은 변경의 종류·글자·확인 필요만 담는다(상자·신뢰도는 OCR 실행 환경에 따라 조금 흔들릴 수 있어 빼고, 상자는 허용 오차 테스트로 따로 본다). debug 빌드에서 OCR 테스트 파일 하나가 약 1분 걸린다. CI는 세 OS 잡 모두 두 값을 넣어 OCR 테스트를 돌린다(`.github/workflows/ci.yml`). 신뢰도·확인 필요·NFKC 강제 규칙은 pdfium·OCR 없이 글자를 직접 만든 문서로 확인한다(`compare_review.rs`). OCR 픽스처는 `generate_ocr_fixtures.py`로 다시 만든다.

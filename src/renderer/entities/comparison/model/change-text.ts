@@ -6,7 +6,7 @@ import {
   COMPARISON_TEXT,
   OCR_TEXT_SOURCE
 } from "../config/change-kind";
-import type { PagePair } from "./change-rows";
+import { changeSideOf, type PagePair } from "./change-rows";
 
 /** 화면에 보이는 쪽 번호(0부터 센 번호 + 1, ADR 0001 §3) */
 export function displayPageNumber(page: number): number {
@@ -15,8 +15,8 @@ export function displayPageNumber(page: number): number {
 
 /** 목록 한 줄 요약: 추가는 B 글자, 삭제는 A 글자, 변경은 "A → B"(시안 4) */
 export function changeSummary(change: Change): string {
-  const before = change.before?.text;
-  const after = change.after?.text;
+  const before = changeSideOf({ change, side: COMPARE_SIDE.BEFORE })?.text;
+  const after = changeSideOf({ change, side: COMPARE_SIDE.AFTER })?.text;
   if (before !== undefined && after !== undefined) {
     return `${before} → ${after}`;
   }

@@ -16,12 +16,12 @@ use pdfium_render::prelude::{
 
 use super::super::extract::ExtractedPage;
 use super::super::model::{
-    Change, ChangeKind, ChangeSide, CompareResult, PagePair, PageSizes, PageSources, TextBox,
-    TextSource,
+    Change, ChangeKind, CompareResult, PagePair, PageSizes, PageSources,
+    Placement as ChangePlacement, TextBox, TextSource,
 };
 use super::super::{
-    DIFF_TIME_LIMIT, NormalizeOptions, connector_stems, diff_tokens, extract_text_layer,
-    pair_pages, tokenize,
+    ComparedPages, DIFF_TIME_LIMIT, NormalizeOptions, connector_stems, diff_tokens,
+    extract_text_layer, pair_pages, tokenize,
 };
 use super::compose::{CONNECTOR_COLOR, MAX_SHEET_CONNECTORS};
 use super::sheet::{Placement, slots};
@@ -141,10 +141,21 @@ fn compare_files(before: &Path, after: &Path) -> CompareResult {
     let after_pages = extract_text_layer(engine(), after).expect("extract after");
     let before_tokens = tokenize(&before_pages, NormalizeOptions::default());
     let after_tokens = tokenize(&after_pages, NormalizeOptions::default());
-    let diff = diff_tokens(&before_tokens, &after_tokens, DIFF_TIME_LIMIT);
+    let (before_numbers, after_numbers) = (page_numbers(&before_pages), page_numbers(&after_pages));
+    let sizes = |pages: &[ExtractedPage]| pages.iter().map(|page| page.size).collect();
+    let page_sizes = PageSizes {
+        before: sizes(&before_pages),
+        after: sizes(&after_pages),
+    };
+    let pages = ComparedPages {
+        before: &before_numbers,
+        after: &after_numbers,
+        sizes: &page_sizes,
+    };
+    let diff = diff_tokens(&before_tokens, &after_tokens, &pages, DIFF_TIME_LIMIT);
     let page_pairs = pair_pages(
-        &page_numbers(&before_pages),
-        &page_numbers(&after_pages),
+        &before_numbers,
+        &after_numbers,
         &before_tokens,
         &after_tokens,
         &diff.matches,
@@ -253,7 +264,7 @@ fn boxes_cover_the_same_glyphs_on_rotated_and_offset_pages() {
                 }
             })
             .expect("word has boxes");
-        let side = ChangeSide {
+        let side = ChangePlacement::Boxes {
             text: word.text.clone(),
             boxes: vec![bounds],
             min_confidence: None,
@@ -261,8 +272,8 @@ fn boxes_cover_the_same_glyphs_on_rotated_and_offset_pages() {
         changes.push(Change {
             id: page.to_string(),
             kind: ChangeKind::Replace,
-            before: Some(side.clone()),
-            after: Some(side),
+            before: side.clone(),
+            after: side,
             page_pair: (Some(page), Some(page)),
             needs_review: page == GEOMETRY_REVIEW_PAGE,
         });
@@ -299,7 +310,7 @@ fn boxes_cover_the_same_glyphs_on_rotated_and_offset_pages() {
                 .filter(|rect| rect.stroke == rgb(CHANGE_STROKE))
                 .collect();
             assert_eq!(boxes.len(), 2, "page {page}: one box on A and one on B");
-            let word: String = change.before.as_ref().expect("before").text.clone();
+            let word: String = change.before.text().expect("before").to_owned();
             for drawn in &boxes {
                 // 변경은 점선, 확인 필요는 채우지 않는다.
                 assert!(drawn.dashed, "page {page}: replace boxes are dashed");
@@ -368,9 +379,8 @@ fn row_has_visible_box(result: &CompareResult, row: PagePair, hidden: &[ChangeKi
         .iter()
         .filter(|change| !hidden.contains(&change.kind))
         .any(|change| {
-            let on = |side: &Option<ChangeSide>, page: Option<u32>| {
-                side.as_ref()
-                    .is_some_and(|side| side.boxes.iter().any(|bounds| Some(bounds.page) == page))
+            let on = |side: &ChangePlacement, page: Option<u32>| {
+                side.boxes().iter().any(|bounds| Some(bounds.page) == page)
             };
             on(&change.before, row.0) || on(&change.after, row.1)
         })
@@ -557,22 +567,20 @@ fn annotated_pdf_marks_after_copy_and_keeps_source() {
 
     let mut expected_count = 0;
     for change in &result.changes {
-        let before_text = change.before.as_ref().map(|side| side.text.as_str());
-        let after_text = change.after.as_ref().map(|side| side.text.as_str());
+        let (before_text, after_text) = (change.before.text(), change.after.text());
         let mentions_change = |contents: &str| {
             before_text.is_none_or(|text| contents.contains(text))
                 && after_text.is_none_or(|text| contents.contains(text))
         };
-        match &change.after {
-            Some(after_side) => {
+        match change.after.boxes() {
+            after_boxes @ [first, ..] => {
                 let expected_type = if change.needs_review {
                     PdfPageAnnotationType::Square
                 } else {
                     PdfPageAnnotationType::Highlight
                 };
-                let page = after_side.boxes[0].page;
-                let expected_rect = after_side
-                    .boxes
+                let page = first.page;
+                let expected_rect = after_boxes
                     .iter()
                     .filter(|bounds| bounds.page == page)
                     .map(page_box)
@@ -590,7 +598,7 @@ fn annotated_pdf_marks_after_copy_and_keeps_source() {
                 );
                 expected_count += 1;
             }
-            None => {
+            [] => {
                 assert!(
                     found.iter().any(|(_, kind, _, contents)| {
                         *kind == PdfPageAnnotationType::Text && mentions_change(contents)
@@ -919,7 +927,7 @@ fn compare_pdf_omits_connectors_over_the_sheet_limit() {
     let directory = TestDir::new("connector-limit");
     let source = copy_fixture("diff-base.pdf", &directory);
     let pages = extract_text_layer(engine(), &source).expect("extract");
-    let side = |row: usize| ChangeSide {
+    let side = |row: usize| ChangePlacement::Boxes {
         text: row.to_string(),
         boxes: vec![TextBox {
             page: 0,
@@ -939,8 +947,8 @@ fn compare_pdf_omits_connectors_over_the_sheet_limit() {
             .map(|row| Change {
                 id: row.to_string(),
                 kind: ChangeKind::Replace,
-                before: Some(side(row)),
-                after: Some(side(count - 1 - row)),
+                before: side(row),
+                after: side(count - 1 - row),
                 page_pair: (Some(0), Some(0)),
                 needs_review: false,
             })

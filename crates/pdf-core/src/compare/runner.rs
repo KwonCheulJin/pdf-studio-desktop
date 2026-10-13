@@ -21,6 +21,7 @@ use pdfium_render::prelude::PdfDocument;
 
 use self::cache::{FileKey, ReadText};
 use self::progress::ProgressReporter;
+use super::anchors::ComparedPages;
 use super::diff::{DIFF_TIME_LIMIT, diff_tokens_with_progress};
 use super::extract::{ExtractedChar, ExtractedPage, extract_pages};
 use super::model::{
@@ -109,9 +110,18 @@ pub fn compare_pdfs(
     );
 
     ensure_not_cancelled(cancel)?;
+    let page_sizes = PageSizes {
+        before: before.sizes(),
+        after: after.sizes(),
+    };
     let diff = diff_tokens_with_progress(
         &before_tokens,
         &after_tokens,
+        &ComparedPages {
+            before: &before.range,
+            after: &after.range,
+            sizes: &page_sizes,
+        },
         DIFF_TIME_LIMIT,
         |done, total| reporter.report(CompareStage::Diff, done, total),
     );
@@ -128,10 +138,7 @@ pub fn compare_pdfs(
     let result = CompareResult {
         changes: diff.changes,
         page_pairs,
-        page_sizes: PageSizes {
-            before: before.sizes(),
-            after: after.sizes(),
-        },
+        page_sizes,
         page_sources: PageSources {
             before: before.sources(),
             after: after.sources(),

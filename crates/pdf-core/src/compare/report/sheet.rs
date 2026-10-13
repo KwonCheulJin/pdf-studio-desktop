@@ -2,7 +2,9 @@
 
 use std::collections::HashMap;
 
-use super::super::model::{ChangeKind, ChangeSide, CompareResult, PageSize, TextBox};
+use super::super::model::{
+    ChangeKind, CompareResult, PageSize, Placement as ChangePlacement, TextBox,
+};
 use super::super::options::{display_size, to_display};
 use super::{CompareReportOptions, ReportLayout};
 use crate::info::PageBox;
@@ -47,8 +49,9 @@ impl<'r> Marks<'r> {
             .iter()
             .filter(|change| !hidden_kinds.contains(&change.kind));
         for change in visible {
-            let add = |pages: &mut HashMap<u32, Vec<Mark<'r>>>, side: &'r ChangeSide| {
-                for bounds in &side.boxes {
+            // 앵커는 상자가 없어 그리지 않는다.
+            let add = |pages: &mut HashMap<u32, Vec<Mark<'r>>>, side: &'r ChangePlacement| {
+                for bounds in side.boxes() {
                     pages.entry(bounds.page).or_default().push(Mark {
                         kind: change.kind,
                         needs_review: change.needs_review,
@@ -56,12 +59,8 @@ impl<'r> Marks<'r> {
                     });
                 }
             };
-            if let Some(before) = &change.before {
-                add(&mut marks.before, before);
-            }
-            if let Some(after) = &change.after {
-                add(&mut marks.after, after);
-            }
+            add(&mut marks.before, &change.before);
+            add(&mut marks.after, &change.after);
         }
         marks
     }

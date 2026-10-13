@@ -30,7 +30,7 @@
 | `crates/translate` | 문단 키(§3), 묶음(§4), 요청·응답(§5·§6), 재시도(§7), 기록(§8), 진행(§9) | Tauri·pdfium·키체인 |
 | `src-tauri` | 계약 미러(§10), `ErrorCode` 짝(§11), 키체인·설정 저장소(§12·§13) | — |
 
-- `crates/translate`는 pdf-core 타입을 받지 않는다. `src-tauri`가 `Paragraph` → translate 입력(`SourceParagraph { page, number, text, heading }`)으로 옮긴다. 두 크레이트가 서로를 모르게 하는 대가다(Q10).
+- `crates/translate`는 pdf-core 타입을 받지 않는다. `src-tauri`가 `ParagraphPage` → translate 입력(`SourcePage { page, content: Text(Vec<SourceParagraph { number, text, heading }>) | Scan(ScanImage { width_px, height_px }) }`, §2와 같은 모양에서 상자·글자 크기를 뺀 것)으로 옮긴다. 스캔 쪽은 렌더하지 않고 보낼 그림 크기만 넘긴다(계획의 그림 토큰, §4). 두 크레이트가 서로를 모르게 하는 대가다(Q10).
 - 계약 타입은 ADR 0001 §7과 같은 방식이다: `src-tauri/contract.rs` 미러 + `From`, camelCase, 단위 enum은 camelCase 문자열, 번호·개수·토큰은 `u32`.
 - `crates/translate`는 serde를 쓴다(요청·응답 JSON과 기록 파일). specta는 쓰지 않는다.
 
@@ -88,7 +88,7 @@ pub struct ParagraphPage { pub page: u32, pub size: PageSize, pub content: PageP
 | 순서 | 문서 순서(쪽 오름차순, 쪽 안 `number` 오름차순)다. |
 | 텍스트 묶음 | 문단을 자르지 않고 차례로 담는다. 다음 문단을 더하면 묶음 입력 예상(§4 아래 식)이 `CHUNK_INPUT_TOKEN_BUDGET`(시작값 2,500)을 넘으면 묶음을 닫는다. 쪽 경계는 넘어도 된다. |
 | 스캔 쪽 | 쪽 하나가 묶음 하나다. 스캔 쪽을 만나면 열린 텍스트 묶음을 닫고 스캔 묶음을 낸 뒤 새 텍스트 묶음을 연다. |
-| 긴 문단 | 문단 하나의 글 토큰이 상한을 넘으면 열린 묶음을 닫고 그 문단을 조각으로 나눈다. 문장 끝(`。！？.!?` 뒤, 닫는 따옴표·괄호가 바로 따르면 그 뒤)에서 나눈 문장을 상한까지 채워 조각 하나로 만든다. 문장 하나가 상한을 넘으면 그 문장을 글자 수로 나눈다(예상 토큰이 상한 안이 되게). 조각 하나가 묶음 하나다. 번역은 조각 순서대로 공백 하나로 잇는다. 화면에는 문단 하나다. |
+| 긴 문단 | 그 문단 하나만 담은 묶음의 입력 예상(고정 부담·그 문단에 나오는 용어 포함)이 상한을 넘으면 열린 묶음을 닫고 그 문단을 조각으로 나눈다. 문장 끝(`。！？.!?` 뒤, 끝 글자·닫는 따옴표·괄호가 바로 따르면 그 뒤)에서 나눈 문장을 상한까지 채워 조각 하나로 만든다(조각의 글 토큰 자리 = 상한 − 고정 부담 − 그 문단에 나오는 용어 토큰). 조각은 앞뒤 공백을 지운다. 문장 하나가 상한을 넘으면 그 문장을 글자 수로 나눈다(예상 토큰이 상한 안이 되게). 조각 하나가 묶음 하나다. 번역은 조각 순서대로 공백 하나로 잇는다. 화면에는 문단 하나다. |
 | 항목 ID | 묶음 안 순번 `"1"`, `"2"`…(문자열)이다. 문단 키를 보내지 않는다(토큰을 아끼고, 모델이 키를 바꿔 쓰는 일을 막는다). |
 | 용어집 | 묶음 원문(조각이면 그 조각)에 원어가 나오는 용어만 싣는다. 나오는지는 NFC 부분 문자열로 보고, ASCII 글자는 대소문자를 무시한다. 스캔 묶음은 원문을 모르므로 합친 용어집 전체를 싣는다. |
 | 이어하기 | 기록(§8)에 있는 문단은 묶음에서 빼고 보낸다. 항목이 모두 기록에 있는 묶음은 보내지 않고 끝난 것으로 센다. 조각으로 나눈 문단은 문단 단위로만 기록하므로 일부 조각만 끝난 채 멈췄으면 그 문단의 조각을 처음부터 다시 보낸다. 스캔 쪽은 기록에 그 쪽이 있으면 보내지 않는다. |
@@ -407,7 +407,10 @@ struct ApiKeyStatus { registered: bool, hint: Option<String> }  // hint = 끝 4�
 ### 14. 의존성 위험 (Q5·Q6, Step 36에서 판정)
 
 - **TLS(Q5):** 채택안은 `reqwest` + rustls(`ring` 공급자) + OS 인증서 저장소다. 레포의 `reqwest`는 0.13.5(tauri 하위, TLS 없음)다. reqwest 0.13의 rustls 기본 경로는 `aws-lc-rs`(라이선스 식에 OpenSSL)를 쓰고, Step 33(자동 업데이트, 브랜치 `feat/auto-update`)에서는 updater의 기본 `rustls-tls`가 reqwest를 거쳐 `webpki-root-certs`(CDLA-Permissive-2.0, §1.2 허용 목록 밖)를 끌어와 updater를 `native-tls`로 바꿨다. 그래서 Q5 A가 기능 플래그만으로 `aws-lc-*`·`webpki-root*` 없이 빌드되는지는 확실하지 않다. Step 36이 `cargo tree -i`와 `pnpm licenses:check`(예외 추가 없이)로 판정한다. 안 되면 Q5 B(`native-tls`, updater와 같은 TLS라 TLS 스택이 하나로 준다)로 바꾸는 것을 계획서 §9.1.9에 적고 보고한다. 정확한 기능 이름은 Step 36에서 확인한다.
+  - **판정(Step 36, 2026-10-13): Q5 B로 바꿨다.** `reqwest` `default-features = false` + `rustls-no-provider`와 `rustls` `ring`으로 `aws-lc-*`는 빠졌지만, reqwest 0.13의 rustls 기능은 둘 다 `rustls-platform-verifier` 0.7.1을 끌어오고 그것이 wasm32 타깃 의존성으로 `webpki-root-certs`를 선언한다. 끄는 기능이 없어 `licenses:check`가 실패했다. 지금 값은 `src-tauri/Cargo.toml`의 `reqwest = { version = "0.13", default-features = false, features = ["native-tls"] }`(0.13.5)이고 예외 추가 없이 통과한다. 의존성에 `aws-lc-*`·`webpki-root*`·`rustls`·`ring`이 없다. Linux는 시스템 OpenSSL(`libssl-dev`)에 동적 링크한다. 키 없는 `GET https://api.anthropic.com/v1/models`가 TLS로 연결되고 401, 본문 `{ type: "error", error: { type: "authentication_error", … }, request_id }`, 헤더 `request-id`를 돌려줬다(macOS, `src-tauri/src/translate_deps_spike.rs`의 ignored 테스트). 릴리스 바이너리 증가는 요청·키체인 호출을 링크하면 약 +1.4 MiB(+1,503,872 B, 계획서 §9.1.9 Q5).
+  - Step 36은 의존성을 Step 41 어댑터가 쓸 `src-tauri`에 넣었다. `crates/translate`가 reqwest를 쓰게 되면(Step 39) 같은 기능(`default-features = false`, `native-tls`)으로 넣는다. 기본 기능을 켜면 rustls·`aws-lc-rs`가 다시 들어온다.
 - **키체인(Q6):** `keyring`의 Linux 백엔드는 `libdbus`를 쓰지 않는 쪽(zbus 기반 Secret Service)이어야 한다. 정확한 기능 플래그와 macOS ad-hoc 서명 앱의 다시 빌드한 뒤 허락 창 동작은 Step 36에서 확인한다.
+  - **판정(Step 36, 2026-10-13):** `keyring = "4"`(4.2.0) 기본 기능 `v1` = macOS `apple-native-keyring-store/keychain`, Windows `windows-native-keyring-store`, Linux `zbus-secret-service-keyring-store`(`crypto-rust`). `libdbus` 백엔드(`dbus-secret-service-keyring-store`)는 들어오지 않는다. API는 `keyring::Entry::new(서비스, 계정)` → `set_password`·`get_password`·`delete_credential`, 없으면 `keyring::Error::NoEntry`. macOS에서 쓰기·읽기·지우기·지운 뒤 `NoEntry`를 ignored 테스트로 확인했다(서명 없는 테스트 바이너리, 허락 창 없음). ad-hoc 서명 `.app`의 허락 창과 다시 빌드한 뒤 읽기는 앱을 띄워야 해서 사용자 확인이 남았다.
 - **비동기:** `crates/translate`는 tokio(시간·취소 대기)와 reqwest를 쓴다. 테스트는 `tokio::time::pause`로 재시도 지연을 결정적으로 본다(계획서 §9.1.5).
 
 ### 15. 공식 문서로 확인한 것 (2026-10-13)

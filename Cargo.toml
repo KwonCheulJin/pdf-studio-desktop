@@ -1,3 +1,3 @@
 [workspace]
 resolver = "3"
-members = ["src-tauri", "crates/pdf-core"]
+members = ["src-tauri", "crates/pdf-core", "crates/translate"]

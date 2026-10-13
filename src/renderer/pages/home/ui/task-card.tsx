@@ -6,6 +6,8 @@ interface TaskCardProps {
   title: string;
   description: string;
   actionLabel: string;
+  /** 같은 화면에 이름이 같은 버튼이 여럿일 때 스크린 리더용으로 구분하는 이름(보이는 글자를 포함해야 한다). */
+  actionAriaLabel?: string;
   /** 버튼 옆에 받는 파일을 적는다. */
   caption: string;
   /** 끌어온 파일이 이 카드 위에 있다. */
@@ -20,6 +22,7 @@ export function TaskCard({
   title,
   description,
   actionLabel,
+  actionAriaLabel,
   caption,
   isDropTarget,
   illustration,
@@ -43,7 +46,11 @@ export function TaskCard({
         <p className="text-muted-foreground">{description}</p>
       </div>
       <div className="flex flex-wrap items-center gap-3">
-        <Button className="h-9 rounded-md px-4 font-medium" onClick={onAction}>
+        <Button
+          aria-label={actionAriaLabel}
+          className="h-9 rounded-md px-4 font-medium"
+          onClick={onAction}
+        >
           {actionLabel}
         </Button>
         <span className="text-muted-foreground text-xs/4.25">{caption}</span>

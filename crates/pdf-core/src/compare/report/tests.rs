@@ -6,12 +6,12 @@
 use std::fs;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
 use std::sync::atomic::AtomicBool;
+use std::sync::{Mutex, MutexGuard, OnceLock, PoisonError};
 
 use pdfium_render::prelude::{
     PdfColor, PdfDocument, PdfPage, PdfPageAnnotationCommon, PdfPageAnnotationType,
-    PdfPageObjectCommon, PdfPageObjectsCommon, PdfPathFillMode,
+    PdfPageObjectCommon, PdfPageObjectsCommon, PdfPathFillMode, PdfPathSegments,
 };
 
 use super::super::extract::ExtractedPage;
@@ -20,8 +20,11 @@ use super::super::model::{
     TextSource,
 };
 use super::super::{
-    DIFF_TIME_LIMIT, NormalizeOptions, diff_tokens, extract_text_layer, pair_pages, tokenize,
+    DIFF_TIME_LIMIT, NormalizeOptions, connector_stems, diff_tokens, extract_text_layer,
+    pair_pages, tokenize,
 };
+use super::compose::{CONNECTOR_COLOR, MAX_SHEET_CONNECTORS};
+use super::sheet::{Placement, slots};
 use super::{
     CHANGE_STROKE, CompareReportOptions, ReportError, ReportLayout, ReportSources,
     export_annotated_pdf, export_compare_pdf, preview_compare_report,
@@ -57,6 +60,16 @@ fn engine() -> &'static PdfEngine {
         // 번들 폴더는 없는 경로를 준다: 환경변수 경로로 바인딩돼야 통과한다.
         PdfEngine::bind(Path::new("/nonexistent/pdfium")).expect("bind pdfium")
     })
+}
+
+/// 이 모듈의 테스트를 하나씩 돌린다. pdfium-render 0.9.4의 `thread_safe` 바인딩은 일부 함수
+/// (`FPDFPageObj_SetStrokeColor`·`GetStrokeColor`·`FPDFPath_BezierTo`·`FPDF_NewXObjectFromPage` 등)를
+/// 프로세스 잠금 없이 부른다. 두 테스트가 동시에 장을 그리면 pdfium의 공유 색공간 참조 수가 깨져
+/// `CPDF_Color::GetColorRef`에서 죽는다(연결선 테스트를 더한 뒤 병렬 실행 20번 중 7번 재현). 테스트가
+/// 실패해 잠금이 오염돼도 다음 테스트는 돈다.
+fn pdfium_serialized() -> MutexGuard<'static, ()> {
+    static PDFIUM_TESTS: Mutex<()> = Mutex::new(());
+    PDFIUM_TESTS.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 fn fixture(name: &str) -> PathBuf {
@@ -219,6 +232,7 @@ fn union(first: PageBox, second: PageBox) -> PageBox {
 /// 장에 그린 상자 두 개(A·B)가 각각 출력 장에서 pdfium이 다시 뽑은 그 낱말 글자들을 덮는다.
 #[test]
 fn boxes_cover_the_same_glyphs_on_rotated_and_offset_pages() {
+    let _pdfium = pdfium_serialized();
     let directory = TestDir::new("geometry");
     let source = copy_fixture("text-geometry.pdf", &directory);
     let pages = extract_text_layer(engine(), &source).expect("extract");
@@ -372,6 +386,7 @@ fn row_has_visible_box(result: &CompareResult, row: PagePair, hidden: &[ChangeKi
 /// 출력 장의 글자로 알아본다.
 #[test]
 fn sheets_follow_layout_and_changed_page_filters() {
+    let _pdfium = pdfium_serialized();
     let directory = TestDir::new("sheets");
     let before = copy_fixture("pages-base.pdf", &directory);
     let after = copy_fixture("pages-insert.pdf", &directory);
@@ -495,6 +510,7 @@ fn sheets_follow_layout_and_changed_page_filters() {
 /// 내용은 변경 전후 글자이고 원본 B는 바뀌지 않는다. 숨긴 종류는 달지 않는다.
 #[test]
 fn annotated_pdf_marks_after_copy_and_keeps_source() {
+    let _pdfium = pdfium_serialized();
     let directory = TestDir::new("annotated");
     let before = copy_fixture("diff-base.pdf", &directory);
     let after = copy_fixture("diff-edit.pdf", &directory);
@@ -643,6 +659,7 @@ fn annotated_pdf_marks_after_copy_and_keeps_source() {
 /// 출력 경로가 비교한 파일이면(`..`로 돌아간 경로 포함) 쓰지 않고 거부한다.
 #[test]
 fn refuses_to_overwrite_compared_files() {
+    let _pdfium = pdfium_serialized();
     let directory = TestDir::new("overwrite");
     let before = copy_fixture("diff-base.pdf", &directory);
     let after = copy_fixture("diff-edit.pdf", &directory);
@@ -687,6 +704,7 @@ fn refuses_to_overwrite_compared_files() {
 /// 취소가 켜져 있으면 저장하지 않고 `Cancelled`를 돌려주며 출력·임시 파일이 남지 않는다.
 #[test]
 fn cancelled_export_leaves_no_files() {
+    let _pdfium = pdfium_serialized();
     let directory = TestDir::new("cancel");
     let before = copy_fixture("diff-base.pdf", &directory);
     let after = copy_fixture("diff-edit.pdf", &directory);
@@ -724,6 +742,7 @@ fn cancelled_export_leaves_no_files() {
 /// 그림에 색(회색이 아닌 화소)이 생긴다.
 #[test]
 fn preview_renders_first_sheets_as_png() {
+    let _pdfium = pdfium_serialized();
     let directory = TestDir::new("preview");
     let before = copy_fixture("pages-base.pdf", &directory);
     let after = copy_fixture("pages-insert.pdf", &directory);
@@ -772,4 +791,185 @@ fn preview_renders_first_sheets_as_png() {
     assert_eq!(with_boxes.images.len(), 1);
     assert!(colored_pixels(&with_boxes.images[0]) > 0);
     assert_eq!(colored_pixels(&without_boxes.images[0]), 0);
+}
+
+/// 장에 그린 연결선 하나의 시작점(A 쪽)과 끝점(B 쪽). 그린 순서대로다.
+fn drawn_connectors(page: &PdfPage) -> Vec<((f32, f32), (f32, f32))> {
+    page.objects()
+        .iter()
+        .filter(|object| {
+            object
+                .stroke_color()
+                .is_ok_and(|color| rgb(color) == rgb(CONNECTOR_COLOR))
+        })
+        .filter_map(|object| {
+            let segments = object.as_path_object()?.segments();
+            let first = segments.get(0).expect("first segment");
+            let last = segments
+                .get(segments.len().checked_sub(1).expect("segments"))
+                .expect("last segment");
+            Some((
+                (first.x().value, first.y().value),
+                (last.x().value, last.y().value),
+            ))
+        })
+        .collect()
+}
+
+/// 놓인 쪽 사각형의 세로 가운데에 사용자 공간 상자를 옮긴 높이
+fn mapped_center(placement: &Placement, bounds: &TextBox) -> f32 {
+    let rect = placement.map(bounds);
+    (rect.bottom + rect.top) / 2.0
+}
+
+/// 나란히 내보낸 비교 PDF는 행마다 화면과 같은 묶기 규칙의 묶음 수만큼 연결선을 그린다. 선은 A 쪽
+/// 오른쪽 끝에서 묶음 A 상자의 세로 가운데로 나가 B 쪽 왼쪽 끝의 묶음 B 상자 가운데로 들어간다(가로
+/// 쪽 행 포함). 색 상자를 빼거나 한쪽 배치면 연결선도 없고, 변경(`Replace`)을 숨기면 이을 변경이 없다.
+#[test]
+fn compare_pdf_draws_one_connector_per_stem() {
+    let _pdfium = pdfium_serialized();
+    let directory = TestDir::new("connectors");
+    let before = copy_fixture("connectors-a.pdf", &directory);
+    let after = copy_fixture("connectors-b.pdf", &directory);
+    let result = compare_files(&before, &after);
+    let rows = connector_stems(&result, &[]);
+    assert!(rows.len() == result.page_pairs.len(), "{rows:?}");
+    let sources = ReportSources {
+        before: before.clone(),
+        after: after.clone(),
+    };
+    let export = |name: &str, options: &CompareReportOptions| {
+        let output = directory.join(name);
+        export_compare_pdf(
+            engine(),
+            &result,
+            &sources,
+            options,
+            &output,
+            &AtomicBool::new(false),
+        )
+        .expect("export");
+        open_output(&output)
+    };
+
+    let document = export("connectors.pdf", &CompareReportOptions::default());
+    let (Some(before_slot), Some(after_slot)) = slots(ReportLayout::SideBySide) else {
+        panic!("side by side has two slots");
+    };
+    for (index, row) in rows.iter().enumerate() {
+        let sheet = document.pages().get(index as i32).expect("sheet");
+        let connectors = drawn_connectors(&sheet);
+        assert_eq!(connectors.len(), row.stems.len(), "row {:?}", row.pages);
+        let before_placement =
+            Placement::fit(&result.page_sizes.before[row.pages.0 as usize], before_slot);
+        let after_placement =
+            Placement::fit(&result.page_sizes.after[row.pages.1 as usize], after_slot);
+        for (stem, (start, end)) in row.stems.iter().zip(&connectors) {
+            let message = format!("row {:?} stem {:?}", row.pages, stem.change_ids);
+            assert!(
+                (start.0 - before_placement.frame().right).abs() < 0.01,
+                "{message}"
+            );
+            assert!(
+                (end.0 - after_placement.frame().left).abs() < 0.01,
+                "{message}"
+            );
+            assert!(
+                (start.1 - mapped_center(&before_placement, &stem.before)).abs() < 0.01,
+                "{message}: start {start:?}"
+            );
+            assert!(
+                (end.1 - mapped_center(&after_placement, &stem.after)).abs() < 0.01,
+                "{message}: end {end:?}"
+            );
+        }
+    }
+
+    for (name, options) in [
+        (
+            "no-boxes.pdf",
+            CompareReportOptions {
+                draw_boxes: false,
+                ..CompareReportOptions::default()
+            },
+        ),
+        (
+            "a-only.pdf",
+            CompareReportOptions {
+                layout: ReportLayout::AOnly,
+                ..CompareReportOptions::default()
+            },
+        ),
+        (
+            "no-replace.pdf",
+            CompareReportOptions {
+                hidden_kinds: vec![ChangeKind::Replace],
+                ..CompareReportOptions::default()
+            },
+        ),
+    ] {
+        let document = export(name, &options);
+        for sheet in document.pages().iter() {
+            assert!(drawn_connectors(&sheet).is_empty(), "{name}");
+        }
+    }
+}
+
+/// 한 장의 묶음이 [`MAX_SHEET_CONNECTORS`]개면 모두 그리고, 하나라도 넘으면 그 장에는 하나도 그리지
+/// 않는다. 변경마다 따로 묶이도록 B 쪽 순서를 A와 거꾸로 둔다(순위가 앞 변경 + 1이 아니다).
+#[test]
+fn compare_pdf_omits_connectors_over_the_sheet_limit() {
+    let _pdfium = pdfium_serialized();
+    const BOX_STEP_PT: f32 = 15.0;
+    const BOX_HEIGHT_PT: f32 = 5.0;
+    const TOP_PT: f32 = 800.0;
+    let directory = TestDir::new("connector-limit");
+    let source = copy_fixture("diff-base.pdf", &directory);
+    let pages = extract_text_layer(engine(), &source).expect("extract");
+    let side = |row: usize| ChangeSide {
+        text: row.to_string(),
+        boxes: vec![TextBox {
+            page: 0,
+            x: 100.0,
+            y: TOP_PT - BOX_STEP_PT * row as f32,
+            w: 20.0,
+            h: BOX_HEIGHT_PT,
+        }],
+        min_confidence: None,
+    };
+    let sources = ReportSources {
+        before: source.clone(),
+        after: source,
+    };
+    let connector_count = |count: usize| {
+        let changes = (0..count)
+            .map(|row| Change {
+                id: row.to_string(),
+                kind: ChangeKind::Replace,
+                before: Some(side(row)),
+                after: Some(side(count - 1 - row)),
+                page_pair: (Some(0), Some(0)),
+                needs_review: false,
+            })
+            .collect();
+        let result = result_from(&pages, &pages, changes, vec![(Some(0), Some(0))]);
+        let stems = connector_stems(&result, &[]);
+        assert_eq!(stems[0].stems.len(), count, "each change is its own stem");
+        let output = directory.join(format!("limit-{count}.pdf"));
+        export_compare_pdf(
+            engine(),
+            &result,
+            &sources,
+            &CompareReportOptions::default(),
+            &output,
+            &AtomicBool::new(false),
+        )
+        .expect("export");
+        let document = open_output(&output);
+        let sheet = document.pages().get(0).expect("sheet");
+        drawn_connectors(&sheet).len()
+    };
+
+    assert_eq!(connector_count(MAX_SHEET_CONNECTORS), MAX_SHEET_CONNECTORS);
+    assert_eq!(connector_count(MAX_SHEET_CONNECTORS + 1), 0);
 }

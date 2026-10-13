@@ -5,6 +5,7 @@ import {
   ChangeList,
   ChangeNavigator,
   CompareNoticesBand,
+  ConnectorToggle,
   useChangeFilter,
   useChangeKeyboard,
   useChangeNavigation,
@@ -19,8 +20,7 @@ import {
 
 /**
  * 비교 결과 화면(시안 4, 계획서 P3-4). 머리는 앱 툴바(`AppToolbarCompare`)가 그린다.
- * 툴바(종류 칩·이전/다음·보기 방식·배율·현재 쪽) / 안내 띠 / 차이 목록 | 페이지 영역 | 미니맵.
- * 연결선(Step 28)은 거터 자리만 둔다.
+ * 툴바(종류 칩·연결선·이전/다음·보기 방식·배율·현재 쪽) / 안내 띠 / 차이 목록 | 페이지 영역 | 미니맵.
  */
 export function CompareResultScreen() {
   const completed = useCompletedComparison();
@@ -44,6 +44,7 @@ export function CompareResultScreen() {
     <div className="flex min-w-0 flex-1 flex-col text-sm/5.25">
       <div className="border-border bg-card flex min-h-12 shrink-0 flex-wrap items-center gap-x-4 gap-y-2.5 border-b px-6 py-2">
         <ChangeKindChips counts={counts} />
+        <ConnectorToggle />
         <span className="grow" />
         <ChangeNavigator navigation={navigation} />
         <span className="grow" />

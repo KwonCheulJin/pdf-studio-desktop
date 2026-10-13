@@ -40,7 +40,7 @@ project-root/
 │  │  ├─ engine.rs             # pdfium 라이브러리 경로 결정(PDFIUM_LIB_PATH 우선)과 바인딩
 │  │  ├─ document.rs           # 문서 열기, 에러 타입
 │  │  ├─ info.rs               # 페이지 수·크기·회전 정규화
-│  │  ├─ compare.rs, compare/  # PDF 비교(결과 모델·추출·토큰화·diff·리포트 내보내기 규칙은 ADR 0001)
+│  │  ├─ compare.rs, compare/  # PDF 비교(결과 모델·추출·토큰화·diff·리포트 내보내기 규칙은 ADR 0001, 연결선 묶기 connectors.rs는 계획서 §7.1)
 │  │  ├─ ocr/                  # 스캔 쪽 OCR(렌더·검출·인식, 런타임 경로, 디스크 캐시). 비교 연결은 compare/pipeline.rs(ADR 0001 §11)
 │  │  ├─ merge.rs, merge/      # 병합(회전 절대값), 진행률
 │  │  ├─ tiff.rs, tiff/        # TIFF → PDF (CCITT 포함)
@@ -78,17 +78,17 @@ project-root/
    │  └─ merged-preview/       # 병합 결과 미리보기 화면
    ├─ widgets/
    │  ├─ merge-workspace/      # 병합 작업 영역 조합
-   │  └─ compare-viewer/       # 비교 결과 페이지 영역: 쪽 쌍 행 가상화(virtuoso), pdf.js 쪽 + SVG 하이라이트, 미니맵, 배율
+   │  └─ compare-viewer/       # 비교 결과 페이지 영역: 쪽 쌍 행 가상화(virtuoso), pdf.js 쪽 + SVG 하이라이트, 거터 연결선, 미니맵, 배율
    ├─ features/                # 사용자 행동
    │  ├─ pdf-merge/            # 파일 추가·선택·회전·병합·다운로드
-   │  ├─ pdf-compare/          # 비교 세션(A·B 문서·옵션·결과·고른 변경·필터·보기 방식)·실행(진행률·취소), 파일 받기, ui/file-slots·options-card·progress-card·결과 머리·종류 칩·이전/다음·차이 목록·안내 띠
+   │  ├─ pdf-compare/          # 비교 세션(A·B 문서·옵션·결과·고른 변경·필터·보기 방식·연결선 표시)·실행(진행률·취소), 파일 받기, 연결선 묶음·호버, ui/file-slots·options-card·progress-card·결과 머리·종류 칩·연결선 체크박스·이전/다음·차이 목록·안내 띠
    │  ├─ pdf-preview/          # 미리보기 모달
    │  ├─ theme-toggle/         # 테마 system|light|dark 선택·저장
    │  ├─ error-reporting/      # 오류 보고 켜기·끄기, 첫 실행 안내
    │  └─ third-party-notices/  # 앱 정보: 상태 바에서 제3자 고지 대화상자 열기
    ├─ entities/                # 읽기·표시
    │  ├─ merge-plan/           # 병합 대상 문서·페이지 상태(merge-store), 진행 오버레이
-   │  └─ comparison/           # 비교 결과 타입(바인딩 재수출)·선택자(필터·개수·쪽별 묶기·이동·안내 문구), 하이라이트 상자·견본·배지
+   │  └─ comparison/           # 비교 결과 타입(바인딩 재수출)·선택자(필터·개수·쪽별 묶기·이동·안내 문구), 연결선 묶기·path(connector-stems·connectors), 하이라이트 상자·견본·배지
    └─ shared/                  # 도메인을 모른다
       ├─ api/bindings.ts       # tauri-specta 생성물 (손으로 고치지 않는다)
       ├─ platform/             # DesktopPlatform 인터페이스, tauri·mock 구현

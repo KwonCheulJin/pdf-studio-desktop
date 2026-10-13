@@ -16,6 +16,8 @@ import {
   useActiveChangeId,
   useChangeFilter,
   useCompareViewMode,
+  useConnectorStems,
+  useHoveredChangeIds,
   useRevealCount,
   type CompletedComparison
 } from "@/renderer/features/pdf-compare";
@@ -123,6 +125,7 @@ interface CompareViewerProps {
  * 결과 화면 가운데 페이지 영역(계획서 P3-4) + 오른쪽 미니맵. 스크롤 컨테이너는 하나이고
  * `page_pairs`의 한 쌍이 한 행이며, virtuoso가 행 단위로 가상화해 화면 근처 행만 pdf.js로 그린다.
  * 좌우가 따로 스크롤하지 않으므로 동기 스크롤이 없다. 행 크기는 `page_sizes`로 미리 안다.
+ * 연결선 묶음은 행마다 pt로 한 번 계산하고(배율과 상관없다), 마운트된 행만 거터에 그린다.
  */
 export function CompareViewer({ completed }: CompareViewerProps) {
   const { jobId, result, files } = completed;
@@ -130,6 +133,8 @@ export function CompareViewer({ completed }: CompareViewerProps) {
   const activeChangeId = useActiveChangeId();
   const revealCount = useRevealCount();
   const viewMode = useCompareViewMode();
+  const connectorStems = useConnectorStems();
+  const hoveredChangeIds = useHoveredChangeIds();
   const scale = useViewerScale();
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const [wrapper, setWrapper] = useState<HTMLElement | null>(null);
@@ -185,17 +190,27 @@ export function CompareViewer({ completed }: CompareViewerProps) {
 
   const renderScale = scale === null ? RENDER_SCALE.MIN : renderScaleOf(scale);
   const renderRow = useCallback(
-    (_index: number, row: ViewerRow) => (
+    (index: number, row: ViewerRow) => (
       <PageRow
         row={row}
         files={files}
         pageSources={result.pageSources}
         highlights={highlights}
+        stems={connectorStems?.[index] ?? null}
         activeChangeId={activeChangeId}
+        hoveredChangeIds={hoveredChangeIds}
         renderScale={renderScale}
       />
     ),
-    [files, result.pageSources, highlights, activeChangeId, renderScale]
+    [
+      files,
+      result.pageSources,
+      highlights,
+      connectorStems,
+      activeChangeId,
+      hoveredChangeIds,
+      renderScale
+    ]
   );
 
   return (

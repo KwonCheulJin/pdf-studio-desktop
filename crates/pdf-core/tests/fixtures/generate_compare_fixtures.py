@@ -20,6 +20,9 @@
 - pages-base.pdf·pages-insert.pdf·pages-delete.pdf·pages-edit.pdf·pages-push.pdf(Step 20): 빈 쪽이
   낀 5쪽 가상 계약서 원본과 변형 넷(쪽 삽입과 다른 쪽 숫자 하나 수정, 쪽 삭제, 쪽 순서를 둔 채
   내용 일부 수정, 앞에 넣은 문단 때문에 쪽 내용이 반 넘게 다음 쪽으로 밀린 판).
+- connectors-a.pdf·connectors-b.pdf(Step 28): 연결선 묶기 사례(여러 줄 변경, 인접 변경 3개, 20pt
+  경계 안·밖, A만 경계 안, 순서가 뒤바뀐 변경, 추가·삭제)를 둔 세로 쪽과 가로 쪽(A는 /Rotate 90에
+  돌려 그린 글자, B는 가로 MediaBox) 2쪽.
 
     python3 crates/pdf-core/tests/fixtures/generate_compare_fixtures.py
 
@@ -905,6 +908,164 @@ PAGES_PUSH = [
 ]
 
 
+# --- 연결선 묶기(Step 28) ------------------------------------------------------------
+
+# 0쪽(A4 세로)은 A·B가 같은 자리에 같은 문구를 두고 바꾼 곳만 다르다. 사례 사이는 40pt 넘게 띄워
+# 서로 묶이지 않게 한다. 글자 크기 12pt에서 숫자 tight 상자는 기준선 위 약 8.6pt·아래 약 0.2pt라,
+# 위아래 두 줄 숫자 상자의 세로 간격은 기준선 간격 − 약 8.8pt다.
+CONNECTOR_FONT_SIZE = 12
+CONNECTOR_LEFT = 60
+# 붙는 줄(간격 약 13pt), 20pt 경계 바로 안(약 17pt)과 바로 밖(약 23pt)의 기준선 간격
+CONNECTOR_LINE_GAP = 22
+CONNECTOR_NEAR_GAP = 26
+CONNECTOR_FAR_GAP = 32
+
+
+@dataclass
+class ConnectorLine:
+    """연결선 픽스처 한 줄. `before_y`·`after_y`는 A·B 기준선(같으면 `after_y`는 None)."""
+
+    before: str
+    after: str
+    before_y: float
+    after_y: float | None = None
+
+
+CONNECTOR_PORTRAIT_LINES = [
+    # 여러 줄 변경: 줄 끝 `서면으로`와 다음 줄 첫 `통지한`이 한 변경이고 상자가 줄마다 하나다.
+    ConnectorLine(
+        "제1조(통지) 계약을 끝내려는 쪽은 상대방에게 서면으로",
+        "제1조(통지) 계약을 끝내려는 쪽은 상대방에게 전자우편으로",
+        780,
+    ),
+    ConnectorLine("통지한 후 30일이 지나면 해지할 수 있다.", "알린 후 30일이 지나면 해지할 수 있다.", 758),
+    # 인접 변경 3개: 줄마다 숫자 하나씩, 붙는 줄 간격이라 한 묶음이다.
+    ConnectorLine(
+        "제2조(대금) 계약 금액은 금 1,000,000원으로 한다.",
+        "제2조(대금) 계약 금액은 금 1,200,000원으로 한다.",
+        700,
+    ),
+    ConnectorLine(
+        "착수금은 계약 금액의 30%로 하고 계약일에 지급한다.",
+        "착수금은 계약 금액의 40%로 하고 계약일에 지급한다.",
+        700 - CONNECTOR_LINE_GAP,
+    ),
+    ConnectorLine(
+        "잔금은 검수를 마친 날부터 14일 안에 지급한다.",
+        "잔금은 검수를 마친 날부터 7일 안에 지급한다.",
+        700 - 2 * CONNECTOR_LINE_GAP,
+    ),
+    # 20pt 경계 안: 간격 약 17pt라 묶인다.
+    ConnectorLine(
+        "제3조(기간) 용역 기간은 2026년 11월 2일부터 시작한다.",
+        "제3조(기간) 용역 기간은 2026년 11월 9일부터 시작한다.",
+        600,
+    ),
+    ConnectorLine(
+        "검수 기간은 산출물을 받은 날부터 10일로 한다.",
+        "검수 기간은 산출물을 받은 날부터 15일로 한다.",
+        600 - CONNECTOR_NEAR_GAP,
+    ),
+    # 20pt 경계 밖: 간격 약 23pt라 따로다.
+    ConnectorLine("제4조(보증) 하자 보증 기간은 1년으로 한다.", "제4조(보증) 하자 보증 기간은 2년으로 한다.", 520),
+    ConnectorLine(
+        "보증금은 계약 금액의 5%로 한다.", "보증금은 계약 금액의 3%로 한다.", 520 - CONNECTOR_FAR_GAP
+    ),
+    # A는 경계 안(약 17pt), B는 경계 밖(약 23pt): 양쪽 모두 안이어야 묶이므로 따로다.
+    ConnectorLine(
+        "제5조(지체) 지체상금은 하루에 계약 금액의 0.1%로 한다.",
+        "제5조(지체) 지체상금은 하루에 계약 금액의 0.2%로 한다.",
+        430,
+    ),
+    ConnectorLine(
+        "지체상금 합계는 계약 금액의 10%를 넘지 못한다.",
+        "지체상금 합계는 계약 금액의 20%를 넘지 못한다.",
+        430 - CONNECTOR_NEAR_GAP,
+        430 - CONNECTOR_FAR_GAP,
+    ),
+    # 순서가 뒤바뀐 변경: B는 내용 순서를 둔 채 두 줄의 자리만 바꿨다. 붙는 줄이지만 B 읽는 순서의
+    # 순위가 거꾸로라 따로다.
+    ConnectorLine(
+        "제6조(관할) 분쟁은 갑의 본점 소재지 법원에서 다룬다.",
+        "제6조(관할) 분쟁은 을의 본점 소재지 법원에서 다룬다.",
+        350,
+        350 - CONNECTOR_LINE_GAP,
+    ),
+    ConnectorLine(
+        "이 계약서는 2통을 만들어 1통씩 가진다.",
+        "이 계약서는 3통을 만들어 1통씩 가진다.",
+        350 - CONNECTOR_LINE_GAP,
+        350,
+    ),
+    # 추가·삭제는 잇지 않는다.
+    ConnectorLine(
+        "제7조(기타) 이 계약에 없는 사항은 관례에 따른다.",
+        "제7조(기타) 이 계약에 없는 사항은 서로 협의해 관례에 따른다.",
+        260,
+    ),
+    ConnectorLine("부속 합의서는 이 계약과 같은 효력을 가진다.", "부속 합의서는 계약과 같은 효력을 가진다.", 200),
+]
+
+# 1쪽은 가로 쪽 행이다. A는 세로 A4를 /Rotate 90으로 눕히고 글자를 돌려 그려 화면에서 바로 선다
+# (화면 위 → 아래가 사용자 공간 x가 커지는 쪽). B는 가로 MediaBox에 그냥 쓴다. A 첫 줄의 변경은 줄
+# 앞쪽, 둘째 줄의 변경은 줄 뒤쪽이라 사용자 공간 위쪽 모서리 순서로는 둘째 줄이 먼저다. 화면 방향
+# 읽는 순서로는 첫 줄이 먼저라 두 변경이 한 묶음이다. 셋째 줄은 멀리 떨어져 따로다.
+CONNECTOR_LANDSCAPE_TEXT = [
+    ("제8조(검수) 7일 안에 갑은 산출물을 모두 검수한다.", "제8조(검수) 10일 안에 갑은 산출물을 모두 검수한다."),
+    (
+        "검수에 떨어진 산출물은 을이 고쳐 다시 넘기되 5일을 넘기지 않는다.",
+        "검수에 떨어진 산출물은 을이 고쳐 다시 넘기되 3일을 넘기지 않는다.",
+    ),
+    ("이 조항은 2026년 10월 13일부터 적용한다.", "이 조항은 2027년 10월 13일부터 적용한다."),
+]
+# A(돌려 그린 줄): 줄마다 사용자 공간 x, 줄 시작 y
+CONNECTOR_ROTATED_LINE_X = (120, 120 + CONNECTOR_LINE_GAP, 240)
+CONNECTOR_ROTATED_START_Y = 80
+# B(가로 MediaBox): 줄마다 기준선 y
+A4_LANDSCAPE_MEDIA_BOX = (0, 0, 842, 595)
+CONNECTOR_LANDSCAPE_LINE_Y = (515, 515 - CONNECTOR_LINE_GAP, 395)
+
+
+def connector_pages(side: str) -> list[PageSpec]:
+    is_before = side == "before"
+    portrait = PageSpec(
+        media_box=A4_MEDIA_BOX,
+        runs=[
+            TextRun(
+                CONNECTOR_LEFT,
+                line.before_y if is_before or line.after_y is None else line.after_y,
+                line.before if is_before else line.after,
+                CONNECTOR_FONT_SIZE,
+            )
+            for line in CONNECTOR_PORTRAIT_LINES
+        ],
+    )
+    if is_before:
+        landscape = PageSpec(
+            media_box=A4_MEDIA_BOX,
+            rotate=90,
+            runs=[
+                TextRun(x, CONNECTOR_ROTATED_START_Y, before, CONNECTOR_FONT_SIZE, upward=True)
+                for x, (before, _) in zip(CONNECTOR_ROTATED_LINE_X, CONNECTOR_LANDSCAPE_TEXT)
+            ],
+        )
+    else:
+        landscape = PageSpec(
+            media_box=A4_LANDSCAPE_MEDIA_BOX,
+            runs=[
+                TextRun(CONNECTOR_LEFT, y, after, CONNECTOR_FONT_SIZE)
+                for y, (_, after) in zip(CONNECTOR_LANDSCAPE_LINE_Y, CONNECTOR_LANDSCAPE_TEXT)
+            ],
+        )
+    return [portrait, landscape]
+
+
+def connectors_pdf(side: str) -> bytes:
+    specs = connector_pages(side)
+    font = korean_font(specs)
+    return build_document(specs, font.objects, font.encode)
+
+
 def main() -> None:
     fixtures = {
         "text-geometry.pdf": text_geometry_pdf(),
@@ -920,6 +1081,8 @@ def main() -> None:
         "pages-delete.pdf": diff_pdf(PAGES_DELETE),
         "pages-edit.pdf": diff_pdf(PAGES_EDIT),
         "pages-push.pdf": diff_pdf(PAGES_PUSH),
+        "connectors-a.pdf": connectors_pdf("before"),
+        "connectors-b.pdf": connectors_pdf("after"),
     }
     for name, data in fixtures.items():
         (OUTPUT_DIR / name).write_bytes(data)

@@ -3,6 +3,7 @@ import { cn } from "@/renderer/shared/lib/utils";
 import { CHANGE_KIND_STYLE, NEEDS_REVIEW_STYLE } from "../config/change-kind";
 
 interface ChangeNumberTagProps {
+  changeId: string;
   number: number;
   kind: ChangeKind;
   needsReview: boolean;
@@ -16,6 +17,7 @@ interface ChangeNumberTagProps {
  * mono 10/16, 종류 색 바탕. "확인 필요"는 `warning` 바탕이다.
  */
 export function ChangeNumberTag({
+  changeId,
   number,
   kind,
   needsReview,
@@ -25,6 +27,7 @@ export function ChangeNumberTag({
   return (
     <span
       aria-hidden="true"
+      data-number-tag={changeId}
       className={cn(
         "pointer-events-none absolute -mt-0.5 ml-1.5 rounded-xs px-1 font-mono text-[10px]/4",
         needsReview

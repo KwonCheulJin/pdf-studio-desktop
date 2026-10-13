@@ -57,13 +57,16 @@ interface ChangeHighlightProps {
   kind: ChangeKind;
   needsReview: boolean;
   isActive: boolean;
+  /** 이 변경이 든 연결선을 가리키고 있다(고르지 않았으면 옅은 primary 고리) */
+  isHovered: boolean;
   /** 화면 1px의 viewport 단위 길이(고리 간격을 화면 px로 맞춘다) */
   unitsPerPixel: number;
 }
 
 /**
  * 페이지 위 변경 상자 하나(SVG). 종류 색·선 모양(토큰 문서 §2.1), "확인 필요"는 바깥 점 고리,
- * 고른 변경은 primary 고리를 더한다. 테두리는 확대와 상관없이 화면 px 두께다.
+ * 고른 변경은 primary 고리를 더한다. 연결선을 가리켜 함께 강조하면(고르지 않은 변경) 같은 자리에
+ * 옅은 primary 고리를 둔다. 테두리는 확대와 상관없이 화면 px 두께다.
  */
 export function ChangeHighlight({
   rect,
@@ -72,10 +75,12 @@ export function ChangeHighlight({
   kind,
   needsReview,
   isActive,
+  isHovered,
   unitsPerPixel
 }: ChangeHighlightProps) {
   const style = CHANGE_KIND_STYLE[kind];
   const reviewGap = needsReview ? REVIEW_RING_GAP_PX : 0;
+  const isRinged = isActive || isHovered;
   return (
     <g>
       <rect
@@ -83,6 +88,7 @@ export function ChangeHighlight({
         data-side={side}
         data-kind={kind}
         data-review={needsReview}
+        data-hovered={isHovered || undefined}
         x={rect.left}
         y={rect.top}
         width={rect.width}
@@ -100,13 +106,13 @@ export function ChangeHighlight({
           dashArray={NEEDS_REVIEW_STYLE.ringDashArray}
         />
       )}
-      {isActive && (
+      {isRinged && (
         <Ring
           rect={expand({
             rect,
             by: (reviewGap + ACTIVE_RING_STROKE_PX / 2) * unitsPerPixel
           })}
-          className="stroke-primary"
+          className={isActive ? "stroke-primary" : "stroke-primary/50"}
           strokeWidth={ACTIVE_RING_STROKE_PX}
         />
       )}

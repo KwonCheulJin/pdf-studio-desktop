@@ -48,6 +48,8 @@ export {
   pairOcrLabel,
   pairPagesLabel
 } from "./model/change-text";
+export { rowConnectorStems, type ConnectorStem } from "./model/connector-stems";
+export { connectorPathOf } from "./model/connectors";
 export { noticeLinesOf } from "./model/notice-lines";
 export { ChangeHighlight } from "./ui/change-highlight";
 export { ChangeNumberTag } from "./ui/change-number-tag";

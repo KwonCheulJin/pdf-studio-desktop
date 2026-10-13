@@ -63,16 +63,20 @@ function ChangeDetail({ change }: ChangeDetailProps) {
 interface ChangeListItemProps {
   numbered: NumberedChange;
   isActive: boolean;
+  /** 이 변경이 든 연결선에 마우스가 있다(계획서 §7.1 호버 강조) */
+  isHovered: boolean;
   onSelect: (changeId: string) => void;
 }
 
 /**
  * 차이 목록 항목(시안 4): 견본 · 종류 · 쪽 배지 · `#번호` · 한 줄 요약. 고른 항목은 `accent` 바탕과
  * 왼쪽 primary 띠, 전/후 상자로 펼친다. 고르면(키보드 이동 포함) 목록 안에서 보이게 스크롤한다.
+ * 이 변경이 든 연결선을 가리키면 마우스를 올린 것과 같은 `muted` 바탕이다.
  */
 export function ChangeListItem({
   numbered,
   isActive,
+  isHovered,
   onSelect
 }: ChangeListItemProps) {
   const { change, number } = numbered;
@@ -95,12 +99,13 @@ export function ChangeListItem({
         type="button"
         aria-label={label}
         aria-current={isActive ? true : undefined}
+        data-hovered={isHovered || undefined}
         onClick={() => onSelect(change.id)}
         className={cn(
           "focus-visible:ring-ring relative flex w-full gap-2.5 rounded-md p-2.5 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset",
           isActive
             ? "bg-accent before:bg-primary before:absolute before:inset-y-0 before:left-0 before:w-0.75 before:rounded-l-md"
-            : "hover:bg-muted"
+            : "hover:bg-muted data-hovered:bg-muted"
         )}
       >
         <ChangeSwatch kind={change.kind} className="mt-1.25" />

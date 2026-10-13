@@ -10,8 +10,9 @@ use std::sync::OnceLock;
 use std::sync::atomic::AtomicBool;
 
 use pdfium_render::prelude::{
-    PdfColor, PdfDocument, PdfPage, PdfPageAnnotationCommon, PdfPageAnnotationType,
-    PdfPageObjectCommon, PdfPageObjectsCommon, PdfPathFillMode, PdfPathSegments,
+    PdfColor, PdfDocument, PdfPage, PdfPageAnnotationCommon, PdfPageAnnotationType, PdfPageObject,
+    PdfPageObjectCommon, PdfPageObjectsCommon, PdfPathFillMode, PdfPathSegmentType,
+    PdfPathSegments,
 };
 
 use super::super::extract::ExtractedPage;
@@ -20,14 +21,14 @@ use super::super::model::{
     Placement as ChangePlacement, TextBox, TextSource,
 };
 use super::super::{
-    ComparedPages, DIFF_TIME_LIMIT, NormalizeOptions, connector_stems, diff_tokens,
-    extract_text_layer, pair_pages, tokenize,
+    ComparedPages, Connector, ConnectorEnd, ConnectorShape, DIFF_TIME_LIMIT, NormalizeOptions,
+    connectors, diff_tokens, extract_text_layer, pair_pages, tokenize,
 };
-use super::compose::{CONNECTOR_COLOR, MAX_SHEET_CONNECTORS};
+use super::compose::MAX_SHEET_CONNECTORS;
 use super::sheet::{Placement, slots};
 use super::{
     CHANGE_STROKE, CompareReportOptions, ReportError, ReportLayout, ReportSources,
-    export_annotated_pdf, export_compare_pdf, preview_compare_report,
+    export_annotated_pdf, export_compare_pdf, kind_colors, preview_compare_report,
 };
 use crate::engine::PdfEngine;
 use crate::info::PageBox;
@@ -37,7 +38,7 @@ const LIBRARY_PATH_ENV: &str = "PDFIUM_LIB_PATH";
 /// 장 좌표 허용 오차(pt): 상자 여백 1pt + 선 굵기(경로 경계에 선 반쪽과 모서리 마이터가 들어가며
 /// 확인 필요 선은 1.5pt) + 부동소수점
 const SHEET_TOLERANCE_PT: f32 = 3.0;
-/// 주석 사각형 허용 오차(pt). 결과 상자를 그대로 쓰므로 부동소수점 차이만 흡수한다.
+/// 주석 사각형 허용 오차(pt). 결과 상자·앵커를 그대로 쓰므로 부동소수점 차이만 흡수한다.
 const ANNOTATION_TOLERANCE_PT: f32 = 0.01;
 /// `text-geometry.pdf`의 8쪽: CropBox가 MediaBox와 겹치지 않아 pdfium XObject에 보이는 영역이 없다.
 const GEOMETRY_BROKEN_PAGE: u32 = 8;
@@ -185,9 +186,20 @@ struct DrawnRect {
     dashed: bool,
 }
 
+/// 연결선 경로인가: 변경 상자·쪽 테두리는 직선뿐이고 연결선만 두 쪽 사이를 베지어로 건넌다.
+fn is_connector(object: &PdfPageObject) -> bool {
+    object.as_path_object().is_some_and(|path| {
+        path.segments()
+            .iter()
+            .any(|segment| segment.segment_type() == PdfPathSegmentType::BezierTo)
+    })
+}
+
+/// 장에 그린 사각형 경로들(연결선 제외)
 fn drawn_rects(page: &PdfPage) -> Vec<DrawnRect> {
     page.objects()
         .iter()
+        .filter(|object| !is_connector(object))
         .filter_map(|object| {
             let path = object.as_path_object()?;
             let bounds = object.bounds().expect("path bounds").to_rect();
@@ -599,11 +611,20 @@ fn annotated_pdf_marks_after_copy_and_keeps_source() {
                 expected_count += 1;
             }
             [] => {
+                // 삭제 메모는 B 앵커 자리다: 아이콘 왼쪽 끝이 막대에 붙고 세로 가운데가 막대 가운데다.
+                let ChangePlacement::Anchor { page, x, y, h } = change.after else {
+                    panic!("{change:?}: a delete has a B anchor");
+                };
                 assert!(
-                    found.iter().any(|(_, kind, _, contents)| {
-                        *kind == PdfPageAnnotationType::Text && mentions_change(contents)
+                    found.iter().any(|(found_page, kind, rect, contents)| {
+                        *found_page == page
+                            && *kind == PdfPageAnnotationType::Text
+                            && (rect.left - x).abs() < ANNOTATION_TOLERANCE_PT
+                            && ((rect.bottom + rect.top) / 2.0 - (y + h / 2.0)).abs()
+                                < ANNOTATION_TOLERANCE_PT
+                            && mentions_change(contents)
                     }),
-                    "{change:?} has no note in {found:?}"
+                    "{change:?} has no note at its anchor in {found:?}"
                 );
                 expected_count += 1;
             }
@@ -791,46 +812,68 @@ fn preview_renders_first_sheets_as_png() {
     assert_eq!(colored_pixels(&without_boxes.images[0]), 0);
 }
 
-/// 장에 그린 연결선 하나의 시작점(A 쪽)과 끝점(B 쪽). 그린 순서대로다.
-fn drawn_connectors(page: &PdfPage) -> Vec<((f32, f32), (f32, f32))> {
+/// 장에 그린 연결선 하나: 선 색, 채웠는가(띠), 지나는 점들(그린 순서, 베지어는 끝점만)
+#[derive(Debug)]
+struct DrawnConnector {
+    stroke: (u8, u8, u8),
+    filled: bool,
+    points: Vec<(f32, f32)>,
+}
+
+fn drawn_connectors(page: &PdfPage) -> Vec<DrawnConnector> {
     page.objects()
         .iter()
-        .filter(|object| {
-            object
-                .stroke_color()
-                .is_ok_and(|color| rgb(color) == rgb(CONNECTOR_COLOR))
-        })
-        .filter_map(|object| {
-            let segments = object.as_path_object()?.segments();
-            let first = segments.get(0).expect("first segment");
-            let last = segments
-                .get(segments.len().checked_sub(1).expect("segments"))
-                .expect("last segment");
-            Some((
-                (first.x().value, first.y().value),
-                (last.x().value, last.y().value),
-            ))
+        .filter(is_connector)
+        .map(|object| {
+            let path = object.as_path_object().expect("connector is a path");
+            DrawnConnector {
+                stroke: rgb(object.stroke_color().expect("stroke color")),
+                filled: path.fill_mode().expect("fill mode") != PdfPathFillMode::None,
+                points: path
+                    .segments()
+                    .iter()
+                    .map(|segment| (segment.x().value, segment.y().value))
+                    .collect(),
+            }
         })
         .collect()
 }
 
-/// 놓인 쪽 사각형의 세로 가운데에 사용자 공간 상자를 옮긴 높이
-fn mapped_center(placement: &Placement, bounds: &TextBox) -> f32 {
-    let rect = placement.map(bounds);
-    (rect.bottom + rect.top) / 2.0
+/// 끝 사각형을 놓인 쪽에 옮긴 사각형과 끝점(계획서 §7.1: 상자는 거터를 향한 변 가운데 — A 오른쪽, B
+/// 왼쪽 —, 앵커는 막대 가운데). 기대값이라 규칙을 손으로 다시 적는다.
+fn expected_end(
+    placement: &Placement,
+    end: &ConnectorEnd,
+    is_before: bool,
+) -> (PageBox, (f32, f32)) {
+    let rect = placement.map(&end.bounds);
+    let x = if end.is_anchor {
+        (rect.left + rect.right) / 2.0
+    } else if is_before {
+        rect.right
+    } else {
+        rect.left
+    };
+    (rect, (x, (rect.bottom + rect.top) / 2.0))
 }
 
-/// 나란히 내보낸 비교 PDF는 행마다 화면과 같은 묶기 규칙의 묶음 수만큼 연결선을 그린다. 선은 A 쪽
-/// 오른쪽 끝에서 묶음 A 상자의 세로 가운데로 나가 B 쪽 왼쪽 끝의 묶음 B 상자 가운데로 들어간다(가로
-/// 쪽 행 포함). 색 상자를 빼거나 한쪽 배치면 연결선도 없고, 변경(`Replace`)을 숨기면 이을 변경이 없다.
+fn near(actual: (f32, f32), expected: (f32, f32)) -> bool {
+    (actual.0 - expected.0).abs() < 0.01 && (actual.1 - expected.1).abs() < 0.01
+}
+
+/// 나란히 내보낸 비교 PDF는 장마다 두 끝이 그 장의 두 쪽에 있는 변경마다 연결선 하나를 그린다(회전
+/// 0·90·180·270·CropBox 오프셋·MediaBox 원점 쪽). 선은 종류 색이고 A 끝점에서 A 쪽 오른쪽 끝까지 수평으로
+/// 나가 B 쪽 왼쪽 끝에서 B 끝점으로 들어간다(앵커는 막대 가운데). 세 줄 넘는 변경은 두 끝의 위·아래 변을
+/// 이은 채운 띠다. 색 상자를 빼거나 한쪽 배치면 연결선이 없고, 종류를 숨기면 그 종류만 빠진다.
 #[test]
-fn compare_pdf_draws_one_connector_per_stem() {
+fn compare_pdf_draws_one_connector_per_change() {
     let directory = TestDir::new("connectors");
-    let before = copy_fixture("connectors-a.pdf", &directory);
-    let after = copy_fixture("connectors-b.pdf", &directory);
+    let before = copy_fixture("connector-geometry-a.pdf", &directory);
+    let after = copy_fixture("connector-geometry-b.pdf", &directory);
     let result = compare_files(&before, &after);
-    let rows = connector_stems(&result, &[]);
-    assert!(rows.len() == result.page_pairs.len(), "{rows:?}");
+    let expected_connectors = connectors(&result, &[]);
+    let shapes: Vec<ConnectorShape> = expected_connectors.iter().map(|c| c.shape).collect();
+    assert!(shapes.contains(&ConnectorShape::Band) && shapes.contains(&ConnectorShape::Line));
     let sources = ReportSources {
         before: before.clone(),
         after: after.clone(),
@@ -846,7 +889,6 @@ fn compare_pdf_draws_one_connector_per_stem() {
             &AtomicBool::new(false),
         )
         .expect("export");
-        // 장마다 그린 연결선
         inspect_output(&output, |document| {
             document
                 .pages()
@@ -857,34 +899,54 @@ fn compare_pdf_draws_one_connector_per_stem() {
     };
 
     let sheets = export("connectors.pdf", &CompareReportOptions::default());
-    assert_eq!(sheets.len(), rows.len());
+    assert_eq!(sheets.len(), result.page_pairs.len());
     let (Some(before_slot), Some(after_slot)) = slots(ReportLayout::SideBySide) else {
         panic!("side by side has two slots");
     };
-    for (row, connectors) in rows.iter().zip(&sheets) {
-        assert_eq!(connectors.len(), row.stems.len(), "row {:?}", row.pages);
+    for (&(before_page, after_page), drawn) in result.page_pairs.iter().zip(&sheets) {
+        let (before_page, after_page) = (before_page.expect("A page"), after_page.expect("B page"));
+        let on_sheet: Vec<&Connector> = expected_connectors
+            .iter()
+            .filter(|c| c.before.bounds.page == before_page && c.after.bounds.page == after_page)
+            .collect();
+        assert!(!on_sheet.is_empty(), "sheet {before_page} has connectors");
+        assert_eq!(drawn.len(), on_sheet.len(), "sheet {before_page}");
         let before_placement =
-            Placement::fit(&result.page_sizes.before[row.pages.0 as usize], before_slot);
+            Placement::fit(&result.page_sizes.before[before_page as usize], before_slot);
         let after_placement =
-            Placement::fit(&result.page_sizes.after[row.pages.1 as usize], after_slot);
-        for (stem, (start, end)) in row.stems.iter().zip(connectors) {
-            let message = format!("row {:?} stem {:?}", row.pages, stem.change_ids);
-            assert!(
-                (start.0 - before_placement.frame().right).abs() < 0.01,
-                "{message}"
-            );
-            assert!(
-                (end.0 - after_placement.frame().left).abs() < 0.01,
-                "{message}"
-            );
-            assert!(
-                (start.1 - mapped_center(&before_placement, &stem.before)).abs() < 0.01,
-                "{message}: start {start:?}"
-            );
-            assert!(
-                (end.1 - mapped_center(&after_placement, &stem.after)).abs() < 0.01,
-                "{message}: end {end:?}"
-            );
+            Placement::fit(&result.page_sizes.after[after_page as usize], after_slot);
+        let (gutter_left, gutter_right) =
+            (before_placement.frame().right, after_placement.frame().left);
+        for (connector, line) in on_sheet.iter().zip(drawn) {
+            let message = format!("sheet {before_page} {connector:?}: {line:?}");
+            let (before_rect, start) = expected_end(&before_placement, &connector.before, true);
+            let (after_rect, end) = expected_end(&after_placement, &connector.after, false);
+            assert_eq!(line.stroke, rgb(kind_colors(connector.kind).0), "{message}");
+            let first = line.points[0];
+            let last = *line.points.last().expect("points");
+            match connector.shape {
+                ConnectorShape::Line => {
+                    assert!(!line.filled, "{message}");
+                    assert!(near(first, start), "{message}");
+                    assert!(line.points.contains(&(gutter_left, start.1)), "{message}");
+                    assert!(line.points.contains(&(gutter_right, end.1)), "{message}");
+                    assert!(near(last, end), "{message}");
+                }
+                ConnectorShape::Band => {
+                    assert!(line.filled, "{message}");
+                    assert!(near(first, (start.0, before_rect.top)), "{message}");
+                    for corner in [
+                        (end.0, after_rect.top),
+                        (end.0, after_rect.bottom),
+                        (start.0, before_rect.bottom),
+                    ] {
+                        assert!(
+                            line.points.iter().any(|&point| near(point, corner)),
+                            "{message}: corner {corner:?}"
+                        );
+                    }
+                }
+            }
         }
     }
 
@@ -903,22 +965,32 @@ fn compare_pdf_draws_one_connector_per_stem() {
                 ..CompareReportOptions::default()
             },
         ),
-        (
-            "no-replace.pdf",
-            CompareReportOptions {
-                hidden_kinds: vec![ChangeKind::Replace],
-                ..CompareReportOptions::default()
-            },
-        ),
     ] {
-        for connectors in export(name, &options) {
-            assert!(connectors.is_empty(), "{name}");
+        for drawn in export(name, &options) {
+            assert!(drawn.is_empty(), "{name}");
         }
     }
+    let replace_color = rgb(kind_colors(ChangeKind::Replace).0);
+    let without_replace = export(
+        "no-replace.pdf",
+        &CompareReportOptions {
+            hidden_kinds: vec![ChangeKind::Replace],
+            ..CompareReportOptions::default()
+        },
+    );
+    let remaining: Vec<&DrawnConnector> = without_replace.iter().flatten().collect();
+    assert_eq!(
+        remaining.len(),
+        expected_connectors
+            .iter()
+            .filter(|c| c.kind != ChangeKind::Replace)
+            .count()
+    );
+    assert!(remaining.iter().all(|line| line.stroke != replace_color));
 }
 
-/// 한 장의 묶음이 [`MAX_SHEET_CONNECTORS`]개면 모두 그리고, 하나라도 넘으면 그 장에는 하나도 그리지
-/// 않는다. 변경마다 따로 묶이도록 B 쪽 순서를 A와 거꾸로 둔다(순위가 앞 변경 + 1이 아니다).
+/// 한 장의 연결선(변경 하나에 하나)이 [`MAX_SHEET_CONNECTORS`]개면 모두 그리고, 하나라도 넘으면 그 장에는
+/// 하나도 그리지 않는다.
 #[test]
 fn compare_pdf_omits_connectors_over_the_sheet_limit() {
     const BOX_STEP_PT: f32 = 15.0;
@@ -948,14 +1020,12 @@ fn compare_pdf_omits_connectors_over_the_sheet_limit() {
                 id: row.to_string(),
                 kind: ChangeKind::Replace,
                 before: side(row),
-                after: side(count - 1 - row),
+                after: side(row),
                 page_pair: (Some(0), Some(0)),
                 needs_review: false,
             })
             .collect();
         let result = result_from(&pages, &pages, changes, vec![(Some(0), Some(0))]);
-        let stems = connector_stems(&result, &[]);
-        assert_eq!(stems[0].stems.len(), count, "each change is its own stem");
         let output = directory.join(format!("limit-{count}.pdf"));
         export_compare_pdf(
             engine(),

@@ -23,6 +23,7 @@ const AFTER_LABEL: &str = "변경 후";
 const REVIEW_LABEL: &str = "[확인 필요]";
 /// 삭제 메모 아이콘 상자 한 변(pt)
 const NOTE_SIZE_PT: f32 = 20.0;
+const HALF: f32 = 0.5;
 
 /// 쪽 하나에 달 주석
 struct Note {
@@ -36,7 +37,7 @@ enum NoteShape {
     Highlight { kind: ChangeKind, boxes: PageBoxes },
     /// 확인 필요인 추가·변경: B 쪽 상자 전체를 감싼 테두리, 종류의 선 색
     Square { kind: ChangeKind, rect: PageBox },
-    /// 삭제: B에 자리가 없으므로 근사한 위치의 메모 아이콘
+    /// 삭제: B에 글자가 없으므로 앵커 자리의 메모 아이콘
     Text { rect: PageBox },
 }
 
@@ -96,19 +97,21 @@ pub(super) fn annotate<'a>(
     Ok((document, count(notes.len())))
 }
 
-/// 변경 하나의 주석들. 추가·변경은 B 상자가 있는 쪽마다 하나, 삭제는 메모 하나다.
+/// 변경 하나의 주석들. 추가·변경은 B 상자가 있는 쪽마다 하나, 삭제는 B 앵커 자리에 메모 하나다.
 fn notes_for(change: &Change, result: &CompareResult) -> Vec<Note> {
     let contents = contents_of(change);
-    // 삭제는 B에 글자가 없다(앵커). 메모 위치는 아래 근사로 정한다.
-    let Placement::Boxes { boxes, .. } = &change.after else {
-        return delete_note(change, result)
-            .map(|(page, rect)| Note {
-                page,
-                shape: NoteShape::Text { rect },
-                contents,
-            })
-            .into_iter()
-            .collect();
+    let boxes = match &change.after {
+        Placement::Boxes { boxes, .. } => boxes,
+        &Placement::Anchor { page, x, y, h } => {
+            return delete_note(&result.page_sizes.after, page, x, y + h * HALF)
+                .map(|rect| Note {
+                    page,
+                    shape: NoteShape::Text { rect },
+                    contents,
+                })
+                .into_iter()
+                .collect();
+        }
     };
     group_by_page(boxes)
         .into_iter()
@@ -165,58 +168,22 @@ fn group_by_page(boxes: &[TextBox]) -> Vec<(u32, PageBoxes)> {
     groups
 }
 
-/// 삭제 메모를 달 B 쪽과 아이콘 상자. 쪽은 삭제된 A 첫 상자 쪽과 같은 행의 B 쪽이고, 그 행에 B 쪽이
-/// 없으면 앞 행 중 가장 가까운 B 쪽, 그것도 없으면 뒤 행 중 가장 가까운 B 쪽이다. 위치는 A 첫 상자의
-/// 왼쪽 위 모서리를 A `view_box` 안의 비율로 B `view_box`에 옮긴 점이다(근사).
-fn delete_note(change: &Change, result: &CompareResult) -> Option<(u32, PageBox)> {
-    let first = change.before.boxes().first()?;
-    let row = result
-        .page_pairs
-        .iter()
-        .position(|&(before, _)| before == Some(first.page))?;
-    let (earlier, rest) = result.page_pairs.split_at(row);
-    let ((_, same_row), later) = rest.split_first()?;
-    let after_page = same_row
-        .or_else(|| earlier.iter().rev().find_map(|&(_, after)| after))
-        .or_else(|| later.iter().find_map(|&(_, after)| after))?;
-
-    let before_view = size_at(&result.page_sizes.before, first.page)?.view_box;
-    let after_view = size_at(&result.page_sizes.after, after_page)?.view_box;
-    let ratio_x = ratio(
-        first.x - before_view.left,
-        before_view.right - before_view.left,
-    );
-    let ratio_y = ratio(
-        first.y + first.h - before_view.bottom,
-        before_view.top - before_view.bottom,
-    );
-    let x = after_view.left + ratio_x * (after_view.right - after_view.left);
-    let y = after_view.bottom + ratio_y * (after_view.top - after_view.bottom);
-    // 아이콘이 보이는 영역 안에 다 들어오게 민다.
-    let left = x.min(after_view.right - NOTE_SIZE_PT).max(after_view.left);
-    let top = y.max(after_view.bottom + NOTE_SIZE_PT).min(after_view.top);
-    Some((
-        after_page,
-        PageBox {
-            left,
-            bottom: top - NOTE_SIZE_PT,
-            right: left + NOTE_SIZE_PT,
-            top,
-        },
-    ))
-}
-
-fn size_at(sizes: &[PageSize], page: u32) -> Option<&PageSize> {
-    sizes.get(usize::try_from(page).ok()?)
-}
-
-/// `offset / length`를 0~1로 자른다. 길이가 0이면 0이다.
-fn ratio(offset: f32, length: f32) -> f32 {
-    if length > 0.0 {
-        (offset / length).clamp(0.0, 1.0)
-    } else {
-        0.0
-    }
+/// 삭제 메모 아이콘 상자. 왼쪽 끝이 B 앵커 막대(지운 글자가 들어갈 자리, ADR 0001 §4)에 붙고 세로
+/// 가운데가 막대 가운데다. 아이콘이 보이는 영역(`view_box`) 안에 다 들도록 민다. 앵커의 쪽이 문서에
+/// 없으면(쪽이 0개인 B, ADR 0001 §4 "놓을 쪽이 없음") 메모를 달지 않는다.
+fn delete_note(sizes: &[PageSize], page: u32, x: f32, center_y: f32) -> Option<PageBox> {
+    let view = sizes.get(usize::try_from(page).ok()?)?.view_box;
+    let half = NOTE_SIZE_PT * HALF;
+    let left = x.min(view.right - NOTE_SIZE_PT).max(view.left);
+    let top = (center_y + half)
+        .min(view.top)
+        .max(view.bottom + NOTE_SIZE_PT);
+    Some(PageBox {
+        left,
+        bottom: top - NOTE_SIZE_PT,
+        right: left + NOTE_SIZE_PT,
+        top,
+    })
 }
 
 /// 주석 내용: 변경 전후 글자. 확인 필요 변경은 앞에 표시를 붙인다.

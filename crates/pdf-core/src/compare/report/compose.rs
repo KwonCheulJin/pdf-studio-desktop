@@ -1,7 +1,6 @@
 //! 비교 PDF 문서를 pdfium으로 만든다. 원본 쪽은 Form XObject로 가져와 내용 스트림·리소스를 그대로
 //! 쓰므로 글자는 벡터로 남고 원본 파일은 읽기만 한다.
 
-use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
 
@@ -11,7 +10,7 @@ use pdfium_render::prelude::{
     PdfRect, Pdfium, PdfiumError,
 };
 
-use super::super::connectors::{ConnectorStem, connector_stems};
+use super::super::connectors::{Connector, ConnectorShape, connectors};
 use super::super::model::{ChangeKind, CompareResult, PageSize, Side};
 use super::sheet::{
     Mark, Marks, Placement, SHEET_HEIGHT_PT, SHEET_WIDTH_PT, Sheet, inflate, intersect, slots,
@@ -34,14 +33,13 @@ const BOX_PADDING_PT: f32 = 1.0;
 /// 점선 무늬(선, 빈칸 길이). 빈 쪽 자리와 변경(`Replace`) 상자에 쓴다. 토큰 문서가 변경을 점선으로
 /// 구분하므로(색각 이상에서 삭제 주황과 변경 노랑을 가린다) 화면과 같은 구분을 둔다.
 const DASH_PATTERN_PT: [f32; 2] = [3.0, 2.0];
-/// 디자인 토큰 `connector`(oklch(0.62 0.13 285) ≈ #7f79d1)에 화면 평상시와 같은 불투명도 0.45
-/// (0.45 × 255 ≈ 0x73). 연결선은 A·B 쪽 사이(두 칸 간격)를 잇는다(계획서 §7.1).
-pub(super) const CONNECTOR_COLOR: PdfColor = PdfColor::new(0x7f, 0x79, 0xd1, 0x73);
-/// 장은 쪽을 약 0.65배로 놓으므로 화면 2px(배율 100%에서 1.5pt)보다 가늘게 둔다.
+/// 연결선 선 굵기. 장은 쪽을 약 0.65배로 놓으므로 화면 선(1.5px, 배율 100%에서 약 1.1pt)보다 조금
+/// 가늘게 둔다. 색은 종류의 선 색 토큰이다(토큰 문서 §6.6).
 const CONNECTOR_STROKE_WIDTH_PT: f32 = 1.0;
-/// 두 끝점 높이 차이가 이 값 이하면 곡선 대신 직선이다(화면의 3px 규칙을 장 pt에 그대로 쓴다).
-const CONNECTOR_STRAIGHT_MAX_RISE_PT: f32 = 3.0;
-/// 한 장의 묶음이 이보다 많으면 그 장에는 연결선을 그리지 않는다(선이 엉켜 읽을 수 없다, 계획서 §7.1).
+/// 띠(2줄 넘는 변경)의 테두리 굵기. 채움은 종류의 `-fill` 토큰(알파 그대로)이다.
+const BAND_STROKE_WIDTH_PT: f32 = 0.5;
+/// 한 장의 연결선(변경 하나에 하나)이 이보다 많으면 그 장에는 연결선을 그리지 않는다(선이 엉켜 읽을 수
+/// 없다, 계획서 §7.1).
 pub(super) const MAX_SHEET_CONNECTORS: usize = 40;
 const HALF: f32 = 0.5;
 
@@ -98,11 +96,17 @@ pub(super) fn compose<'a>(
             canvas.empty_slot(placed_before.as_ref(), placed_after.as_ref())?;
         }
         if let (Some(before_page), Some(after_page)) = (&placed_before, &placed_after) {
-            let stems = connectors
-                .get(&(before_page.page, after_page.page))
-                .filter(|stems| stems.len() <= MAX_SHEET_CONNECTORS);
-            for stem in stems.into_iter().flatten() {
-                canvas.connector(stem, &before_page.placement, &after_page.placement)?;
+            let on_sheet: Vec<&Connector> = connectors
+                .iter()
+                .filter(|connector| {
+                    connector.before.bounds.page == before_page.page
+                        && connector.after.bounds.page == after_page.page
+                })
+                .collect();
+            if on_sheet.len() <= MAX_SHEET_CONNECTORS {
+                for connector in on_sheet {
+                    canvas.connector(connector, &before_page.placement, &after_page.placement)?;
+                }
             }
         }
         page.regenerate_content().map_err(compose_error)?;
@@ -110,19 +114,14 @@ pub(super) fn compose<'a>(
     Ok(document)
 }
 
-/// 행 (A 쪽, B 쪽)마다 연결선 묶음. 나란히 배치에 색 상자를 넣을 때만 그린다(상자가 없으면 이을 곳이
-/// 없다). 숨긴 종류는 상자처럼 묶기 입력에서도 뺀다.
-fn sheet_connectors(
-    result: &CompareResult,
-    options: &CompareReportOptions,
-) -> HashMap<(u32, u32), Vec<ConnectorStem>> {
+/// 그릴 연결선(계획서 §7.1, 화면과 같은 `connectors`). 나란히 배치에 색 상자를 넣을 때만 그린다(상자가
+/// 없으면 이을 곳이 없다). 숨긴 종류는 상자처럼 뺀다. 장에는 두 끝이 모두 그 장의 두 쪽에 있는 변경만
+/// 그린다(다른 장으로 넘어가는 선은 그릴 곳이 없다).
+fn sheet_connectors(result: &CompareResult, options: &CompareReportOptions) -> Vec<Connector> {
     if options.layout != ReportLayout::SideBySide || !options.draw_boxes {
-        return HashMap::new();
+        return Vec::new();
     }
-    connector_stems(result, &options.hidden_kinds)
-        .into_iter()
-        .map(|row| (row.pages, row.stems))
-        .collect()
+    connectors(result, &options.hidden_kinds)
 }
 
 /// 장에 쓰는 원본 문서 한쪽과 그 쪽 크기 목록
@@ -284,47 +283,81 @@ impl<'a> Canvas<'_, 'a> {
         }
     }
 
-    /// 묶음 하나를 A 쪽 오른쪽 끝에서 B 쪽 왼쪽 끝까지 잇는다. 끝점 높이는 묶음 상자를 장 좌표로 옮긴
-    /// 사각형의 세로 가운데이고, 모양은 화면과 같은 대칭 S 베지어(제어점 x = 가운데)다.
+    /// 변경 하나를 잇는다(계획서 §7.1, 화면과 같은 모양). 선은 A 끝점 → A 쪽 오른쪽 끝까지 수평 →
+    /// 두 쪽 사이 3차 베지어 → B 쪽 왼쪽 끝 → B 끝점까지 수평이고, 띠는 두 끝의 위 변과 아래 변을 같은
+    /// 모양으로 이은 닫힌 경로다. 끝은 사용자 공간 사각형을 장 좌표로 옮긴 뒤 끝점을 정한다.
     fn connector(
         &mut self,
-        stem: &ConnectorStem,
+        connector: &Connector,
         before: &Placement,
         after: &Placement,
     ) -> Result<(), ReportError> {
-        let (start_x, end_x) = (before.frame().right, after.frame().left);
-        let start_y = vertical_center(before.map(&stem.before));
-        let end_y = vertical_center(after.map(&stem.after));
-        let mut path = PdfPagePathObject::new(
-            self.document,
-            PdfPoints::new(start_x),
-            PdfPoints::new(start_y),
-            Some(CONNECTOR_COLOR),
-            Some(PdfPoints::new(CONNECTOR_STROKE_WIDTH_PT)),
-            None,
-        )
-        .map_err(compose_error)?;
-        if (start_y - end_y).abs() <= CONNECTOR_STRAIGHT_MAX_RISE_PT {
-            path.line_to(PdfPoints::new(end_x), PdfPoints::new(end_y))
-        } else {
-            let middle_x = PdfPoints::new((start_x + end_x) * HALF);
-            path.bezier_to(
-                PdfPoints::new(end_x),
-                PdfPoints::new(end_y),
-                middle_x,
-                PdfPoints::new(start_y),
-                middle_x,
-                PdfPoints::new(end_y),
-            )
-        }
-        .map_err(compose_error)?;
-        path.set_line_cap(PdfPageObjectLineCap::Round)
-            .map_err(compose_error)?;
+        let gutter = Gutter {
+            left: before.frame().right,
+            right: after.frame().left,
+        };
+        let before_rect = before.map(&connector.before.bounds);
+        let after_rect = after.map(&connector.after.bounds);
+        let (start_x, start_y) = connector.before.point(before_rect, Side::Before);
+        let (end_x, end_y) = connector.after.point(after_rect, Side::After);
+        let (stroke, fill) = kind_colors(connector.kind);
+        let path = match connector.shape {
+            ConnectorShape::Line => {
+                let mut path =
+                    self.path_from(start_x, start_y, stroke, CONNECTOR_STROKE_WIDTH_PT, None)?;
+                gutter
+                    .line(&mut path, (start_x, start_y), (end_x, end_y))
+                    .map_err(compose_error)?;
+                path
+            }
+            ConnectorShape::Band => {
+                let mut path = self.path_from(
+                    start_x,
+                    before_rect.top,
+                    stroke,
+                    BAND_STROKE_WIDTH_PT,
+                    Some(fill),
+                )?;
+                let before_edge = BandEdge {
+                    x: start_x,
+                    top: before_rect.top,
+                    bottom: before_rect.bottom,
+                };
+                let after_edge = BandEdge {
+                    x: end_x,
+                    top: after_rect.top,
+                    bottom: after_rect.bottom,
+                };
+                gutter
+                    .band(&mut path, before_edge, after_edge)
+                    .map_err(compose_error)?;
+                path
+            }
+        };
         self.page
             .objects_mut()
             .add_path_object(path)
             .map_err(compose_error)?;
         Ok(())
+    }
+
+    fn path_from(
+        &self,
+        x: f32,
+        y: f32,
+        stroke: PdfColor,
+        stroke_width: f32,
+        fill: Option<PdfColor>,
+    ) -> Result<PdfPagePathObject<'a>, ReportError> {
+        PdfPagePathObject::new(
+            self.document,
+            PdfPoints::new(x),
+            PdfPoints::new(y),
+            Some(stroke),
+            Some(PdfPoints::new(stroke_width)),
+            fill,
+        )
+        .map_err(compose_error)
     }
 
     fn rect(
@@ -355,8 +388,69 @@ impl<'a> Canvas<'_, 'a> {
     }
 }
 
-fn vertical_center(rect: PageBox) -> f32 {
-    (rect.bottom + rect.top) * HALF
+/// 두 쪽 사이(A 쪽 오른쪽 끝 → B 쪽 왼쪽 끝). 연결선은 이 구간을 3차 베지어로 건넌다: 제어점은 각
+/// 끝에서 구간 반만큼 수평으로 나간 점이라 양끝에서 수평으로 들고 난다(화면과 같은 식).
+struct Gutter {
+    left: f32,
+    right: f32,
+}
+
+/// 띠 한쪽 끝의 변: 끝점 x와 위·아래(장 좌표, y 위쪽)
+#[derive(Debug, Clone, Copy)]
+struct BandEdge {
+    x: f32,
+    top: f32,
+    bottom: f32,
+}
+
+impl Gutter {
+    /// 지금 점(A 끝점)에서 A 쪽 끝까지 수평 → 건너기 → B 쪽 끝에서 B 끝점까지 수평. 끝은 둥글다.
+    fn line(
+        &self,
+        path: &mut PdfPagePathObject,
+        start: (f32, f32),
+        end: (f32, f32),
+    ) -> Result<(), PdfiumError> {
+        path.line_to(PdfPoints::new(self.left), PdfPoints::new(start.1))?;
+        self.cross(path, (self.left, start.1), (self.right, end.1))?;
+        path.line_to(PdfPoints::new(end.0), PdfPoints::new(end.1))?;
+        path.set_line_cap(PdfPageObjectLineCap::Round)
+    }
+
+    /// 지금 점(A 위 변 끝점)에서 위 변을 B로 건너고, B 끝을 내려와 아래 변을 A로 돌아와 닫는다.
+    fn band(
+        &self,
+        path: &mut PdfPagePathObject,
+        before: BandEdge,
+        after: BandEdge,
+    ) -> Result<(), PdfiumError> {
+        path.line_to(PdfPoints::new(self.left), PdfPoints::new(before.top))?;
+        self.cross(path, (self.left, before.top), (self.right, after.top))?;
+        path.line_to(PdfPoints::new(after.x), PdfPoints::new(after.top))?;
+        path.line_to(PdfPoints::new(after.x), PdfPoints::new(after.bottom))?;
+        path.line_to(PdfPoints::new(self.right), PdfPoints::new(after.bottom))?;
+        self.cross(path, (self.right, after.bottom), (self.left, before.bottom))?;
+        path.line_to(PdfPoints::new(before.x), PdfPoints::new(before.bottom))?;
+        path.close_path()
+    }
+
+    /// 지금 점 `from`에서 `to`까지(둘 다 거터 양끝 중 하나). 제어점은 각 끝에서 반 폭만큼 상대 끝 쪽.
+    fn cross(
+        &self,
+        path: &mut PdfPagePathObject,
+        from: (f32, f32),
+        to: (f32, f32),
+    ) -> Result<(), PdfiumError> {
+        let half = (to.0 - from.0) * HALF;
+        path.bezier_to(
+            PdfPoints::new(to.0),
+            PdfPoints::new(to.1),
+            PdfPoints::new(from.0 + half),
+            PdfPoints::new(from.1),
+            PdfPoints::new(to.0 - half),
+            PdfPoints::new(to.1),
+        )
+    }
 }
 
 fn compose_error(source: PdfiumError) -> ReportError {

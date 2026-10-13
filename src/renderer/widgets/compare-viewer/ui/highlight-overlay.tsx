@@ -15,7 +15,7 @@ interface HighlightOverlayProps {
   side: Side;
   activeChangeId: string | null;
   /** 연결선을 가리켜 함께 강조할 변경 */
-  hoveredChangeIds: readonly string[];
+  hoveredChangeId: string | null;
   /** 쪽이 화면에 놓인 너비(px). 고리 간격과 번호 태그 겹침을 화면 px로 본다. */
   widthPx: number;
 }
@@ -30,7 +30,7 @@ export function HighlightOverlay({
   highlights,
   side,
   activeChangeId,
-  hoveredChangeIds,
+  hoveredChangeId,
   widthPx
 }: HighlightOverlayProps) {
   const unitsPerPixel = widthPx > 0 ? geometry.width / widthPx : 0;
@@ -71,7 +71,7 @@ export function HighlightOverlay({
             kind={highlight.kind}
             needsReview={highlight.needsReview}
             isActive={isActive}
-            isHovered={hoveredChangeIds.includes(highlight.changeId)}
+            isHovered={highlight.changeId === hoveredChangeId}
             unitsPerPixel={unitsPerPixel}
           />
         ))}

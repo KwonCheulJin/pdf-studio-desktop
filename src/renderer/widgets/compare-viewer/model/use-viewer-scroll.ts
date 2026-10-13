@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { SCROLL_IDLE_MS, SCROLLING_ATTRIBUTE } from "../config/viewer-layout";
+import { rowAt } from "../lib/row-layout";
 import { useViewerStore } from "./viewer-store";
 
 const PERCENT = 100;
@@ -11,28 +11,8 @@ export interface ScrollFrame {
   heightPercent: number;
 }
 
-interface RowAtParams {
-  offsets: readonly number[];
-  top: number;
-}
-
-/** `top`이 걸친 행(`offsets`는 행 위 끝, 마지막 값은 전체 높이) */
-function rowAt({ offsets, top }: RowAtParams): number {
-  const lastRow = offsets.length - 2;
-  let low = 0;
-  let high = Math.max(0, lastRow);
-  while (low < high) {
-    const middle = Math.ceil((low + high) / 2);
-    if (offsets[middle] <= top) {
-      low = middle;
-    } else {
-      high = middle - 1;
-    }
-  }
-  return low;
-}
-
 interface UseViewerScrollParams {
+  /** 기준 패널(현재 쪽 문서의 패널: 나란히·B만은 B, A만은 A)의 스크롤 컨테이너 */
   scroller: HTMLElement | null;
   offsets: readonly number[];
   /** 보고 있는 결과(현재 행을 결과마다 따로 둔다) */
@@ -40,12 +20,9 @@ interface UseViewerScrollParams {
 }
 
 /**
- * 페이지 영역 스크롤을 프레임당 한 번만 읽어 미니맵 틀을 돌려주고, 화면 세로 가운데에 걸친 행을
- * 뷰어 스토어(현재 쪽 표시)에 둔다. 스크롤 컨테이너의 크기 변화도 같이 본다.
- *
- * 스크롤하는 동안은 컨테이너에 `data-scrolling`을 달고 마지막 스크롤 이벤트 뒤
- * [`SCROLL_IDLE_MS`]가 지나면 지운다. 연결선은 CSS로 이 속성을 보고 숨는다(계획서 §7.1). 속성은
- * DOM에 바로 달아 React가 다시 그리지 않는다.
+ * 기준 패널 스크롤을 프레임당 한 번만 읽어 미니맵 틀을 돌려주고, 화면 세로 가운데에 걸친 행을 뷰어
+ * 스토어(현재 쪽 표시, 배율을 바꾼 뒤 다시 시작할 행)에 둔다. 스크롤 컨테이너의 크기 변화도 같이 본다.
+ * 두 패널은 행 배치가 같아 틀과 행은 어느 패널로 재도 같은 규칙이다.
  */
 export function useViewerScroll({
   scroller,
@@ -58,18 +35,10 @@ export function useViewerScroll({
   useEffect(() => {
     if (!scroller) return;
     let frameId: number | null = null;
-    let idleTimer: ReturnType<typeof setTimeout> | null = null;
-    const settle = () => {
-      idleTimer = null;
-      scroller.removeAttribute(SCROLLING_ATTRIBUTE);
-    };
     // 전체 높이는 행 배치로 이미 안다(virtuoso가 아직 재지 않은 행도 같은 높이로 그린다).
     const totalHeight = offsets[offsets.length - 1] ?? 0;
     const update = () => {
       frameId = null;
-      if (idleTimer !== null && !scroller.hasAttribute(SCROLLING_ATTRIBUTE)) {
-        scroller.setAttribute(SCROLLING_ATTRIBUTE, "");
-      }
       const { scrollTop, clientHeight } = scroller;
       if (totalHeight > 0) {
         setFrame({
@@ -90,19 +59,12 @@ export function useViewerScroll({
         frameId = requestAnimationFrame(update);
       }
     };
-    const handleScroll = () => {
-      if (idleTimer !== null) clearTimeout(idleTimer);
-      idleTimer = setTimeout(settle, SCROLL_IDLE_MS);
-      schedule();
-    };
-    scroller.addEventListener("scroll", handleScroll, { passive: true });
+    scroller.addEventListener("scroll", schedule, { passive: true });
     const observer = new ResizeObserver(schedule);
     observer.observe(scroller);
     return () => {
       if (frameId !== null) cancelAnimationFrame(frameId);
-      if (idleTimer !== null) clearTimeout(idleTimer);
-      scroller.removeAttribute(SCROLLING_ATTRIBUTE);
-      scroller.removeEventListener("scroll", handleScroll);
+      scroller.removeEventListener("scroll", schedule);
       observer.disconnect();
     };
   }, [scroller, offsets, jobId, setCurrentRow]);

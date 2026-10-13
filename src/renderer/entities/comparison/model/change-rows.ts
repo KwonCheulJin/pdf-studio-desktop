@@ -49,7 +49,7 @@ interface ChangeSideParams {
   side: Side;
 }
 
-/** 변경의 그 쪽 글자와 상자. 그 쪽에 글자가 없으면(앵커) `null`이다(앵커는 아직 그리지 않는다). */
+/** 변경의 그 쪽 글자와 상자. 그 쪽에 글자가 없으면(앵커) `null`이다(앵커는 연결선 끝으로만 쓴다). */
 export function changeSideOf({
   change,
   side

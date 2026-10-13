@@ -6,15 +6,16 @@ export {
   useCompareViewMode,
   useCompletedComparison,
   useRevealCount,
+  useSelectChange,
   type CompareFile,
   type CompletedComparison
 } from "./model/compare-session-store";
 export { useCompareIntake } from "./model/use-compare-intake";
 export {
   useChangeHoverStore,
-  useHoveredChangeIds
+  useHoveredChangeId
 } from "./model/change-hover-store";
-export { useConnectorStems } from "./model/use-connector-stems";
+export { useConnectors } from "./model/use-connectors";
 export { useCompareRunStatus } from "./model/compare-run-store";
 export {
   COMPARE_SCREEN,

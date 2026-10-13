@@ -4,32 +4,35 @@ export const VIEWER_LAYOUT = {
   CAPTION_HEIGHT_PX: 36,
   /** 행 아래 여백(시안 4 페이지 영역 아래 24px) */
   ROW_GAP_PX: 24,
-  /** 페이지 영역 좌우 여백(시안 4 16px) */
+  /** 페이지 영역 바깥 좌우 여백(시안 4 16px). 나란히 보기는 A 패널 왼쪽·B 패널 오른쪽에 둔다. */
   AREA_PADDING_X_PX: 16,
   /** "맞춤"일 때 쪽 양옆에 남기는 여백. 1280 창에서 쪽이 시안처럼 약 330px이 된다. */
   FIT_PAGE_MARGIN_PX: 24,
-  /** 거터(연결선 자리, 계획서 §7.1): 세로 쪽 120px, 한쪽이라도 가로 쪽이면 72px. 확대와 상관없다. */
-  GUTTER_PORTRAIT_PX: 120,
-  GUTTER_LANDSCAPE_PX: 72,
+  /** 두 패널 사이 거터(연결선이 건너는 자리, 계획서 §7.1). 확대와 상관없다. */
+  GUTTER_PX: 120,
   /** 화면 위아래로 미리 그려 둘 높이 */
   OVERSCAN_PX: 400
 } as const;
 
-/** 연결선 굵기(px, 계획서 §7.1): 평상시 2px, 고르거나 가리키면 3px, 마우스를 받는 투명한 선 14px */
-export const CONNECTOR_STROKE_PX = {
-  NORMAL: 2,
-  EMPHASIZED: 3,
-  HIT: 14
-} as const;
-
 /**
- * 마지막 스크롤 이벤트 뒤 이만큼 지나면 페이지 영역의 `data-scrolling`을 지운다(계획서 §7.1). 연결선이
- * 사라지고 다시 나타나는 CSS 전환(`connector-layer.tsx`의 `duration-140`)과 같은 값이다.
+ * 연결선(계획서 §7.1, 토큰 문서 §6.6). 색은 종류 토큰(`diff-*`)이고 굵기·불투명도·간격은 화면 px다.
  */
-export const SCROLL_IDLE_MS = 140;
-
-/** 스크롤하는 동안 스크롤 컨테이너에 다는 속성 */
-export const SCROLLING_ATTRIBUTE = "data-scrolling";
+export const CONNECTOR_STYLE = {
+  /** 선 굵기: 평상시, 고르거나 가리킬 때 */
+  STROKE_PX: 1.5,
+  EMPHASIZED_STROKE_PX: 3,
+  /** 띠 테두리 굵기: 평상시, 고르거나 가리킬 때 */
+  BAND_STROKE_PX: 1,
+  EMPHASIZED_BAND_STROKE_PX: 2,
+  /** 마우스를 받는 투명한 선(거터 구간만) */
+  HIT_STROKE_PX: 14,
+  /** 한쪽 끝이 화면 밖일 때: 흐린 점선 */
+  CLAMPED_OPACITY: 0.45,
+  CLAMPED_DASH: "2 4",
+  /** 화면 밖 끝을 패널 위·아래 경계에서 들여놓는 거리와 방향 표시(V자)의 반 폭·높이 */
+  CLAMP_INSET_PX: 8,
+  CHEVRON_PX: 4
+} as const;
 
 /** pdf.js 뷰어와 같은 100%: 1pt = 96/72 CSS px */
 export const CSS_PX_PER_PT = 96 / 72;
@@ -68,8 +71,12 @@ export const VIEWER_TEXT = {
   ZOOM_FIT: "맞춤",
   ZOOM_LEVEL: "배율",
   CURRENT_PAGE: "현재 쪽",
-  RENDER_FAILED: "쪽을 그리지 못했어요"
+  RENDER_FAILED: "쪽을 그리지 못했어요",
+  SCROLL_SYNC: "동기 스크롤"
 } as const;
+
+/** 패널 이름("A 문서") */
+export const paneLabel = (badge: string) => `${badge} 문서`;
 
 /** 짝 없는 쪽 자리표시 문구("A에 없는 쪽이에요") */
 export const missingPageText = (badge: string) => `${badge}에 없는 쪽이에요`;

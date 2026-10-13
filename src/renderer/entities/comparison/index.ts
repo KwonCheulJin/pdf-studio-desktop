@@ -15,7 +15,9 @@ export {
   COMPARE_SIDE,
   COMPARE_SIDE_BADGE,
   COMPARE_SIDES,
-  COMPARISON_TEXT
+  COMPARISON_TEXT,
+  CONNECTOR_SHAPE,
+  type ConnectorShape
 } from "./config/change-kind";
 export {
   changePositionOf,
@@ -49,8 +51,12 @@ export {
   pairOcrLabel,
   pairPagesLabel
 } from "./model/change-text";
-export { rowConnectorStems, type ConnectorStem } from "./model/connector-stems";
-export { connectorPathOf } from "./model/connectors";
+export {
+  connectorEndOf,
+  connectorOf,
+  type Connector,
+  type ConnectorEnd
+} from "./model/connector-ends";
 export { noticeLinesOf } from "./model/notice-lines";
 export { ChangeHighlight } from "./ui/change-highlight";
 export { ChangeNumberTag } from "./ui/change-number-tag";

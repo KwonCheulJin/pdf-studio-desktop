@@ -41,7 +41,6 @@
   --diff-delete-fill: #d4500f33;
   --diff-change: #a67a00;
   --diff-change-fill: #e0a80040;
-  --connector: oklch(0.62 0.13 285);
 }
 
 .dark {

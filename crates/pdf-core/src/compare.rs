@@ -16,7 +16,7 @@ mod runner;
 mod tokenize;
 
 pub use anchors::ComparedPages;
-pub use connectors::{ConnectorStem, RowConnectors, connector_stems};
+pub use connectors::{Connector, ConnectorEnd, ConnectorShape, connectors};
 pub use diff::{DIFF_TIME_LIMIT, TokenDiff, diff_tokens};
 pub use extract::{ExtractedChar, ExtractedPage, Glyph, OCR_MIN_TEXT_CHARS, extract_text_layer};
 pub use model::{

@@ -1,8 +1,9 @@
 //! 묶음 golden(ADR 0002 §4): 문단을 자르지 않음, 상한, 긴 문단 문장 나눔, 순서, 스캔 쪽 한 묶음,
 //! 묶음에 나온 용어만.
 //!
-//! 기대값은 상수로 손으로 셈한 리터럴이다(상한 2,500, 고정 부담 600 → 문단 글 토큰 자리 1,900).
-//! 글 토큰: 한자 ×1.3, 라틴 낱말 ×1.4, 그 밖 글자(공백 제외) ×1.0, 올림. 출력: 중국어 ×1.5, 올림.
+//! 기대값은 상수로 손으로 셈한 리터럴이다(상한 2,500, 고정 부담 1,100 → 문단 글 토큰 자리 1,400).
+//! 글 토큰: 한자 ×1.3, 라틴 낱말 ×1.4, 그 밖 글자(공백 제외) ×1.0, 올림. 출력: 중국어 ×1.5, 올림,
+//! 여기에 항목(문단·조각)마다 12.
 //! 비율 상수를 고치면(Step 48) 이 값들을 다시 센다.
 
 use translate::{
@@ -82,16 +83,16 @@ fn chunks_zh(pages: &[SourcePage]) -> Vec<Chunk> {
 /// 쪽 경계를 넘어 담고, 입력 예상이 상한과 같으면 담고 넘으면 닫는다. 문단 글은 그대로다.
 #[test]
 fn paragraphs_fill_a_chunk_up_to_the_budget_across_pages_without_splitting() {
-    let (a, b, c, d) = (han(1000), han(461), han(1), han(10));
+    let (a, b, c, d) = (han(1000), format!("{}。", han(76)), han(1), han(10));
     let pages = [text_page(0, &[&a, &b]), text_page(1, &[&c, &d])];
 
-    // 600 + 1300 + 600 = 2500(상한과 같아 담는다) → 2 토큰을 더하면 2502라 닫는다.
-    // 두 번째: 600 + 2 + 13 = 615. 출력 ⌈1900 × 1.5⌉ = 2850, ⌈15 × 1.5⌉ = 23
+    // b: ⌈98.8 + 1⌉ = 100. 1100 + 1300 + 100 = 2500(상한과 같아 담는다) → 2 토큰을 더하면 2502라 닫는다.
+    // 첫째 출력 ⌈1400 × 1.5⌉ + 2 × 12 = 2124. 두 번째: 1100 + 2 + 13 = 1115, 출력 ⌈15 × 1.5⌉ + 2 × 12 = 47
     assert_eq!(
         chunks_zh(&pages),
         vec![
-            text_chunk(vec![item(0, 1, &a), item(0, 2, &b)], 2500, 2850),
-            text_chunk(vec![item(1, 1, &c), item(1, 2, &d)], 615, 23),
+            text_chunk(vec![item(0, 1, &a), item(0, 2, &b)], 2500, 2124),
+            text_chunk(vec![item(1, 1, &c), item(1, 2, &d)], 1115, 47),
         ]
     );
 }
@@ -101,29 +102,30 @@ fn paragraphs_fill_a_chunk_up_to_the_budget_across_pages_without_splitting() {
 #[test]
 fn long_paragraph_is_split_at_sentence_ends_into_one_chunk_per_fragment() {
     let short = han(10);
-    let first = format!("{}。", han(700)); // 911
-    let second = format!("{}。」", han(699)); // ⌈908.7 + 2⌉ = 911
-    let third = format!("{}！", han(300)); // 391
-    let long = format!("{first}{second} {third}"); // ⌈2208.7 + 4⌉ = 2213 > 1900
+    let first = format!("{}。", han(500)); // 651
+    let second = format!("{}。」", han(499)); // ⌈648.7 + 2⌉ = 651
+    let third = format!("{}！", han(200)); // 261
+    let long = format!("{first}{second} {third}"); // ⌈1562.7⌉ = 1563 > 1400
     let pages = [text_page(0, &[&short, &long, &short])];
 
-    // 조각 0 = 첫째 + 둘째: ⌈1818.7 + 3⌉ = 1822(셋째까지면 2213이라 넘는다). 조각 1 = 셋째(앞 공백 지움)
+    // 조각 0 = 첫째 + 둘째: ⌈1301.7⌉ = 1302(셋째까지면 1563이라 넘는다). 조각 1 = 셋째(앞 공백 지움).
+    // 출력: ⌈13 × 1.5⌉ + 12 = 32, ⌈1302 × 1.5⌉ + 12 = 1965, ⌈261 × 1.5⌉ + 12 = 404
     assert_eq!(
         chunks_zh(&pages),
         vec![
-            text_chunk(vec![item(0, 1, &short)], 613, 20),
+            text_chunk(vec![item(0, 1, &short)], 1113, 32),
             text_chunk(
                 vec![fragment(0, 2, &format!("{first}{second}"), 0, 2)],
-                2422,
-                2733
+                2402,
+                1965
             ),
-            text_chunk(vec![fragment(0, 2, &third, 1, 2)], 991, 587),
-            text_chunk(vec![item(0, 3, &short)], 613, 20),
+            text_chunk(vec![fragment(0, 2, &third, 1, 2)], 1361, 404),
+            text_chunk(vec![item(0, 3, &short)], 1113, 32),
         ]
     );
 }
 
-/// 문장 끝이 없는 긴 글은 글 토큰이 상한 안인 만큼씩 글자로 나눈다(⌈1.3n⌉ ≤ 1900 → n ≤ 1461).
+/// 문장 끝이 없는 긴 글은 글 토큰이 상한 안인 만큼씩 글자로 나눈다(⌈1.3n⌉ ≤ 1400 → n ≤ 1076).
 #[test]
 fn sentence_longer_than_the_budget_is_split_by_characters() {
     let long = han(2000);
@@ -132,9 +134,10 @@ fn sentence_longer_than_the_budget_is_split_by_characters() {
     assert_eq!(
         chunks_zh(&pages),
         vec![
-            text_chunk(vec![fragment(3, 1, &han(1461), 0, 2)], 2500, 2850),
-            // ⌈539 × 1.3⌉ = 701, ⌈701 × 1.5⌉ = 1052
-            text_chunk(vec![fragment(3, 1, &han(539), 1, 2)], 1301, 1052),
+            // ⌈1076 × 1.3⌉ = 1399, 출력 ⌈1399 × 1.5⌉ + 12 = 2111
+            text_chunk(vec![fragment(3, 1, &han(1076), 0, 2)], 2499, 2111),
+            // ⌈924 × 1.3⌉ = 1202, 출력 ⌈1202 × 1.5⌉ + 12 = 1815
+            text_chunk(vec![fragment(3, 1, &han(924), 1, 2)], 2302, 1815),
         ]
     );
 }
@@ -216,7 +219,7 @@ fn text_chunk_carries_only_terms_found_in_its_items_and_scan_chunk_carries_all()
 #[test]
 fn glossary_tokens_count_toward_the_budget() {
     let a = han(1000);
-    let b = format!("甲{}", han(460)); // 한자 461자 → 600
+    let b = format!("甲{}。", han(75)); // 한자 76자 + 문장부호 1 → ⌈98.8 + 1⌉ = 100
     let pages = [text_page(0, &[&a, &b])];
     let glossary = Glossary::new([term("甲", "갑")]);
 
@@ -225,13 +228,13 @@ fn glossary_tokens_count_toward_the_budget() {
     assert_eq!(
         chunks,
         vec![
-            text_chunk(vec![item(0, 1, &a)], 1900, 1950),
+            text_chunk(vec![item(0, 1, &a)], 2400, 1962),
             Chunk::Text(TextChunk {
                 items: vec![item(0, 2, &b)],
                 glossary: vec![term("甲", "갑")],
                 estimate: ChunkEstimate {
                     input_tokens: 1203,
-                    output_tokens: 900,
+                    output_tokens: 162,
                 },
             }),
         ]

@@ -128,12 +128,12 @@ fn write_record(dir: &Path, record_key: &str) {
     .expect("write record");
 }
 
-/// 기록이 없으면 묶음 전체가 보낼 것이다: 텍스트 묶음 입력 600 + 용어 `甲方 → 갑` 4 + `乙方 → 을` 4 + 글
-/// 12 + 9 + 16 = 645, 출력 ⌈37 × 1.5⌉ = 56. 스캔 묶음 입력 600 + 그림 56 × 40 = 2,240 + 용어 전체 8 = 2,848,
-/// 출력 3,500. 합 3,493 / 3,556, 요금(Sonnet $2·$10) 3,493 × 2 + 3,556 × 10 = 42,546 micro-USD.
+/// 기록이 없으면 묶음 전체가 보낼 것이다: 텍스트 묶음 입력 1,100 + 용어 `甲方 → 갑` 4 + `乙方 → 을` 4 + 글
+/// 12 + 9 + 16 = 1,145, 출력 ⌈37 × 1.5⌉ + 문단 3 × 12 = 92. 스캔 묶음 입력 1,100 + 그림 56 × 40 = 2,240 + 용어
+/// 전체 8 = 3,348, 출력 3,500. 합 4,493 / 3,592, 요금(Sonnet $2·$10) 4,493 × 2 + 3,592 × 10 = 44,906 micro-USD.
 ///
-/// 같은 옵션의 기록에 첫 문단과 스캔 쪽이 있으면 남은 두 문단만 센다: 입력 600 + 그 둘에 나오는 용어
-/// `乙方 → 을` 4 + 글 9 + 16 = 629, 출력 ⌈25 × 1.5⌉ = 38, 요금 629 × 2 + 38 × 10 = 1,638. 묶음 수는 그대로
+/// 같은 옵션의 기록에 첫 문단과 스캔 쪽이 있으면 남은 두 문단만 센다: 입력 1,100 + 그 둘에 나오는 용어
+/// `乙方 → 을` 4 + 글 9 + 16 = 1,129, 출력 ⌈25 × 1.5⌉ + 문단 2 × 12 = 62, 요금 1,129 × 2 + 62 × 10 = 2,878. 묶음 수는 그대로
 /// 둘이고, 이어하기는 끝난 문단 3(텍스트 1 + 받아 적은 2) / 문단 5다.
 #[test]
 fn estimates_count_only_what_is_left_to_send_while_chunks_count_the_whole_range() {
@@ -152,9 +152,9 @@ fn estimates_count_only_what_is_left_to_send_while_chunks_count_the_whole_range(
         TranslationPlan {
             paragraph_count: 3,
             chunk_count: 2,
-            estimated_input_tokens: 3_493,
-            estimated_output_tokens: 3_556,
-            estimated_cost_micro_usd: 42_546,
+            estimated_input_tokens: 4_493,
+            estimated_output_tokens: 3_592,
+            estimated_cost_micro_usd: 44_906,
             resumable: None,
         }
     );
@@ -163,9 +163,9 @@ fn estimates_count_only_what_is_left_to_send_while_chunks_count_the_whole_range(
         TranslationPlan {
             paragraph_count: 5,
             chunk_count: 2,
-            estimated_input_tokens: 629,
-            estimated_output_tokens: 38,
-            estimated_cost_micro_usd: 1_638,
+            estimated_input_tokens: 1_129,
+            estimated_output_tokens: 62,
+            estimated_cost_micro_usd: 2_878,
             resumable: Some(ResumeState {
                 translated_paragraphs: 3,
                 paragraph_count: 5,

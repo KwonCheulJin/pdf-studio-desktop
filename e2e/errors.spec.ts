@@ -112,7 +112,7 @@ async function openWorkspace(
     window.__E2E_MOCK_SEED__ = initialSeed;
   }, seed);
   await page.goto("/");
-  await page.getByRole("button", { name: "파일 선택" }).click();
+  await page.getByRole("button", { name: "파일 선택", exact: true }).click();
 }
 
 async function holdMerge(page: Page): Promise<void> {

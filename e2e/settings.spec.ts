@@ -50,7 +50,7 @@ async function seedWorkspace(page: Page): Promise<void> {
 
 /** 빈 화면에서 파일을 열어 아래 도구 막대를 띄운다. */
 async function openFile(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "파일 선택" }).click();
+  await page.getByRole("button", { name: "파일 선택", exact: true }).click();
   await expect(page.getByTestId("document-card")).toHaveCount(1);
 }
 
@@ -211,7 +211,7 @@ test.describe("오류 보고", () => {
     await enableErrorReporting(page);
     await page.goto("/");
 
-    await page.getByRole("button", { name: "파일 선택" }).click();
+    await page.getByRole("button", { name: "파일 선택", exact: true }).click();
 
     await expect.poll(async () => (await readReports(page)).length).toBe(1);
     const [report] = await readReports(page);
@@ -233,7 +233,9 @@ test.describe("오류 보고", () => {
     await enableErrorReporting(page);
     await page.goto("/");
     // 저장된 설정을 읽은 뒤 첫 화면을 그리므로, 화면이 보이면 보고가 켜져 있다.
-    await expect(page.getByRole("button", { name: "파일 선택" })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "파일 선택", exact: true })
+    ).toBeVisible();
 
     await page.evaluate(() => {
       const error = new Error(

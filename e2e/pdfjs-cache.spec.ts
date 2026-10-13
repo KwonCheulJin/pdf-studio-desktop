@@ -57,7 +57,7 @@ async function openWorkspace(page: Page, files: E2eMockFile[]): Promise<void> {
     window.__E2E_MOCK_SEED__ = { files: seedFiles };
   }, files);
   await page.goto("/");
-  await page.getByRole("button", { name: "파일 선택" }).click();
+  await page.getByRole("button", { name: "파일 선택", exact: true }).click();
   for (const file of files) {
     await expectImageLoaded(documentThumbnail(page, file));
   }

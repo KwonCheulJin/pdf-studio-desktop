@@ -13,6 +13,7 @@ import {
   useMergeStore
 } from "@/renderer/entities/merge-plan";
 import { Button, Checkbox, Tooltip } from "@/renderer/shared/ui";
+import { ModeTabs } from "./mode-tabs";
 
 export function AppToolbar() {
   const files = useMergeFiles();
@@ -32,14 +33,22 @@ export function AppToolbar() {
     clearSelection();
   }, [clearFiles, clearSelection]);
 
+  // 파일이 없으면 모드 탭만 둔다(빈 작업 공간에서도 비교로 갈 수 있게).
   if (!hasFiles) {
-    return null;
+    return (
+      <header className="border-border bg-card flex h-16 shrink-0 items-center border-b px-6">
+        <ModeTabs />
+      </header>
+    );
   }
 
   return (
     <header className="border-border bg-card flex h-16 shrink-0 items-center justify-between border-b px-6">
-      {/* 좌측: Select All */}
-      <div className="flex w-40 items-center gap-2">
+      {/* 좌측: 모드 탭, Select All */}
+      <div className="flex flex-1 items-center gap-2">
+        <div className="mr-2">
+          <ModeTabs />
+        </div>
         <Tooltip content="전체 선택">
           <label className="hover:bg-accent inline-flex cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 text-sm">
             <Checkbox
@@ -71,7 +80,7 @@ export function AppToolbar() {
       </Tooltip>
 
       {/* 우측: 병합 */}
-      <div className="flex w-40 items-center justify-end">
+      <div className="flex flex-1 items-center justify-end">
         <Tooltip content="모든 파일을 하나의 PDF로 병합">
           <Button disabled={!hasFiles || isMerging} onClick={startMerge}>
             {isMerging ? "병합 중..." : "병합"}

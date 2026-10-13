@@ -116,7 +116,7 @@ test("삭제한 페이지는 제자리에 남아 병합에서 빠지고, 카드�
     window.__E2E_MOCK_SEED__ = { files };
   }, SEED_FILES);
   await page.goto("/");
-  await page.getByRole("button", { name: "파일 선택" }).click();
+  await page.getByRole("button", { name: "파일 선택", exact: true }).click();
   await expect(page.getByTestId("document-card")).toHaveCount(
     SEED_FILES.length
   );

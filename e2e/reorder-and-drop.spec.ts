@@ -65,7 +65,7 @@ async function openWorkspace(page: Page, files: E2eMockFile[]): Promise<void> {
 }
 
 async function pickAllFiles(page: Page, files: E2eMockFile[]): Promise<void> {
-  await page.getByRole("button", { name: "파일 선택" }).click();
+  await page.getByRole("button", { name: "파일 선택", exact: true }).click();
   await expect(page.getByTestId("document-card")).toHaveCount(files.length);
 }
 
@@ -350,6 +350,11 @@ test("창 밖에서 끌어온 파일은 놓은 자리(물리 픽셀 → CSS 픽�
     x: x * DEVICE_PIXEL_RATIO,
     y: y * DEVICE_PIXEL_RATIO
   });
+
+  // 첫 화면은 홈이다. 빈 병합 작업 공간으로 가려고 파일을 넣었다가 모두 지운다.
+  await pickAllFiles(page, files);
+  await page.getByRole("button", { name: "전체 삭제" }).click();
+  await expect(page.getByTestId("document-card")).toHaveCount(0);
 
   // 빈 작업 공간: 끌어오면 안내가 보이고, 놓으면 놓은 순서대로 추가된다.
   const center = toPhysical(800, 500);

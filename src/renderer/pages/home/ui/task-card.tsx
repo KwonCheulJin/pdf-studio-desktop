@@ -1,0 +1,53 @@
+import { useId, type ReactNode, type RefObject } from "react";
+import { Button } from "@/renderer/shared/ui";
+
+interface TaskCardProps {
+  ref: RefObject<HTMLElement | null>;
+  title: string;
+  description: string;
+  actionLabel: string;
+  /** 버튼 옆에 받는 파일을 적는다. */
+  caption: string;
+  /** 끌어온 파일이 이 카드 위에 있다. */
+  isDropTarget: boolean;
+  illustration: ReactNode;
+  onAction: () => void;
+}
+
+/** 홈의 작업 카드 하나(시안 1): 그림, 제목·설명, 파일 선택 버튼. */
+export function TaskCard({
+  ref,
+  title,
+  description,
+  actionLabel,
+  caption,
+  isDropTarget,
+  illustration,
+  onAction
+}: TaskCardProps) {
+  const titleId = useId();
+
+  return (
+    <section
+      ref={ref}
+      aria-labelledby={titleId}
+      className={`bg-card border-border flex flex-col gap-5 rounded-lg border p-6 shadow-sm transition-shadow ${
+        isDropTarget ? "ring-primary ring-2" : ""
+      }`}
+    >
+      {illustration}
+      <div className="flex flex-col gap-1">
+        <h2 id={titleId} className="text-lg/6.5 font-semibold">
+          {title}
+        </h2>
+        <p className="text-muted-foreground">{description}</p>
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button className="h-9 rounded-md px-4 font-medium" onClick={onAction}>
+          {actionLabel}
+        </Button>
+        <span className="text-muted-foreground text-xs/4.25">{caption}</span>
+      </div>
+    </section>
+  );
+}

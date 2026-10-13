@@ -29,14 +29,14 @@ export function HomePage({ onEnterMerge, onEnterCompare }: HomePageProps) {
   const compareCardRef = useRef<HTMLElement>(null);
   const { handleAddFiles } = useAddFiles();
   const addDroppedFiles = useAddDroppedFiles();
-  const { pickCompareFiles, takeCompareFiles } = useCompareIntake();
+  const { pickCompareFiles, placeCompareFiles } = useCompareIntake();
 
   const handlePickMerge = useCallback(async () => {
     if ((await handleAddFiles()) > 0) onEnterMerge();
   }, [handleAddFiles, onEnterMerge]);
 
   const handlePickCompare = useCallback(async () => {
-    if (await pickCompareFiles()) onEnterCompare();
+    if (await pickCompareFiles({ target: null })) onEnterCompare();
   }, [pickCompareFiles, onEnterCompare]);
 
   const handleCardDrop = useCallback(
@@ -46,9 +46,9 @@ export function HomePage({ onEnterMerge, onEnterCompare }: HomePageProps) {
         if (added > 0) onEnterMerge();
         return;
       }
-      if (await takeCompareFiles(paths)) onEnterCompare();
+      if (await placeCompareFiles({ paths, target: null })) onEnterCompare();
     },
-    [addDroppedFiles, takeCompareFiles, onEnterMerge, onEnterCompare]
+    [addDroppedFiles, placeCompareFiles, onEnterMerge, onEnterCompare]
   );
 
   const activeCard = useCardFileDrop({

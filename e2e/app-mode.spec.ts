@@ -42,10 +42,6 @@ const FILE_A = seedFile("alpha.pdf");
 const FILE_B = seedFile("bravo.pdf");
 const FILE_C = seedFile("charlie.pdf");
 
-/** mock `fileStem`은 시드 표시 이름에서 확장자를 뺀다. */
-const STEM_A = "alpha";
-const STEM_B = "bravo";
-
 const VIEWPORT = { width: 1280, height: 800 };
 
 test.use({ viewport: VIEWPORT });
@@ -71,8 +67,19 @@ function documentCards(page: Page): Locator {
   return page.getByTestId("document-card");
 }
 
-function compareDocuments(page: Page): Locator {
-  return page.getByRole("region", { name: "비교할 문서" });
+/** 비교 슬롯(시안 3): 이름은 슬롯 제목("이전 문서" | "이후 문서")이다. */
+function compareSlot(page: Page, title: string): Locator {
+  return page
+    .getByRole("region", { name: "비교할 문서" })
+    .getByRole("group", { name: title, exact: true });
+}
+
+async function expectCompareSlots(
+  page: Page,
+  [before, after]: [string, string]
+): Promise<void> {
+  await expect(compareSlot(page, "이전 문서")).toContainText(before);
+  await expect(compareSlot(page, "이후 문서")).toContainText(after);
 }
 
 function selectionLabel(page: Page): Locator {
@@ -188,9 +195,7 @@ test("비교 카드 버튼으로 두 파일을 고르면 A·B에 넣고 비교 �
 
   await expect(page.getByRole("heading", { name: "새 비교" })).toBeVisible();
   await expect(modeTab(page, "비교")).toHaveAttribute("aria-selected", "true");
-  const documents = compareDocuments(page);
-  await expect(documents).toContainText(`이전 문서${STEM_A}`);
-  await expect(documents).toContainText(`이후 문서${STEM_B}`);
+  await expectCompareSlots(page, [FILE_A.displayName, FILE_B.displayName]);
 });
 
 test("비교 카드에는 2개까지 놓을 수 있고, 카드 밖이나 3개 이상이면 홈에 남는다", async ({
@@ -218,8 +223,7 @@ test("비교 카드에는 2개까지 놓을 수 있고, 카드 밖이나 3개 �
   await dropOn(page, compareCard, [FILE_A.path, FILE_B.path]);
 
   await expect(modeTab(page, "비교")).toHaveAttribute("aria-selected", "true");
-  await expect(compareDocuments(page)).toContainText(`이전 문서${STEM_A}`);
-  await expect(compareDocuments(page)).toContainText(`이후 문서${STEM_B}`);
+  await expectCompareSlots(page, [FILE_A.displayName, FILE_B.displayName]);
 });
 
 test("모드 탭으로 오가도 병합 파일·선택과 비교 세션이 그대로 남는다", async ({
@@ -229,7 +233,7 @@ test("모드 탭으로 오가도 병합 파일·선택과 비교 세션이 그�
 
   // 비교 카드에 두 파일 → 비교 모드
   await dropOn(page, homeCard(page, "PDF 비교"), [FILE_A.path, FILE_B.path]);
-  await expect(compareDocuments(page)).toContainText(`이후 문서${STEM_B}`);
+  await expectCompareSlots(page, [FILE_A.displayName, FILE_B.displayName]);
 
   // 병합 탭: 파일이 없어도 탭이 있는 빈 작업 공간이다.
   await modeTab(page, "병합").click();
@@ -244,8 +248,7 @@ test("모드 탭으로 오가도 병합 파일·선택과 비교 세션이 그�
   // 임시 결과가 없으면 확인 없이 넘어가고, 비교 세션은 남아 있다.
   await modeTab(page, "비교").click();
   await expect(unsavedResultDialog(page)).toHaveCount(0);
-  await expect(compareDocuments(page)).toContainText(`이전 문서${STEM_A}`);
-  await expect(compareDocuments(page)).toContainText(`이후 문서${STEM_B}`);
+  await expectCompareSlots(page, [FILE_A.displayName, FILE_B.displayName]);
 
   await modeTab(page, "병합").click();
   await expect(documentCards(page)).toHaveCount(3);

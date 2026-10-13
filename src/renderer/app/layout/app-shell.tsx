@@ -4,6 +4,7 @@ import { ComparePage } from "@/renderer/pages/compare";
 import { HomePage } from "@/renderer/pages/home";
 import { MergedPreviewPage } from "@/renderer/pages/merged-preview";
 import { MergeWorkspace } from "@/renderer/widgets/merge-workspace";
+import { useCompareFilePaths } from "@/renderer/features/pdf-compare";
 import { MergeProgressOverlay } from "@/renderer/features/pdf-merge";
 import {
   MERGE_VIEW,
@@ -62,6 +63,9 @@ export function AppShell() {
     useShallow((state) => state.files.map((file) => file.path))
   );
   usePdfDocumentRetention(sourcePaths);
+  // 비교 슬롯의 문서도 같다. 모드를 오가도 썸네일을 그리려고 다시 읽지 않는다.
+  const comparePaths = useCompareFilePaths();
+  usePdfDocumentRetention(comparePaths);
 
   const handleEnterMerge = useCallback(
     () => setMode(APP_MODE.MERGE),

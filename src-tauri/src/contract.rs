@@ -157,6 +157,8 @@ pub(crate) enum OpenedFile {
         pdf_path: PathBuf,
         /// 화면에 보일 이름. TIFF면 원본 이름에서 확장자만 `.pdf`로 바꾼 것이다.
         display_name: String,
+        /// 요청한 파일의 크기(바이트). TIFF면 변환 전 TIFF의 크기다.
+        size_bytes: u32,
         info: PdfInfo,
     },
     #[serde(rename = "error", rename_all = "camelCase")]
@@ -250,6 +252,12 @@ impl From<pdf_core::MergeProgress> for MergeProgress {
             overall_percent: progress.overall_percent,
         }
     }
+}
+
+/// 파일 크기를 `u32`로 보낸다. 열 수 있는 파일은 입력 상한(512MB) 안이라 넘칠 수 없지만,
+/// 넘치면 최댓값으로 막는다.
+pub(crate) fn byte_count(value: u64) -> u32 {
+    u32::try_from(value).unwrap_or(u32::MAX)
 }
 
 /// 개수를 `u32`로 보낸다. 상한(파일 512MB, 소스 200개)으로 보아 넘칠 수 없지만,

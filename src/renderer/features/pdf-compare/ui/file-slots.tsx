@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import { ArrowLeftRight } from "lucide-react";
+import { cn } from "@/renderer/shared/lib/utils";
 import { COMPARE_SLOT } from "../config/compare-files";
 import {
   useCompareSessionStore,
@@ -32,10 +33,16 @@ export function FileSlots() {
     onDrop: (drop) => void placeCompareFiles(drop)
   });
 
+  /** 드롭존이 하나라도 남아 있으면 남는 높이를 채운다. 둘 다 채우면 파일 카드는 제 높이로 위에 쌓는다. */
+  const isFillingHeight = !before || !after;
+
   return (
     <section
       aria-label="비교할 문서"
-      className="bg-card border-border flex items-end gap-4 rounded-xl border px-6 py-5"
+      className={cn(
+        "bg-card border-border flex gap-4 rounded-xl border px-6 py-5",
+        isFillingHeight && "flex-1"
+      )}
     >
       <FileSlot
         ref={beforeRef}
@@ -49,7 +56,7 @@ export function FileSlots() {
         aria-label="A와 B 바꾸기"
         disabled={!before && !after}
         onClick={swapSlots}
-        className="border-border bg-card text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring mb-16 flex size-10 shrink-0 items-center justify-center rounded-full border transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
+        className="border-border bg-card text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring mt-7.5 flex size-10 shrink-0 items-center justify-center self-center rounded-full border transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
       >
         <ArrowLeftRight size={SWAP_ICON_SIZE} aria-hidden="true" />
       </button>

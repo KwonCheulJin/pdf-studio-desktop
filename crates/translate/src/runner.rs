@@ -13,6 +13,8 @@
 mod arrange;
 mod cancel;
 
+pub(crate) use cancel::until_cancelled;
+
 use std::collections::HashMap;
 use std::future::Future;
 use std::path::Path;
@@ -33,6 +35,7 @@ use crate::response::ScanParagraph;
 use crate::source::{SourcePage, SourcePageContent};
 use crate::usage::TokenUsage;
 
+pub(crate) use arrange::{MISSING_RESULT, recorded_status};
 pub use arrange::{PageFailure, PageKind, ParagraphStatus, TranslatedPage, TranslatedParagraph};
 
 /// 스캔 쪽 그림(PNG)을 보내기 직전에 만든다. 앱에서는 pdf-core `render_scan_page`(pdfium 잠금 안)이다.
@@ -80,9 +83,81 @@ pub enum RunError<E> {
 }
 
 /// 보낼 묶음(기록에 있는 문단을 뺀)
-enum Pending<'c> {
+pub(crate) enum Pending<'c> {
     Text(TextChunk),
     Scan(&'c ScanChunk),
+}
+
+/// (쪽, 문단 번호) → 문단 키(범위 안 글자층 문단)
+pub(crate) type ParagraphKeys = HashMap<(u32, u32), String>;
+
+/// 범위 안 글자층 문단의 키와 실행을 시작할 때의 문단 수(ADR 0002 §9 `paragraphs_done`·`paragraph_count`):
+/// 글자층 문단과 기록에 있는 스캔 쪽(옵션이 켜졌을 때)의 받아 적은 문단을 센다. 계획(`prepare_translation`)의
+/// 이어하기 표시도 같은 값이다.
+pub(crate) fn paragraph_keys(
+    pages: &[SourcePage],
+    include_scan_pages: bool,
+    record: Option<&Record>,
+) -> (ParagraphKeys, ParagraphCounts) {
+    let mut keys = HashMap::new();
+    let mut counts = ParagraphCounts::default();
+    for page in pages {
+        match &page.content {
+            SourcePageContent::Text(paragraphs) => {
+                for paragraph in paragraphs {
+                    let key = paragraph_key(page.page, paragraph.number, &paragraph.text);
+                    counts.count += 1;
+                    if record.is_some_and(|record| record.paragraphs.contains_key(&key)) {
+                        counts.done += 1;
+                    }
+                    keys.insert((page.page, paragraph.number), key);
+                }
+            }
+            SourcePageContent::Scan(_) if include_scan_pages => {
+                if let Some(paragraphs) =
+                    record.and_then(|record| record.scan_pages.get(&page.page))
+                {
+                    counts.count += count(paragraphs.len());
+                    counts.done += count(paragraphs.len());
+                }
+            }
+            SourcePageContent::Scan(_) => {}
+        }
+    }
+    (keys, counts)
+}
+
+/// 묶음에서 기록에 있는 것을 뺀 보낼 묶음. 남은 것이 없으면 `None`(끝난 묶음)이다. 남은 항목만 담은 텍스트
+/// 묶음은 용어집·예상치를 그대로 쓴다(나눈 요청처럼 보낼 때 그 항목에 나오는 용어만 싣는다).
+pub(crate) fn pending<'c>(
+    chunk: &'c Chunk,
+    keys: &ParagraphKeys,
+    record: Option<&Record>,
+) -> Option<Pending<'c>> {
+    let recorded = |key: &String| record.is_some_and(|record| record.paragraphs.contains_key(key));
+    match chunk {
+        Chunk::Text(chunk) => {
+            let items: Vec<ChunkItem> = chunk
+                .items
+                .iter()
+                .filter(|item| {
+                    keys.get(&(item.page, item.number))
+                        .is_none_or(|key| !recorded(key))
+                })
+                .cloned()
+                .collect();
+            (!items.is_empty()).then(|| {
+                Pending::Text(TextChunk {
+                    items,
+                    glossary: chunk.glossary.clone(),
+                    estimate: chunk.estimate,
+                })
+            })
+        }
+        Chunk::Scan(chunk) => (!record
+            .is_some_and(|record| record.scan_pages.contains_key(&chunk.page)))
+        .then_some(Pending::Scan(chunk)),
+    }
 }
 
 /// 묶음 하나를 보낸 결과
@@ -136,7 +211,10 @@ where
         options.language,
         options.include_scan_pages,
     );
-    let pending: Vec<Option<Pending>> = chunks.iter().map(|chunk| run.pending(chunk)).collect();
+    let pending: Vec<Option<Pending>> = chunks
+        .iter()
+        .map(|chunk| pending(chunk, &run.keys, Some(&run.record)))
+        .collect();
     let total = count(chunks.len());
     let mut done = count(pending.iter().filter(|chunk| chunk.is_none()).count());
     run.report(reporter, TranslateStage::Translate, done, total);
@@ -145,7 +223,7 @@ where
         if cancel.load(Ordering::Relaxed) {
             return Err(RunError::Cancelled);
         }
-        let sent = cancel::until_cancelled(cancel, send(&client, renderer, chunk))
+        let sent = until_cancelled(cancel, send(&client, renderer, chunk))
             .await
             .ok_or(RunError::Cancelled)?;
         run.settle(sent)?;
@@ -188,8 +266,7 @@ async fn send<T: Transport, R: ScanRenderer>(
 /// 실행 하나의 상태
 struct Run {
     include_scan_pages: bool,
-    /// (쪽, 문단 번호) → 문단 키(범위 안 글자층 문단)
-    keys: HashMap<(u32, u32), String>,
+    keys: ParagraphKeys,
     record: Record,
     store: RecordStore,
     /// 이번 실행에서 받은 200 응답의 합
@@ -210,29 +287,7 @@ impl Run {
         record: Record,
         store: RecordStore,
     ) -> Self {
-        let mut keys = HashMap::new();
-        let mut counts = ParagraphCounts::default();
-        for page in pages {
-            match &page.content {
-                SourcePageContent::Text(paragraphs) => {
-                    for paragraph in paragraphs {
-                        let key = paragraph_key(page.page, paragraph.number, &paragraph.text);
-                        counts.count += 1;
-                        if record.paragraphs.contains_key(&key) {
-                            counts.done += 1;
-                        }
-                        keys.insert((page.page, paragraph.number), key);
-                    }
-                }
-                SourcePageContent::Scan(_) if include_scan_pages => {
-                    if let Some(paragraphs) = record.scan_pages.get(&page.page) {
-                        counts.count += count(paragraphs.len());
-                        counts.done += count(paragraphs.len());
-                    }
-                }
-                SourcePageContent::Scan(_) => {}
-            }
-        }
+        let (keys, counts) = paragraph_keys(pages, include_scan_pages, Some(&record));
         Self {
             include_scan_pages,
             keys,
@@ -258,34 +313,6 @@ impl Run {
 
     fn key(&self, item: &ChunkItem) -> Option<&String> {
         self.keys.get(&(item.page, item.number))
-    }
-
-    /// 묶음에서 기록에 있는 것을 뺀 보낼 묶음. 남은 것이 없으면 `None`(끝난 묶음)이다. 남은 항목만 담은
-    /// 텍스트 묶음은 용어집·예상치를 그대로 쓴다(나눈 요청처럼 보낼 때 그 항목에 나오는 용어만 싣는다).
-    fn pending<'c>(&self, chunk: &'c Chunk) -> Option<Pending<'c>> {
-        match chunk {
-            Chunk::Text(chunk) => {
-                let items: Vec<ChunkItem> = chunk
-                    .items
-                    .iter()
-                    .filter(|item| {
-                        self.key(item)
-                            .is_none_or(|key| !self.record.paragraphs.contains_key(key))
-                    })
-                    .cloned()
-                    .collect();
-                (!items.is_empty()).then(|| {
-                    Pending::Text(TextChunk {
-                        items,
-                        glossary: chunk.glossary.clone(),
-                        estimate: chunk.estimate,
-                    })
-                })
-            }
-            Chunk::Scan(chunk) => {
-                (!self.record.scan_pages.contains_key(&chunk.page)).then_some(Pending::Scan(chunk))
-            }
-        }
     }
 
     /// 보낸 묶음의 결과를 상태·기록에 담고 기록을 쓴다. 작업을 멈추는 오류면 그 오류다(사용량은 더한다).

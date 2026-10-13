@@ -1,5 +1,5 @@
 //! reqwest 전송을 로컬 mock HTTP 서버(127.0.0.1, 평문)로 확인한다: 보내는 헤더·본문, 시간 제한, 연결
-//! 실패, 리디렉션을 따르지 않음, 오류 본문 → 코드. 인터넷에 나가지 않는다.
+//! 실패, 리디렉션을 따르지 않음, 오류 본문 → 코드, 키 확인(모델 목록). 인터넷에 나가지 않는다.
 
 use std::time::Duration;
 
@@ -12,6 +12,7 @@ use crate::chunk::{ChunkEstimate, ChunkItem, TextChunk};
 use crate::client::MessagesClient;
 use crate::language::Language;
 use crate::models::TranslateModel;
+use crate::verify::verify_api_key;
 
 const KEY: &str = "sk-ant-api03-local-mock-key";
 const TEST_TIMEOUT: Duration = Duration::from_millis(300);
@@ -281,4 +282,55 @@ fn one_item_chunk() -> TextChunk {
             output_tokens: 6,
         },
     }
+}
+
+/// 모델 목록 응답(공식 문서 `api/models/list` 모양). `ids`만 목록에 있다.
+fn model_list(ids: &[&str]) -> String {
+    let data: Vec<String> = ids
+        .iter()
+        .map(|id| format!(r#"{{"type":"model","id":"{id}","display_name":"{id}","created_at":"2026-01-01T00:00:00Z"}}"#))
+        .collect();
+    format!(
+        r#"{{"data":[{}],"has_more":false,"first_id":null,"last_id":null}}"#,
+        data.join(",")
+    )
+}
+
+/// 키 확인은 문서를 보내지 않는 모델 목록 요청 한 번이다. 기본 20개가 아니라 한 쪽에 다 받도록 `limit`을 싣는다.
+#[tokio::test]
+async fn key_check_lists_models_once_with_the_key_and_accepts_when_both_app_models_are_listed() {
+    let (base_url, server) = serve_once(Some(http_reply(
+        "200 OK",
+        &[],
+        &model_list(&["claude-opus-5-5", "claude-haiku-5-5", "claude-sonnet-5-5"]),
+    )))
+    .await;
+
+    let result = verify_api_key(&transport(&base_url), &key()).await;
+    let received = server.await.expect("server");
+
+    assert_eq!(received.request_line, "GET /v1/models?limit=1000 HTTP/1.1");
+    assert_eq!(received.header("x-api-key"), Some(KEY));
+    assert_eq!(received.header("anthropic-version"), Some("2023-06-01"));
+    assert!(received.body.is_empty());
+    assert_eq!(result, Ok(()));
+}
+
+/// 두 앱 모델 가운데 하나라도 목록에 없으면 `MODEL_UNAVAILABLE`이다(단종된 모델은 앱 업데이트로 바꾼다).
+#[tokio::test]
+async fn key_check_is_model_unavailable_when_an_app_model_is_missing_from_the_list() {
+    let (base_url, server) = serve_once(Some(http_reply(
+        "200 OK",
+        &[],
+        &model_list(&["claude-sonnet-5-5"]),
+    )))
+    .await;
+
+    let result = verify_api_key(&transport(&base_url), &key()).await;
+    server.await.expect("server");
+
+    assert_eq!(
+        result.map_err(|error| error.code),
+        Err(ApiErrorCode::ModelUnavailable)
+    );
 }

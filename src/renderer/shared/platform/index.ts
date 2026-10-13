@@ -17,8 +17,11 @@ export {
   type MergeProgressHandler,
   type PickSaveDirectoryOptions,
   type PickSavePathOptions,
+  type PrepareTranslationParams,
   type SetSettingParams,
   type SettingValue,
+  type TranslatePdfParams,
+  type TranslateProgressHandler,
   type Unsubscribe,
   type UpdateDownloadProgress,
   type UpdateDownloadProgressHandler

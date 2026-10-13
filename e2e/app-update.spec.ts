@@ -19,7 +19,7 @@ import type { MockUpdate } from "../src/renderer/shared/platform";
  * 자동 업데이트(계획서 P4-4).
  * - 시작 후 한 번 확인하고, 새 버전이 있으면 토스트의 '업데이트'로 받기 → 설치·재시작.
  * - 받는 동안 %(정수 내림, 끝나기 전에는 100을 보이지 않는다).
- * - 진행 중인 작업(병합·비교·내보내기·저장)이 있으면 재시작하지 않고 끝난 뒤 '다시 시작'을 누르게 한다.
+ * - 진행 중인 작업(병합·비교·내보내기·저장·번역·다시 번역)이 있으면 재시작하지 않고 끝난 뒤 '다시 시작'을 누르게 한다.
  * - 확인 실패는 화면에 보이지 않고 로그만, 받기 실패는 알리고 다시 시도할 수 있다.
  * 새 버전·실패는 E2E 시드(`update`, `failures`)로 심고 호출은 `__E2E_MOCK_UPDATES__`로 본다.
  */
@@ -36,7 +36,9 @@ const TRACKED_METHODS = [
   "comparePdfs",
   "exportComparePdf",
   "exportAnnotatedPdf",
-  "copyFile"
+  "copyFile",
+  "translatePdf",
+  "retranslateParagraph"
 ] as const;
 
 type TrackedMethod = (typeof TRACKED_METHODS)[number];
@@ -282,7 +284,7 @@ test("받기가 실패하면 알리고 설치하지 않으며, 다시 시도하�
   await expect(toast).toContainText("업데이트를 받지 못했어요");
 });
 
-test("병합·비교·내보내기·저장 호출이 끝나기 전에는 진행 중인 작업으로 센다", async ({
+test("병합·비교·내보내기·저장·번역 호출이 끝나기 전에는 진행 중인 작업으로 센다", async ({
   page
 }) => {
   await openApp(page, { files: [] });
@@ -306,6 +308,12 @@ test("병합·비교·내보내기·저장 호출이 끝나기 전에는 진행 
       isRunningDuring: true,
       isRunningAfter: false
     },
-    { method: "copyFile", isRunningDuring: true, isRunningAfter: false }
+    { method: "copyFile", isRunningDuring: true, isRunningAfter: false },
+    { method: "translatePdf", isRunningDuring: true, isRunningAfter: false },
+    {
+      method: "retranslateParagraph",
+      isRunningDuring: true,
+      isRunningAfter: false
+    }
   ]);
 });

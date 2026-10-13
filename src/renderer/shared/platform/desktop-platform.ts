@@ -1,7 +1,9 @@
 import type {
+  ApiKeyStatus,
   CompareProgress,
   CompareRequest,
   CompareResult,
+  EditParagraphRequest,
   ExportAnnotatedPdfRequest,
   ExportComparePdfRequest,
   ExportedFile,
@@ -11,7 +13,15 @@ import type {
   MergeResult,
   OpenedFile,
   PreviewCompareReportRequest,
-  ReportPreview
+  ReportPreview,
+  RetranslateRequest,
+  RetranslateResult,
+  TranslatedParagraph,
+  TranslateOptions,
+  TranslateProgress,
+  TranslateRequest,
+  TranslationPlan,
+  TranslationResult
 } from "@/renderer/shared/api/bindings";
 import type { ValueOf } from "@/renderer/shared/types/common";
 
@@ -50,6 +60,18 @@ export type CompareProgressHandler = (progress: CompareProgress) => void;
 export interface ComparePdfsParams {
   request: CompareRequest;
   onProgress?: CompareProgressHandler;
+}
+
+export interface PrepareTranslationParams {
+  path: string;
+  options: TranslateOptions;
+}
+
+export type TranslateProgressHandler = (progress: TranslateProgress) => void;
+
+export interface TranslatePdfParams {
+  request: TranslateRequest;
+  onProgress?: TranslateProgressHandler;
 }
 
 export interface CopyFileParams {
@@ -195,4 +217,31 @@ export interface DesktopPlatform {
   readThirdPartyNotices(): Promise<string>;
   /** 업데이트 서버에서 지금보다 새 버전을 찾는다. 없으면 `null` */
   checkForUpdate(): Promise<AppUpdate | null>;
+  /** API 키 등록 상태(끝 4자리 힌트). 키체인을 읽지 않는다. */
+  getApiKeyStatus(): Promise<ApiKeyStatus>;
+  /** 키 형식 검사 뒤 Anthropic 모델 목록을 한 번 받아 확인한다. 저장하지 않는다. 실패하면 코드로 던진다. */
+  verifyApiKey(key: string): Promise<void>;
+  /** 키를 OS 키체인에 저장한다. 외부 전송 확인을 다시 받게 된다(`translate.transferConfirmedOnce` = false). */
+  saveApiKey(key: string): Promise<ApiKeyStatus>;
+  /** 키체인 항목과 힌트를 지운다. 등록된 키가 없어도 성공한다. */
+  deleteApiKey(): Promise<ApiKeyStatus>;
+  /** 실행 전 확인(쪽·문단·묶음·예상 토큰·요금·이어하기). 네트워크를 쓰지 않는다. */
+  prepareTranslation(
+    params: PrepareTranslationParams
+  ): Promise<TranslationPlan>;
+  /**
+   * PDF 번역(문서 내용을 Anthropic API로 보낸다). 한 번에 하나다.
+   * 취소는 `cancelJob(request.jobId)`, 결과의 쪽은 문서 전체다(범위 밖은 `outOfRange`).
+   */
+  translatePdf(params: TranslatePdfParams): Promise<TranslationResult>;
+  /** 문단 하나를 앞뒤 문단 문맥과 함께 다시 번역한다. 취소는 `cancelJob(request.jobId)` */
+  retranslateParagraph(request: RetranslateRequest): Promise<RetranslateResult>;
+  /** 직접 고친 글을 이어하기 기록에 저장한다. 빈 글이면 원래 번역으로 돌린다. */
+  editTranslatedParagraph(
+    request: EditParagraphRequest
+  ): Promise<TranslatedParagraph>;
+  /** 저장된 번역(이어하기 기록)을 모두 지운다. */
+  deleteTranslationRecords(): Promise<void>;
+  /** 글을 클립보드에 복사한다. */
+  copyText(text: string): Promise<void>;
 }

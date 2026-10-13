@@ -5,13 +5,13 @@
 //!
 //! 기다림은 `tokio::time::sleep`이다. 이 future를 버리면(취소) 기다림과 요청이 함께 멈춘다.
 
+use std::future::Future;
 use std::time::Duration;
 
 use serde::Deserialize;
 
 use crate::error::{ApiError, ApiErrorCode};
-use crate::http::{HttpResponse, Transport, TransportError};
-use crate::key::ApiKey;
+use crate::http::{HttpResponse, TransportError};
 use crate::response::is_identifier;
 
 /// 재시도 횟수 상한(처음 요청은 세지 않는다)
@@ -82,15 +82,15 @@ struct ErrorDetails {
     error_code: Option<String>,
 }
 
-/// 200 본문을 받을 때까지 보낸다.
-pub(crate) async fn send_with_retry<T: Transport>(
-    transport: &T,
-    key: &ApiKey,
-    body: &[u8],
-) -> Result<Vec<u8>, SendFailure> {
+/// 200 본문을 받을 때까지 `request`(같은 요청 한 번)를 다시 부른다.
+pub(crate) async fn send_with_retry<F, Fut>(mut request: F) -> Result<Vec<u8>, SendFailure>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<HttpResponse, TransportError>>,
+{
     let mut retries = 0;
     loop {
-        let verdict = match transport.post_messages(key, body).await {
+        let verdict = match request().await {
             Ok(response) => judge(response),
             Err(error) => judge_transport(error),
         };

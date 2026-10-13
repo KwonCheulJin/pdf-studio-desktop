@@ -36,13 +36,22 @@ const SCAN_INSTRUCTION: &str = "이 쪽의 글을 읽는 순서대로 문단으�
 /// 스캔 쪽 그림의 형식(pdf-core가 PNG로 렌더한다, ADR 0002 §2)
 const SCAN_IMAGE_MEDIA_TYPE: &str = "image/png";
 
-/// 텍스트 묶음 요청. 항목 ID는 요청 안 순번 `"1"`, `"2"`…다(ADR 0002 §4 "항목 ID").
+/// 다시 번역의 문맥(ADR 0002 §5 "다시 번역"): 문서 순서로 그 문단의 앞·뒤 문단 원문(같은 쪽이 아니어도).
+/// 번역하지 않는다(system ⑤). 없으면 `null`이다.
+pub(crate) struct RequestContext {
+    pub before: Option<String>,
+    pub after: Option<String>,
+}
+
+/// 텍스트 묶음 요청. 항목 ID는 요청 안 순번 `"1"`, `"2"`…다(ADR 0002 §4 "항목 ID"). 다시 번역이면 `context`를
+/// 용어집 뒤 `<context>`에 JSON으로 싣는다(글 안의 따옴표·태그 모양 글자가 구조를 깨지 않는다).
 pub(crate) fn text_request(
     model: TranslateModel,
     language: Language,
     items: &[ChunkItem],
     glossary: &[GlossaryTerm],
     max_tokens: u32,
+    context: Option<&RequestContext>,
 ) -> Vec<u8> {
     let paragraphs: Vec<Value> = items
         .iter()
@@ -50,6 +59,11 @@ pub(crate) fn text_request(
         .map(|(item, id)| json!({ "id": id.to_string(), "text": item.text }))
         .collect();
     let mut text = prelude(language, glossary);
+    if let Some(context) = context {
+        text.push_str("<context>\n");
+        text.push_str(&json!({ "before": context.before, "after": context.after }).to_string());
+        text.push_str("\n</context>\n\n");
+    }
     text.push_str("<paragraphs>\n");
     text.push_str(&Value::Array(paragraphs).to_string());
     text.push_str("\n</paragraphs>\n\n");

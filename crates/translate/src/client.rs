@@ -25,7 +25,7 @@ use crate::http::Transport;
 use crate::key::ApiKey;
 use crate::language::Language;
 use crate::models::TranslateModel;
-use crate::request::{scan_request, text_request};
+use crate::request::{RequestContext, scan_request, text_request};
 use crate::response::{ReplyKind, ScanParagraph, read_reply, validate_scan, validate_text};
 use crate::retry::{SendFailure, send_with_retry};
 use crate::usage::TokenUsage;
@@ -98,6 +98,23 @@ impl<T: Transport> MessagesClient<T> {
 
     /// 텍스트 묶음을 보내 항목마다(`chunk.items` 순서) 결과를 낸다.
     pub async fn translate_text(&self, chunk: &TextChunk) -> Attempt<Vec<ItemOutcome>> {
+        self.send_text(chunk, None).await
+    }
+
+    /// 다시 번역: 문단 하나를 담은 묶음을 앞·뒤 문단 문맥과 함께 보낸다(ADR 0002 §5 "다시 번역").
+    pub(crate) async fn retranslate_text(
+        &self,
+        chunk: &TextChunk,
+        context: &RequestContext,
+    ) -> Attempt<Vec<ItemOutcome>> {
+        self.send_text(chunk, Some(context)).await
+    }
+
+    async fn send_text(
+        &self,
+        chunk: &TextChunk,
+        context: Option<&RequestContext>,
+    ) -> Attempt<Vec<ItemOutcome>> {
         let mut usage = TokenUsage::default();
         // 쌓인 요청이 모두 끝나면 모든 항목이 정해지므로 초기값은 남지 않는다.
         let mut outcomes = vec![ItemOutcome::Failed(FailReason::Mismatch); chunk.items.len()];
@@ -114,20 +131,28 @@ impl<T: Transport> MessagesClient<T> {
                 .filter(|term| items.iter().any(|item| term_appears_in(term, &item.text)))
                 .cloned()
                 .collect();
-            let body = text_request(self.model, self.language, items, &glossary, max_tokens);
-            let reply = match send_with_retry(&self.transport, &self.key, &body).await {
-                Ok(body) => read_reply(&body),
-                Err(SendFailure::TooLarge(_)) if items.len() > 1 => {
-                    split(&mut stack, &pending);
-                    continue;
-                }
-                Err(SendFailure::TooLarge(error) | SendFailure::Api(error)) => {
-                    return Attempt {
-                        usage,
-                        result: Err(error),
-                    };
-                }
-            };
+            let body = text_request(
+                self.model,
+                self.language,
+                items,
+                &glossary,
+                max_tokens,
+                context,
+            );
+            let reply =
+                match send_with_retry(|| self.transport.post_messages(&self.key, &body)).await {
+                    Ok(body) => read_reply(&body),
+                    Err(SendFailure::TooLarge(_)) if items.len() > 1 => {
+                        split(&mut stack, &pending);
+                        continue;
+                    }
+                    Err(SendFailure::TooLarge(error) | SendFailure::Api(error)) => {
+                        return Attempt {
+                            usage,
+                            result: Err(error),
+                        };
+                    }
+                };
             usage.add(reply.usage);
             let checked = match reply.kind {
                 ReplyKind::Complete(output) => validate_text(&output, items.len()).map(|texts| {
@@ -173,15 +198,16 @@ impl<T: Transport> MessagesClient<T> {
         let body = scan_request(self.model, self.language, &chunk.glossary, max_tokens, png);
         let mut is_retry = false;
         loop {
-            let reply = match send_with_retry(&self.transport, &self.key, &body).await {
-                Ok(body) => read_reply(&body),
-                Err(SendFailure::TooLarge(error) | SendFailure::Api(error)) => {
-                    return Attempt {
-                        usage,
-                        result: Err(error),
-                    };
-                }
-            };
+            let reply =
+                match send_with_retry(|| self.transport.post_messages(&self.key, &body)).await {
+                    Ok(body) => read_reply(&body),
+                    Err(SendFailure::TooLarge(error) | SendFailure::Api(error)) => {
+                        return Attempt {
+                            usage,
+                            result: Err(error),
+                        };
+                    }
+                };
             usage.add(reply.usage);
             let checked = match reply.kind {
                 ReplyKind::Complete(output) => validate_scan(&output).map(ScanOutcome::Paragraphs),

@@ -110,6 +110,11 @@ impl CompareState {
         Ok(Self::new(ocr_bundle, ocr_cache_dir))
     }
 
+    /// 추출 메모리 캐시. 번역 문단 추출도 같은 캐시를 쓴다(ADR 0002 §2 "입력").
+    pub(crate) fn extraction_cache(&self) -> &ExtractionCache {
+        &self.extraction_cache
+    }
+
     /// 엔진 슬롯은 비교 하나가 통째로 쓴다. 비교 도중 패닉해도 슬롯은 로드 전·후 둘 중 하나라
     /// 잠금 오염은 무시한다.
     fn lock_ocr(&self) -> MutexGuard<'_, OcrSlot> {

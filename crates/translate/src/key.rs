@@ -5,11 +5,14 @@ use std::fmt;
 
 use reqwest::header::HeaderValue;
 
-/// 키 접두(Anthropic API 키)
-const API_KEY_PREFIX: &str = "sk-ant-";
+/// 키 접두(Anthropic API 키). 화면의 형식 검사도 이 값을 쓴다(바인딩 상수).
+pub const API_KEY_PREFIX: &str = "sk-ant-";
 
 /// 키 길이 상한(ADR 0002 §12). 실제 키는 100자 남짓이고 붙여 넣기 실수(문서 통째)를 막는다.
-const API_KEY_MAX_LEN: usize = 256;
+pub const API_KEY_MAX_LEN: usize = 256;
+
+/// 화면에 보이는 키 끝 글자 수(ADR 0002 §12 "힌트"). 비밀이 아니다(Q17).
+const API_KEY_HINT_LEN: usize = 4;
 
 /// 형식 검사를 통과한 API 키
 pub struct ApiKey(HeaderValue);
@@ -33,6 +36,12 @@ impl ApiKey {
         let mut header = HeaderValue::from_str(key).map_err(|_| InvalidApiKey)?;
         header.set_sensitive(true);
         Ok(Self(header))
+    }
+
+    /// 키 끝 4자리(설정 저장소 `translate.apiKeyHint`). 키는 ASCII라 바이트로 자른다.
+    pub fn hint(&self) -> String {
+        let bytes = self.0.as_bytes();
+        String::from_utf8_lossy(&bytes[bytes.len().saturating_sub(API_KEY_HINT_LEN)..]).into_owned()
     }
 
     /// `x-api-key` 헤더 값(민감 표시가 켜진)

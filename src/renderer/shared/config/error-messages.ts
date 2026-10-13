@@ -1,3 +1,7 @@
+import {
+  MAX_GLOSSARY_TERM_CHARS,
+  MAX_GLOSSARY_TERMS
+} from "@/renderer/shared/api/bindings";
 import type { PlatformErrorCode } from "@/renderer/shared/platform";
 
 /** 표에 없는 코드에 보이는 문구 */
@@ -43,6 +47,36 @@ const ERROR_MESSAGES: Record<PlatformErrorCode, string> = {
   UNSUPPORTED_TIFF_COMPRESSION: "지원하지 않는 압축 방식의 TIFF 파일이에요.",
   UNSUPPORTED_TIFF_FORMAT: "지원하지 않는 형식의 TIFF 파일이에요.",
   IMAGE_TOO_LARGE: "이미지가 너무 커서 변환할 수 없어요.",
+  API_KEY_MISSING:
+    "API 키가 등록되지 않았어요. 설정 › 번역에서 키를 등록해 주세요.",
+  API_KEY_INVALID: "API 키가 올바르지 않아요. 키를 다시 확인해 주세요.",
+  API_PERMISSION_DENIED:
+    "이 API 키로는 번역할 권한이 없어요. Anthropic 콘솔에서 키 권한을 확인해 주세요.",
+  API_BILLING:
+    "Anthropic 계정의 잔액이나 월 지출 한도가 부족해요. 콘솔에서 결제 상태를 확인해 주세요.",
+  MODEL_UNAVAILABLE: "번역 모델을 쓸 수 없어요. 앱을 업데이트해 주세요.",
+  API_REQUEST_REJECTED:
+    "Anthropic API가 요청을 받지 않았어요. 콘솔의 지출 한도를 확인하거나 잠시 후 다시 시도해 주세요.",
+  API_RATE_LIMITED:
+    "요청이 많아 잠시 막혔어요. 잠시 후 이어서 다시 시도해 주세요.",
+  API_UNAVAILABLE:
+    "Anthropic API가 지금 응답하지 않아요. 잠시 후 이어서 다시 시도해 주세요.",
+  API_TIMEOUT: "응답이 너무 늦어 멈췄어요. 잠시 후 이어서 다시 시도해 주세요.",
+  NETWORK_UNAVAILABLE:
+    "인터넷에 연결할 수 없어요. 연결을 확인한 뒤 다시 시도해 주세요.",
+  TRANSLATION_MISMATCH:
+    "번역 응답이 문단과 맞지 않았어요. 이 문단을 다시 번역해 주세요.",
+  TRANSLATION_TRUNCATED:
+    "번역이 너무 길어 끝까지 받지 못했어요. 이 문단을 다시 번역해 주세요.",
+  TRANSLATION_REFUSED:
+    "모델이 이 글의 번역을 거절했어요. 다른 모델로 다시 번역해 볼 수 있어요.",
+  KEYCHAIN_UNAVAILABLE:
+    "이 컴퓨터의 키체인을 쓸 수 없어 API 키를 저장하거나 읽지 못했어요.",
+  NO_TRANSLATABLE_TEXT: "범위 안에 번역할 글이 없어요.",
+  SOURCE_LANGUAGE_UNKNOWN: "원문 언어를 알 수 없어요. 원문 언어를 골라 주세요.",
+  TRANSLATION_RECORD_NOT_FOUND:
+    "저장된 번역을 찾을 수 없어요. 파일이 바뀌었거나 저장된 번역을 지웠어요. 다시 번역해 주세요.",
+  GLOSSARY_TOO_LARGE: `용어집이 너무 커요. 용어는 ${MAX_GLOSSARY_TERMS}개, 원어·번역어는 ${MAX_GLOSSARY_TERM_CHARS}자까지 넣을 수 있어요.`,
   IPC_FAILED: "앱 내부 통신에 실패했어요. 다시 시도해 주세요."
 };
 

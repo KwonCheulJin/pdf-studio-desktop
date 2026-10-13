@@ -16,7 +16,7 @@
 use std::collections::BTreeSet;
 use std::ops::Range;
 
-use crate::glossary::{Glossary, GlossaryTerm};
+use crate::glossary::{Glossary, GlossaryTerm, term_appears_in};
 use crate::language::Language;
 use crate::models::TranslateModel;
 use crate::per_mille::{PER_MILLE_SCALE, PerMille};
@@ -157,6 +157,35 @@ pub fn estimated_cost_micro_usd(
     u32::try_from(cost).unwrap_or(u32::MAX)
 }
 
+/// 텍스트 항목들을 요청 하나로 보낼 때의 예상(ADR 0002 §4 "입력 예상"·"출력 예상"): 입력 = 고정 부담 +
+/// `glossary` 가운데 항목 원문에 원어가 나오는 용어의 글 토큰 + 항목 글 토큰, 출력 = 항목 글 토큰 × 원문 언어
+/// 비율. 묶음을 만들 때와 같은 식이라 묶음 항목 전체를 넣으면 그 묶음의 `estimate`와 같다. 이어하기로 남은
+/// 항목만 보낼 때(계획의 "보낼 것만")와 다시 번역(문단 하나)의 예상에 쓴다.
+pub fn estimate_text_items(
+    items: &[ChunkItem],
+    glossary: &[GlossaryTerm],
+    language: Language,
+) -> ChunkEstimate {
+    let text: u64 = items.iter().map(|item| text_tokens(&item.text)).sum();
+    let terms: u64 = glossary
+        .iter()
+        .filter(|term| items.iter().any(|item| term_appears_in(term, &item.text)))
+        .map(|term| text_tokens(&term.source) + text_tokens(&term.target))
+        .sum();
+    ChunkEstimate {
+        input_tokens: saturate(CHUNK_OVERHEAD_TOKENS + terms + text),
+        output_tokens: saturate(output_rate(language).of_ceil(text)),
+    }
+}
+
+/// 원문 언어별 출력/입력 비율
+fn output_rate(language: Language) -> PerMille {
+    match language {
+        Language::Zh => OUTPUT_TOKENS_PER_INPUT_TOKEN_ZH,
+        Language::En => OUTPUT_TOKENS_PER_INPUT_TOKEN_EN,
+    }
+}
+
 /// 범위 안 쪽(`pages`, 문서 순서)을 묶음으로 나눈다. `language`는 정해진 원문 언어다.
 pub fn build_chunks(
     pages: &[SourcePage],
@@ -206,14 +235,10 @@ impl<'a> ChunkBuilder<'a> {
             .iter()
             .map(|term| text_tokens(&term.source) + text_tokens(&term.target))
             .collect();
-        let output_rate = match language {
-            Language::Zh => OUTPUT_TOKENS_PER_INPUT_TOKEN_ZH,
-            Language::En => OUTPUT_TOKENS_PER_INPUT_TOKEN_EN,
-        };
         Self {
             glossary,
             term_tokens,
-            output_rate,
+            output_rate: output_rate(language),
             chunks: Vec::new(),
             open: OpenChunk::default(),
         }

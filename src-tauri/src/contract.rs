@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use specta_typescript::Number;
 
-use crate::error::AppError;
+use crate::error::{AppError, ErrorCode, fail_code};
 
 /// 페이지 회전(도). 0·90·180·270만 받는다.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
@@ -939,6 +939,383 @@ pub(crate) struct ReportPreview {
 pub(crate) struct SaveDirectoryDialogOptions {
     /// 다이얼로그가 처음 보일 폴더
     pub(crate) default_directory: Option<PathBuf>,
+}
+
+// ── 번역(ADR 0002 §10). crates/translate 타입에는 specta를 붙이지 않으므로(serde만 쓴다) 같은 모양을 여기 두고
+// `From`으로 옮긴다. 개수·번호·토큰은 `u32`다.
+
+/// 원문 언어 고르기(옵션 화면 `자동 감지 | 중국어 | 영어`)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum SourceLanguage {
+    Auto,
+    Zh,
+    En,
+}
+
+/// 감지·정한 원문 언어. 간체·번체는 표시용이고 요청은 "중국어"다.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum DetectedLanguage {
+    ZhHans,
+    ZhHant,
+    Zh,
+    En,
+    Unknown,
+}
+
+/// 번역 모델. API ID·요금은 crates/translate 모델 표에만 있다.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum TranslateModel {
+    Sonnet,
+    Haiku,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+pub(crate) struct GlossaryTerm {
+    pub(crate) source: String,
+    pub(crate) target: String,
+}
+
+#[derive(Debug, Clone, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct TranslateOptions {
+    pub(crate) source_language: SourceLanguage,
+    /// 1부터 센 쪽 범위(`"1,3-5"`, 비우면 전체. 비교와 같은 문법·검사)
+    pub(crate) range: String,
+    /// 범위 안 스캔 쪽 그림을 보낸다.
+    pub(crate) include_scan_pages: bool,
+    pub(crate) model: TranslateModel,
+    /// 문서별 + 공용(문서별을 앞에), 프론트가 합친다. 정규화(앞뒤 공백·NFC·같은 원어)는 Rust도 한다.
+    pub(crate) glossary: Vec<GlossaryTerm>,
+}
+
+/// 실행 전 확인(네트워크 없음)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct TranslationPlan {
+    /// 문서 전체 쪽 수
+    pub(crate) page_count: u32,
+    /// 문서 전체의 글자층 쪽 수
+    pub(crate) text_pages: u32,
+    /// 문서 전체의 스캔 쪽 수(`text_pages + scan_pages = page_count`)
+    pub(crate) scan_pages: u32,
+    /// 범위 안 쪽 수
+    pub(crate) range_pages: u32,
+    /// 범위 안 글자층 문단으로 감지한 언어
+    pub(crate) detected_language: DetectedLanguage,
+    /// 범위 안 글자층 문단 수 + 이어하기 기록에 있는 스캔 쪽의 받아 적은 문단 수
+    pub(crate) paragraph_count: u32,
+    /// 범위 전체 묶음 수
+    pub(crate) chunk_count: u32,
+    /// 보낼 것만(이어하기면 남은 것만). 원문 언어를 정하지 못하면 0
+    pub(crate) estimated_input_tokens: u32,
+    pub(crate) estimated_output_tokens: u32,
+    /// 0.000001 USD 단위
+    pub(crate) estimated_cost_micro_usd: u32,
+    /// 모델 표 요금 기준일 `YYYY-MM-DD`
+    pub(crate) pricing_date: String,
+    /// 같은 옵션의 기록에 끝난 문단이 있으면 그 수
+    pub(crate) resumable: Option<ResumeState>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ResumeState {
+    pub(crate) translated_paragraphs: u32,
+    pub(crate) paragraph_count: u32,
+}
+
+#[derive(Debug, Clone, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct TranslateRequest {
+    /// 프론트가 만든 작업 ID. `cancel_job`에 같은 값을 넘긴다.
+    pub(crate) job_id: String,
+    pub(crate) path: PathBuf,
+    pub(crate) options: TranslateOptions,
+    /// `false`면 같은 옵션의 기록을 읽지 않고 처음부터 번역해 새 기록으로 덮는다.
+    pub(crate) resume: bool,
+}
+
+/// 번역 단계. 이 순서대로 진행한다(ADR 0002 §9).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum TranslateStage {
+    ReadDocument,
+    Translate,
+    Arrange,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct TokenUsage {
+    pub(crate) input_tokens: u32,
+    pub(crate) output_tokens: u32,
+}
+
+/// 번역 진행률. 화면에 보이는 %(단계·전체)가 바뀔 때만 온다.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct TranslateProgress {
+    pub(crate) job_id: String,
+    pub(crate) stage: TranslateStage,
+    pub(crate) done: u32,
+    pub(crate) total: u32,
+    pub(crate) stage_percent: u32,
+    pub(crate) overall_percent: u32,
+    pub(crate) paragraphs_done: u32,
+    pub(crate) paragraph_count: u32,
+    /// 이번 실행에서 받은 응답의 사용량
+    pub(crate) usage: TokenUsage,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum PageKind {
+    TextLayer,
+    /// 스캔 쪽 + 스캔 옵션 켬(받아 적은 문단)
+    Image,
+    /// 스캔 쪽 + 스캔 옵션 끔(문단 없음)
+    ScanSkipped,
+    /// 범위 밖(문단 없음)
+    OutOfRange,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum ParagraphStatus {
+    Translated,
+    Edited,
+    Failed,
+    Refused,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct TranslatedParagraph {
+    /// 문단 키(ADR 0002 §3). 다시 번역·직접 고치기가 이 키로 찾는다.
+    pub(crate) key: String,
+    /// 쪽 안 순번, 1부터
+    pub(crate) number: u32,
+    pub(crate) source: String,
+    /// 화면에 보일 글(직접 고친 글 우선). 실패·거절이면 `null`
+    pub(crate) target: Option<String>,
+    /// 제목 문단(굵게). 스캔 쪽은 `false`
+    pub(crate) heading: bool,
+    pub(crate) status: ParagraphStatus,
+    /// `failed` → `TRANSLATION_MISMATCH`·`TRANSLATION_TRUNCATED`, `refused` → `TRANSLATION_REFUSED`, 그 밖 `null`
+    pub(crate) fail_code: Option<ErrorCode>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct TranslatedPage {
+    /// 0부터
+    pub(crate) page: u32,
+    pub(crate) kind: PageKind,
+    pub(crate) paragraphs: Vec<TranslatedParagraph>,
+    /// 스캔 쪽 자체가 실패했다(`image`일 때만, 문단 없음)
+    pub(crate) fail_code: Option<ErrorCode>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct TranslationResult {
+    /// 기록 키. 다시 번역·직접 고치기에 그대로 보낸다.
+    pub(crate) record_id: String,
+    /// canonical 경로
+    pub(crate) path: PathBuf,
+    pub(crate) language: DetectedLanguage,
+    pub(crate) model: TranslateModel,
+    /// 문서 전체 쪽(색인 = 쪽 번호, 0부터)
+    pub(crate) pages: Vec<TranslatedPage>,
+    /// 이 기록의 누적 사용량(모든 실행과 다시 번역)
+    pub(crate) usage: TokenUsage,
+    /// 이번 실행
+    pub(crate) elapsed_ms: u32,
+    /// 범위 안 원문(스캔 쪽은 받아 적은 원문)에 원어가 나오는 용어
+    pub(crate) glossary_used: Vec<GlossaryTerm>,
+}
+
+#[derive(Debug, Clone, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RetranslateRequest {
+    /// 프론트가 만든 작업 ID. `cancel_job`에 같은 값을 넘긴다.
+    pub(crate) job_id: String,
+    /// 결과의 `recordId`
+    pub(crate) record_id: String,
+    pub(crate) path: PathBuf,
+    /// 문단 키
+    pub(crate) key: String,
+    /// 결과를 만든 옵션 그대로
+    pub(crate) options: TranslateOptions,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RetranslateResult {
+    /// 번역이면 새 글, 실패·거절이면 그 상태(기록의 글은 그대로다)
+    pub(crate) paragraph: TranslatedParagraph,
+    /// 이 요청의 사용량
+    pub(crate) usage: TokenUsage,
+}
+
+/// 직접 고치기. 다시 번역처럼 `path`·`options`로 기록 키를 다시 세어 결과의 `recordId`와 같을 때만 쓴다.
+#[derive(Debug, Clone, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct EditParagraphRequest {
+    pub(crate) record_id: String,
+    pub(crate) path: PathBuf,
+    pub(crate) key: String,
+    /// 앞뒤 공백을 지운다. 비면 고친 글을 지워 원래 번역으로 돌린다.
+    pub(crate) text: String,
+    pub(crate) options: TranslateOptions,
+}
+
+/// 키 등록 상태. 키 원문은 웹뷰로 다시 보내지 않는다.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ApiKeyStatus {
+    pub(crate) registered: bool,
+    /// 키 끝 4자리
+    pub(crate) hint: Option<String>,
+}
+
+impl From<TranslateModel> for translate::TranslateModel {
+    fn from(model: TranslateModel) -> Self {
+        match model {
+            TranslateModel::Sonnet => Self::Sonnet,
+            TranslateModel::Haiku => Self::Haiku,
+        }
+    }
+}
+
+impl From<translate::DetectedLanguage> for DetectedLanguage {
+    fn from(language: translate::DetectedLanguage) -> Self {
+        match language {
+            translate::DetectedLanguage::ZhHans => Self::ZhHans,
+            translate::DetectedLanguage::ZhHant => Self::ZhHant,
+            translate::DetectedLanguage::Zh => Self::Zh,
+            translate::DetectedLanguage::En => Self::En,
+            translate::DetectedLanguage::Unknown => Self::Unknown,
+        }
+    }
+}
+
+impl From<GlossaryTerm> for translate::GlossaryTerm {
+    fn from(term: GlossaryTerm) -> Self {
+        Self {
+            source: term.source,
+            target: term.target,
+        }
+    }
+}
+
+impl From<translate::GlossaryTerm> for GlossaryTerm {
+    fn from(term: translate::GlossaryTerm) -> Self {
+        Self {
+            source: term.source,
+            target: term.target,
+        }
+    }
+}
+
+impl From<translate::TokenUsage> for TokenUsage {
+    fn from(usage: translate::TokenUsage) -> Self {
+        Self {
+            input_tokens: usage.input_tokens,
+            output_tokens: usage.output_tokens,
+        }
+    }
+}
+
+impl From<translate::ResumeState> for ResumeState {
+    fn from(state: translate::ResumeState) -> Self {
+        Self {
+            translated_paragraphs: state.translated_paragraphs,
+            paragraph_count: state.paragraph_count,
+        }
+    }
+}
+
+impl From<translate::TranslateProgress> for TranslateProgress {
+    fn from(progress: translate::TranslateProgress) -> Self {
+        Self {
+            job_id: progress.job_id,
+            stage: match progress.stage {
+                translate::TranslateStage::ReadDocument => TranslateStage::ReadDocument,
+                translate::TranslateStage::Translate => TranslateStage::Translate,
+                translate::TranslateStage::Arrange => TranslateStage::Arrange,
+            },
+            done: progress.done,
+            total: progress.total,
+            stage_percent: progress.stage_percent,
+            overall_percent: progress.overall_percent,
+            paragraphs_done: progress.paragraphs_done,
+            paragraph_count: progress.paragraph_count,
+            usage: progress.usage.into(),
+        }
+    }
+}
+
+impl From<translate::TranslatedParagraph> for TranslatedParagraph {
+    fn from(paragraph: translate::TranslatedParagraph) -> Self {
+        let (status, fail_code) = match paragraph.status {
+            translate::ParagraphStatus::Translated => (ParagraphStatus::Translated, None),
+            translate::ParagraphStatus::Edited => (ParagraphStatus::Edited, None),
+            translate::ParagraphStatus::Failed(reason) => {
+                (ParagraphStatus::Failed, Some(fail_code(reason)))
+            }
+            translate::ParagraphStatus::Refused => (
+                ParagraphStatus::Refused,
+                Some(ErrorCode::TranslationRefused),
+            ),
+        };
+        Self {
+            key: paragraph.key,
+            number: paragraph.number,
+            source: paragraph.source,
+            target: paragraph.target,
+            heading: paragraph.heading,
+            status,
+            fail_code,
+        }
+    }
+}
+
+impl From<translate::TranslatedPage> for TranslatedPage {
+    fn from(page: translate::TranslatedPage) -> Self {
+        Self {
+            page: page.page,
+            kind: match page.kind {
+                translate::PageKind::TextLayer => PageKind::TextLayer,
+                translate::PageKind::Image => PageKind::Image,
+                translate::PageKind::ScanSkipped => PageKind::ScanSkipped,
+            },
+            paragraphs: page
+                .paragraphs
+                .into_iter()
+                .map(TranslatedParagraph::from)
+                .collect(),
+            fail_code: page.failure.map(|failure| match failure {
+                translate::PageFailure::Failed(reason) => fail_code(reason),
+                translate::PageFailure::Refused => ErrorCode::TranslationRefused,
+            }),
+        }
+    }
+}
+
+impl TranslatedPage {
+    /// 범위 밖 쪽(문단 없음)
+    pub(crate) fn out_of_range(page: u32) -> Self {
+        Self {
+            page,
+            kind: PageKind::OutOfRange,
+            paragraphs: Vec::new(),
+            fail_code: None,
+        }
+    }
 }
 
 /// 파일 크기를 `u32`로 보낸다. 열 수 있는 파일은 입력 상한(512MB) 안이라 넘칠 수 없지만,

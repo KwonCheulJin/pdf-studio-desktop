@@ -3,11 +3,27 @@
 //! - 정규화(프론트와 같다): 원어·번역어 앞뒤 공백을 지우고 NFC. 어느 쪽이든 빈 용어는 버린다.
 //!   같은 원어가 둘이면 앞의 것을 쓴다(프론트가 문서별 용어를 공용 용어 앞에 둔다).
 //! - 나오는지: NFC 부분 문자열이고 ASCII 글자만 대소문자를 무시한다.
-//! - 개수·글자 수 상한(`MAX_GLOSSARY_TERMS`)은 계약 입력 검사라 Step 41이 오류 코드와 함께 둔다.
+//! - 개수·글자 수 상한([`MAX_GLOSSARY_TERMS`]·[`MAX_GLOSSARY_TERM_CHARS`])은 정규화한 용어로 센다. 넘으면 계약
+//!   입력 오류다(`src-tauri`가 `GLOSSARY_TOO_LARGE`로 거부한다. 화면이 먼저 막는다).
 
 use std::collections::HashSet;
 
 use unicode_normalization::UnicodeNormalization;
+
+/// 용어 수 상한(ADR 0002 §10 "용어집 정규화"). 제품명·고유명사를 적는 표라 수백 개면 넉넉하다. 아래 글자 수
+/// 상한과 함께 요청 입력을 Haiku 5.5의 낮은 요금 구간(프롬프트 100,000토큰 이하, `models.rs`) 안에 둔다: 용어집
+/// 전체를 싣는 스캔 묶음도 500개 × 원어·번역어 40자씩 = 40,000자를 글자당 2토큰(한자·한글을 이 앱의 예상 식
+/// 1.3·1.0보다 넉넉히)으로 보고 줄마다 틀 3토큰을 더해 81,500토큰, 고정 부담 600 + 가장 큰 그림(1568px 정사각형
+/// ⌈1568/28⌉² = 3,136)을 더해도 약 85,000토큰이다.
+pub const MAX_GLOSSARY_TERMS: usize = 500;
+
+/// 원어·번역어 하나의 글자 수(앞뒤 공백을 지운 NFC 유니코드 스칼라 값) 상한. 근거는 [`MAX_GLOSSARY_TERMS`].
+pub const MAX_GLOSSARY_TERM_CHARS: usize = 40;
+
+/// 용어집이 상한을 넘었다(`GLOSSARY_TOO_LARGE`). 용어 글은 담지 않는다.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("용어집이 상한을 넘었다")]
+pub struct GlossaryTooLarge;
 
 /// 용어 하나(계약 `GlossaryTerm`)
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -43,6 +59,21 @@ impl Glossary {
 
     pub fn terms(&self) -> &[GlossaryTerm] {
         &self.terms
+    }
+
+    /// 정규화한 용어 수와 원어·번역어 글자 수가 상한 안인가
+    pub fn check_limits(&self) -> Result<(), GlossaryTooLarge> {
+        let within_chars = |text: &str| text.chars().count() <= MAX_GLOSSARY_TERM_CHARS;
+        let within = self.terms.len() <= MAX_GLOSSARY_TERMS
+            && self
+                .terms
+                .iter()
+                .all(|term| within_chars(&term.source) && within_chars(&term.target));
+        if within {
+            Ok(())
+        } else {
+            Err(GlossaryTooLarge)
+        }
     }
 
     /// `text`(NFC)에 원어가 나오는 용어의 색인(용어집 순서)

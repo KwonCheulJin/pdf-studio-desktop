@@ -25,6 +25,7 @@ use crate::compare::{
 };
 use crate::document::{DocumentError, open_document};
 use crate::engine::PdfEngine;
+use crate::info::PageRotation;
 
 /// 스캔 쪽 그림의 긴 변 상한(px). 비용을 누르는 시작값이다: A4 세로가 1568 × 1109로 그림 토큰
 /// ⌈1568/28⌉ × ⌈1109/28⌉ = 2,240이다. 두 모델이 받는 상한은 2576이다(ADR 0002 §15). 작은 한자를
@@ -118,6 +119,18 @@ pub fn extract_paragraphs(
         .collect())
 }
 
+/// 문서 전체 쪽마다 스캔 쪽(`needs_ocr`, [`PageParagraphs::Scan`])인가. 색인 = 쪽 번호이고 길이가 쪽 수다.
+/// 번역 계획의 글자층·스캔 쪽 수와 기록 키의 "문서에 스캔 쪽이 있는가"(ADR 0002 §8 ⑤)에 쓴다. 추출 캐시를
+/// [`extract_paragraphs`]와 함께 쓰고, 문단은 묶지 않는다.
+pub fn scan_page_flags(
+    engine: &PdfEngine,
+    path: &Path,
+    cache: &ExtractionCache,
+) -> Result<Vec<bool>, ParagraphError> {
+    let text = read_cached(engine, path, cache)?;
+    Ok(text.pages.iter().map(|page| page.needs_ocr).collect())
+}
+
 fn read_cached(
     engine: &PdfEngine,
     path: &Path,
@@ -146,6 +159,26 @@ fn paragraph_page(page: u32, extracted: &ExtractedPage) -> ParagraphPage {
         size: extracted.size,
         content,
     }
+}
+
+/// [`render_scan_page`]가 만들 그림의 크기 `(너비, 높이)`(px). 렌더하지 않고 쪽 크기로 센다(번역 예상치의 그림
+/// 토큰). 화면 방향(`/Rotate` 적용) 쪽 크기의 긴 변을 [`SCAN_IMAGE_MAX_EDGE_PX`]로 맞춘다.
+pub fn scan_image_size(size: &PageSize) -> (u32, u32) {
+    let view = size.view_box;
+    let (width, height) = (view.right - view.left, view.top - view.bottom);
+    let (width, height) = match size.rotation {
+        PageRotation::Degrees0 | PageRotation::Degrees180 => (width, height),
+        PageRotation::Degrees90 | PageRotation::Degrees270 => (height, width),
+    };
+    let longest_edge = width.max(height);
+    let scale = if longest_edge > 0.0 {
+        SCAN_IMAGE_MAX_EDGE_PX as f32 / longest_edge
+    } else {
+        1.0
+    };
+    // pdfium-render와 같이 배율을 곱해 반올림하고, 최대 크기를 넘지 않게 자른다.
+    let pixels = |length: f32| ((length * scale).round() as u32).min(SCAN_IMAGE_MAX_EDGE_PX);
+    (pixels(width), pixels(height))
 }
 
 /// 쪽(0부터)을 PNG로 렌더한다. 영역은 `view_box`, 방향은 `/Rotate`를 적용한 화면 방향이고, 긴 변이

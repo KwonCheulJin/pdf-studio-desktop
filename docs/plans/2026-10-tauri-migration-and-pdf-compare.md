@@ -316,7 +316,16 @@ Phase 6  PDF 번역·설정 (Phase 3 뒤, §9.1, Step 35~48)
 | `cleanup_temp` | `()` | 이 실행의 세션 폴더만 비운다. 앱 임시 디렉터리는 `<시스템 임시>/<식별자>/session-<pid>-<시작 시각>/`처럼 실행마다 세션 폴더로 나누고, 병합 미리보기 결과는 자기 세션 폴더에만 쓴다. 종료 시 자기 세션 폴더를 지우고, 시작 시 다른 세션 폴더 중 24시간 넘게 손대지 않은 것만 지운다(여러 실행이 서로의 결과를 지우지 않는다) |
 | `discard_temp` | `(path)` | 미리보기 결과 하나만 지운다. 이 실행의 세션 폴더 하위만 허용 |
 | `compare_pdfs` | `(request, Channel<CompareProgress>) -> CompareResult` | 두 PDF 비교(P2-7 실행기 연결, Step 26). A·B는 허용 경로 목록 안의 PDF만, canonical 경로로 실행기에 넘긴다. 요청에 프론트가 만든 `job_id`와 옵션(`rangeA`·`rangeB`·줄 제외·`ignoreCase`) 포함. 쪽 범위 오류는 `INVALID_RANGE`. 계약·OCR 엔진 상태는 [ADR 0001](../adr/0001-compare-result-model.md) §16 |
-| `cancel_job` | `(job_id)` | 병합·비교 작업 취소 |
+| `cancel_job` | `(job_id)` | 병합·비교·내보내기·번역·다시 번역 작업 취소 |
+| `get_api_key_status` | `() -> ApiKeyStatus` | 번역(Step 41, [ADR 0002](../adr/0002-translation-model.md) §10). 설정 저장소의 키 힌트(끝 4자리)만 본다. 키체인을 읽지 않는다 |
+| `verify_api_key` | `(key) -> ()` | 형식 검사 → `GET /v1/models?limit=1000` 한 번(두 앱 모델 ID가 목록에 있어야 한다). 저장하지 않는다 |
+| `save_api_key` | `(key) -> ApiKeyStatus` | 형식 검사 → OS 키체인 쓰기 → 힌트 저장 → `translate.transferConfirmedOnce = false`. 네트워크 없음 |
+| `delete_api_key` | `() -> ApiKeyStatus` | 키체인 항목과 힌트를 지운다. 항목이 없어도 성공 |
+| `prepare_translation` | `(path, options) -> TranslationPlan` | 실행 전 확인. 네트워크·키 없음. 허용 경로 안 PDF만, 범위 오류 `INVALID_RANGE`, 용어집 상한 `GLOSSARY_TOO_LARGE` |
+| `translate_pdf` | `(request, Channel<TranslateProgress>) -> TranslationResult` | 검사(경로 → 용어집 → 범위 → 원문 언어 → 번역할 것 → 키) 뒤 실행. 번역·다시 번역은 한 번에 하나(`JOB_ALREADY_RUNNING`). 결과는 문서 전체 쪽(범위 밖 `outOfRange`) |
+| `retranslate_paragraph` | `(request) -> RetranslateResult` | 문단 하나 + 앞뒤 문단 문맥. `recordId`가 지금 파일·옵션의 기록 키와 같을 때만(`TRANSLATION_RECORD_NOT_FOUND`) |
+| `edit_translated_paragraph` | `(request) -> TranslatedParagraph` | 직접 고친 글을 기록에 저장(요청에 `path`·`options`, 기록 키 확인). 네트워크 없음 |
+| `delete_translation_records` | `() -> ()` | 앱 데이터 폴더 `translations/`의 기록(`.json`)과 남은 임시 파일을 지운다 |
 - 모든 처리 커맨드는 `async` + **pdfium 전용 작업 스레드**로 위임한다. UI 스레드는 막히지 않는다.
 - 진행률은 `tauri::ipc::Channel`로 보내고, 취소는 작업별 `Arc<AtomicBool>` 토큰으로 처리한다.
 - **병합 진행률(시안 7):** 비교와 같은 `Progress` 모양을 쓴다. 단계 `readFiles`(파일, 가중치 20) → `mergePages`(쪽, 70) → `save`(10). 오버레이에 전체 %와 단계별 %·막대, "취소". 실패하면 같은 자리에 원인·멈춘 단계·오류 코드와 "다시 시도 / 이 파일 빼기 / 닫기"(시안 8).
@@ -1111,7 +1120,7 @@ Step 28(PR #47)은 행(페이지 쌍) 안에서 `Replace`만 잇고 가까운 �
 
 ### 9.1.3 경계 계약
 
-커맨드는 구현할 때(Step 41) §5 P1-3 표에도 옮긴다. 정본은 생성 바인딩과 [ADR 0002](../adr/0002-translation-model.md) §10·§11이다. 아래는 초안이고, ADR이 바꾼 것은 `TranslationPlan.pricingDate` 추가, `TranslatedParagraph.heading` 추가, `TranslatedPage.failCode` 추가, `glossaryHits` → `glossaryUsed`(용어 목록), `retranslate_paragraph` → `RetranslateResult { paragraph, usage }`, 오류 코드 `TRANSLATION_TRUNCATED`·`TRANSLATION_REFUSED`·`SOURCE_LANGUAGE_UNKNOWN` 추가, `API_BILLING`·`API_TIMEOUT`의 짝이다.
+커맨드는 Step 41에서 §5 P1-3 표에 옮겼다. 정본은 생성 바인딩과 [ADR 0002](../adr/0002-translation-model.md) §10·§11이다. 아래는 초안이고, ADR이 바꾼 것은 `TranslationPlan.pricingDate` 추가, `TranslatedParagraph.heading` 추가, `TranslatedPage.failCode` 추가, `glossaryHits` → `glossaryUsed`(용어 목록), `retranslate_paragraph` → `RetranslateResult { paragraph, usage }`, 오류 코드 `TRANSLATION_TRUNCATED`·`TRANSLATION_REFUSED`·`SOURCE_LANGUAGE_UNKNOWN` 추가, `API_BILLING`·`API_TIMEOUT`의 짝이다. Step 41에서 `EditParagraphRequest`에 `path`·`options`를 더했고(기록 키 확인과 돌려줄 문단의 원문), 오류 코드 `GLOSSARY_TOO_LARGE`를 더했다(ADR 0002 §10 "Step 41 구현에서 정한 것").
 
 | 커맨드 | 시그니처 | 비고 |
 |---|---|---|
@@ -1196,7 +1205,7 @@ struct ApiKeyStatus { registered: bool, hint: Option<String> }  // hint = 끝 4�
 
 **설정 저장소 키**(`plugin-store` `settings.json`, 프론트는 `getSetting`/`setSetting`): `translate.defaultModel`(`sonnet`|`haiku`), `translate.confirmExternalTransfer`(boolean, 기본 `true`, Q11), `translate.glossary`(`GlossaryTerm[]`, 상한 `MAX_GLOSSARY_TERMS` 500·글자 수 상한), `translate.transferConfirmedOnce`(boolean, Q11), `translate.apiKeyHint`(Rust만 쓴다). 키 자체는 여기에 두지 않는다.
 
-**`DesktopPlatform`에 더할 것:** `getApiKeyStatus`, `verifyApiKey`, `saveApiKey`, `deleteApiKey`, `prepareTranslation`, `translatePdf({ request, onProgress })`, `retranslateParagraph`, `editTranslatedParagraph`, `deleteTranslationRecords`, `copyText`(복사. tauri는 `navigator.clipboard.writeText`, mock은 기록).
+**`DesktopPlatform`에 더할 것(Step 41에서 더했다):** `getApiKeyStatus`, `verifyApiKey`, `saveApiKey`, `deleteApiKey`, `prepareTranslation({ path, options })`, `translatePdf({ request, onProgress })`, `retranslateParagraph`, `editTranslatedParagraph`, `deleteTranslationRecords`, `copyText`(복사. tauri는 `navigator.clipboard.writeText`, mock은 기록). 번역·다시 번역은 진행 중인 작업으로 센다(`running-work`, 업데이트 재시작을 미룬다).
 
 ### 9.1.4 보안·개인정보 규칙
 

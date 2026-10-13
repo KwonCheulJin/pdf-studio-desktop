@@ -9,10 +9,10 @@ mod merge;
 mod notices;
 mod pdf_engine;
 mod report;
+mod secrets;
 #[cfg(test)]
 mod test_support;
-#[cfg(test)]
-mod translate_deps_spike;
+mod translate;
 
 use std::error::Error;
 use std::path::PathBuf;
@@ -24,6 +24,8 @@ use tauri_plugin_window_state::StateFlags;
 use access::{AppDirectories, PathAccess, STALE_SESSION_AGE};
 use compare::CompareState;
 use jobs::JobRegistry;
+
+use crate::translate::AppTranslateState;
 
 /// TIFF 변환 결과 PDF를 두는 앱 캐시 하위 폴더
 const CONVERTED_DIRECTORY: &str = "converted";
@@ -60,6 +62,7 @@ pub fn run() {
             }
             app.manage(PathAccess::new(directories));
             app.manage(CompareState::for_app(app)?);
+            app.manage(AppTranslateState::for_app(app)?);
             Ok(())
         })
         .build(tauri::generate_context!())

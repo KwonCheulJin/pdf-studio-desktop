@@ -1,7 +1,7 @@
 # ADR 0002. 번역 결과 모델(`TranslationResult`)과 Messages API 요청 규칙
 
 - 상태: 채택 (2026-10-13, Step 35 / 계획서 P6-0, §9.1.9 Q1~Q17, §11 D18~D28). 응답 형식은 Step 35에서 공식 문서를 확인한 뒤 사용자가 Q13을 C(structured outputs, 두 모델 통일)로 다시 정했다(2026-10-13, §5). Sonnet 5.5가 도구 강제를 400으로 거부하기 때문이다.
-- 코드(쓸 곳): 문단 추출은 `crates/pdf-core/src/paragraphs.rs`, 번역 규칙은 새 크레이트 `crates/translate`(`models.rs` 모델 표, `chunk.rs` 묶음·예상치, `request.rs`·`response.rs` 요청·응답, `client.rs` 묶음 보내기·나눠 다시, `retry.rs` 재시도·상태 짝, `http.rs` 전송 trait·reqwest 어댑터, `key.rs` `ApiKey`, `error.rs` API 오류 코드, `runner.rs`·`runner/` 실행기·취소·결과 조립, `progress.rs` 진행, `record.rs` 이어하기 기록, `record_key.rs` 문단 키·기록 키), 어댑터는 `src-tauri/src/translate.rs`·`secrets.rs`, 계약 미러는 `src-tauri/src/contract.rs`
+- 코드(쓸 곳): 문단 추출은 `crates/pdf-core/src/paragraphs.rs`, 번역 규칙은 새 크레이트 `crates/translate`(`models.rs` 모델 표, `chunk.rs` 묶음·예상치, `request.rs`·`response.rs` 요청·응답, `client.rs` 묶음 보내기·나눠 다시, `retry.rs` 재시도·상태 짝, `http.rs` 전송 trait·reqwest 어댑터, `key.rs` `ApiKey`, `error.rs` API 오류 코드, `runner.rs`·`runner/` 실행기·취소·결과 조립, `progress.rs` 진행, `record.rs` 이어하기 기록, `record_key.rs` 문단 키·기록 키·파일 해시, `plan.rs` 계획, `paragraph.rs` 다시 번역·직접 고치기, `verify.rs` 키 확인), 어댑터는 `src-tauri/src/translate.rs`(커맨드 검증·위임)·`secrets.rs`(키체인·설정 저장소), 계약 미러는 `src-tauri/src/contract.rs`
 - 관련: 계획서 §9.1(범위·아키텍처·계약·보안·테스트·화면), ADR 0001 §8(추출 글자)·§9(하이픈)·§15(진행 공식·pdfium 잠금)·§16(커맨드 관례)
 
 ## 맥락
@@ -68,7 +68,7 @@ pub struct ParagraphPage { pub page: u32, pub size: PageSize, pub content: PageP
 
 #### 문단 추출 규칙과 상수 (Step 37에서 정함)
 
-공개 API는 `extract_paragraphs(engine, path, range, cache: &ExtractionCache) -> Result<Vec<ParagraphPage>, ParagraphError>`, `render_scan_page(engine, path, page) -> Result<Vec<u8>, ParagraphError>`, `SCAN_IMAGE_MAX_EDGE_PX`다. 오류 코드는 `INVALID_RANGE`(쪽 범위), `INVALID_PAGE`(그릴 쪽이 문서에 없다), `IMAGE_ENCODE_FAILED`(PNG 인코딩), 문서 열기 코드(`DocumentError`)다. 코드는 `crates/pdf-core/src/paragraphs.rs`(API·추출 캐시·쪽 그림), `paragraphs/layout.rs`(줄·단·문단), `paragraphs/text.rs`(줄 잇기·목록 머리)다. 쪽 범위는 `parse_page_range`와 같은 함수(`page_numbers`)로 바꾼다.
+공개 API는 `extract_paragraphs(engine, path, range, cache: &ExtractionCache) -> Result<Vec<ParagraphPage>, ParagraphError>`, `render_scan_page(engine, path, page) -> Result<Vec<u8>, ParagraphError>`, `SCAN_IMAGE_MAX_EDGE_PX`다. Step 41이 `scan_page_flags(engine, path, cache) -> Result<Vec<bool>, ParagraphError>`(문서 전체 쪽마다 스캔 쪽인가, 같은 추출 캐시, 계획의 글자층·스캔 쪽 수와 기록 키 ⑤의 "문서에 스캔 쪽이 있는가")와 `scan_image_size(&PageSize) -> (u32, u32)`(렌더하지 않고 센 쪽 그림 크기, 예상치의 그림 토큰. pdfium-render와 같이 배율을 곱해 반올림하고 상한으로 자른다. 렌더한 그림과 같은지 `tests/paragraphs.rs`가 본다)를 더했다. 오류 코드는 `INVALID_RANGE`(쪽 범위), `INVALID_PAGE`(그릴 쪽이 문서에 없다), `IMAGE_ENCODE_FAILED`(PNG 인코딩), 문서 열기 코드(`DocumentError`)다. 코드는 `crates/pdf-core/src/paragraphs.rs`(API·추출 캐시·쪽 그림), `paragraphs/layout.rs`(줄·단·문단), `paragraphs/text.rs`(줄 잇기·목록 머리)다. 쪽 범위는 `parse_page_range`와 같은 함수(`page_numbers`)로 바꾼다.
 
 | 단계 | 규칙 |
 |---|---|
@@ -323,7 +323,7 @@ HTTP 200 응답만 여기로 온다(그 밖은 §7). 사용량은 모든 200 응
 | `prepare_translation` | `(path, options) -> TranslationPlan` | **네트워크 없음.** 허용 경로 안 PDF만(`PATH_NOT_ALLOWED`·`UNSUPPORTED_FILE_TYPE`), 범위 오류 `INVALID_RANGE`. 키를 읽지 않는다. |
 | `translate_pdf` | `(request, Channel<TranslateProgress>) -> TranslationResult` | 작업 ID·취소 토큰 등록, 한 번에 하나(`JOB_ALREADY_RUNNING`). 검사 순서: 경로 → 범위 → **원문 언어(`auto`인데 모름이면 `SOURCE_LANGUAGE_UNKNOWN`)** → 번역할 것(`NO_TRANSLATABLE_TEXT`) → 키(`API_KEY_MISSING`·`KEYCHAIN_UNAVAILABLE`). 키는 시작할 때 한 번 읽어 작업 동안만 메모리에 둔다. |
 | `retranslate_paragraph` | `(request) -> RetranslateResult` | 문단 하나 + 앞뒤 문단 문맥(§5). 기록 고침, 사용량 누적. 작업 ID 등록(`cancel_job`으로 취소). 기록 없음 `TRANSLATION_RECORD_NOT_FOUND`, 문단 키 없음도 같은 코드. **응답에 사용량을 싣는다.** |
-| `edit_translated_paragraph` | `(request) -> TranslatedParagraph` | 기록에 `edited` 저장(앞뒤 공백 지움, 빈 글이면 `edited`를 지워 원래 번역으로 돌린다). 네트워크 없음. |
+| `edit_translated_paragraph` | `(request) -> TranslatedParagraph` | 기록에 `edited` 저장(앞뒤 공백 지움, 빈 글이면 `edited`를 지워 원래 번역으로 돌린다). 네트워크 없음. **요청에 `path`·`options`를 더했다(Step 41)**: 다시 번역처럼 기록 키를 다시 세어 맞춰 보고, 돌려줄 문단의 원문·제목(기록에 없다, §8)을 다시 추출해 얻는다. |
 | `delete_translation_records` | `() -> ()` | §8 "지우기". |
 | `cancel_job` | 기존 | 번역·다시 번역도 취소한다. |
 
@@ -379,15 +379,26 @@ struct TranslationResult {
 }
 struct RetranslateRequest { job_id: String, record_id: String, path: String, key: String, options: TranslateOptions }
 struct RetranslateResult { paragraph: TranslatedParagraph, usage: TokenUsage }   // **추가.** usage = 이 요청
-struct EditParagraphRequest { record_id: String, key: String, text: String }
+struct EditParagraphRequest { record_id: String, path: String, key: String, text: String, options: TranslateOptions }  // **바꿈**(Step 41) path·options 추가
 struct ApiKeyStatus { registered: bool, hint: Option<String> }  // hint = 끝 4자리
 ```
 
 - `TranslatedParagraph.fail_code`: `failed` → `TRANSLATION_MISMATCH` 또는 `TRANSLATION_TRUNCATED`, `refused` → `TRANSLATION_REFUSED`, 그 밖 `None`.
 - `TranslatedPage.kind`: 범위 밖 `OutOfRange`(문단 없음), 범위 안 스캔 쪽 + 옵션 끔 `ScanSkipped`(문단 없음), 스캔 쪽 + 옵션 켬 `Image`(받아 적은 문단, 실패면 문단 없이 `fail_code`), 그 밖 `TextLayer`.
 - `glossary_used`는 범위 안 원문(스캔 쪽은 받아 적은 원문)에 원어가 나오는 합친 용어다. §4와 같은 일치 규칙이고 이번 실행에서 보냈는지와 상관없다(이어하기 결과에서도 같은 값).
-- **용어집 정규화(프론트와 Rust가 같다):** 원어·번역어 앞뒤 공백을 지우고 NFC. 어느 쪽이든 빈 용어는 받지 않는다. 같은 원어가 둘이면 앞의 것(프론트가 문서별을 앞에 둔다)을 쓴다. `MAX_GLOSSARY_TERMS`(500)개를 넘거나 글자 수 상한을 넘으면 계약 입력 오류다(Step 41이 코드를 정한다. 화면이 먼저 막는다).
+- **용어집 정규화(프론트와 Rust가 같다):** 원어·번역어 앞뒤 공백을 지우고 NFC. 어느 쪽이든 빈 용어는 받지 않는다. 같은 원어가 둘이면 앞의 것(프론트가 문서별을 앞에 둔다)을 쓴다. `MAX_GLOSSARY_TERMS`(500)개를 넘거나 글자 수 상한 `MAX_GLOSSARY_TERM_CHARS`(원어·번역어마다 40자)를 넘으면 계약 입력 오류 `GLOSSARY_TOO_LARGE`다(Step 41. 화면이 먼저 막는다). 둘 다 정규화한 용어로 센다(겹친 원어·빈 용어는 세지 않는다). 근거: 용어집 전체를 싣는 스캔 묶음도 500 × 80자 = 40,000자를 글자당 2토큰(이 앱의 예상 식보다 넉넉히) + 줄마다 3토큰으로 보면 81,500토큰, 고정 부담 600 + 가장 큰 그림 3,136을 더해 약 85,000토큰이라 Haiku 5.5의 낮은 요금 구간(프롬프트 100,000토큰 이하, §15)에 든다(`glossary.rs` 상수 주석). 두 값은 바인딩 상수(`MAX_GLOSSARY_TERMS`·`MAX_GLOSSARY_TERM_CHARS`)로 내보내 화면이 다시 적지 않는다.
 - `path`는 canonical 경로다(ADR 0001 §16). 다시 번역·고치기는 `record_id`로 기록을 찾고, `path`·`options`로 기록 키를 다시 계산해 같을 때만 쓴다(다르면 `TRANSLATION_RECORD_NOT_FOUND`).
+- **Step 41 구현에서 정한 것**(`src-tauri/src/translate.rs`·`secrets.rs`, `crates/translate/src/plan.rs`·`paragraph.rs`·`verify.rs`):
+  - **검사 순서(`translate_pdf`):** 경로 → 용어집 상한 → 범위 → 원문 언어 → 번역할 것 → 키. 원문 언어·번역할 것은 문단을 봐야 하므로 문단 추출(추출 캐시를 비교와 함께 쓴다. 계획이 먼저 불러 보통 캐시 적중)은 검사 안에서 한다. 검사를 모두 통과한 뒤 `read_document_started`(0%)를 내고 파일 해시를 센 다음 실행기를 부른다. 그래서 검사에서 멈추면 진행 이벤트가 없고, 키체인은 마지막에 한 번 읽는다(앞 검사에서 멈추면 읽지 않는다).
+  - **번역할 것:** 범위 안에 문단이 있는 글자층 쪽이 있거나, 스캔 옵션이 켜졌고 범위 안에 스캔 쪽이 있으면 된다.
+  - **한 번에 하나:** `translate_pdf`와 `retranslate_paragraph`가 앱에 하나인 실행 표시를 함께 쓴다. 하나가 도는 동안 다른 번역·다시 번역은 `JOB_ALREADY_RUNNING`이다(같은 기록을 두 작업이 함께 고쳐 서로 덮지 않게). 작업 ID 등록(`cancel_job`)은 다른 커맨드와 같다. 직접 고치기·기록 지우기는 막지 않는다(번역 중에는 결과 화면이 없다. 한계: 같은 기록을 번역하는 동안 고치면 실행기의 다음 쓰기가 덮는다).
+  - **계획(`prepare_translation`):** `page_count`·`text_pages`·`scan_pages`는 문서 전체(`text_pages + scan_pages = page_count`, 파일 카드 `글자층 22쪽 / 스캔 2쪽`), `range_pages`는 범위다. `paragraph_count`·이어하기 수는 실행기가 시작할 때 알리는 값과 같은 함수(`runner::paragraph_keys`)로 센다(글자층 문단 + 기록에 있는 스캔 쪽 문단). 예상치는 보낼 것만이다: 기록에 있는 문단·스캔 쪽은 빼고, 일부만 남은 텍스트 묶음은 남은 항목과 그 항목에 나오는 용어로 다시 센다(`estimate_text_items`, 묶음 예상과 같은 식). 보낼 것이 없으면 예상 입력·출력·요금이 0이다(화면의 "이미 번역한 문서예요"). 자동 감지인데 언어를 모르면 묶음·문단 수만 세고 예상치는 0, 이어하기는 없다(기록 키를 셀 수 없다. 화면이 언어를 고르게 막는다). `pricing_date`는 고른 모델의 모델 표 기준일이다. 파일 해시는 기록 폴더에 `.json`이 있을 때만 센다. 스캔 쪽 그림 토큰은 렌더하지 않고 쪽 크기로 센다(`scan_image_size`).
+  - **결과:** 실행기 결과(범위 쪽)에 범위 밖 쪽을 `outOfRange`로 채워 문서 전체 쪽 배열(색인 = 쪽 번호)로 낸다. `language`는 감지한 언어가 요청 언어와 같으면 감지 값(간체·번체를 가른다), 아니면 고른 언어다. `elapsed_ms`는 커맨드를 받은 때부터다. 스캔 쪽 그림은 렌더러가 보내기 직전에 `spawn_blocking`으로 `render_scan_page`를 부른다(pdfium 잠금은 pdf-core가 잡는다). 렌더 실패는 pdf-core 오류 코드(`INVALID_PAGE`·`IMAGE_ENCODE_FAILED`·문서 열기 코드)다.
+  - **기록 키 ①⑤:** 파일 해시는 (경로, 크기, 수정 시각)이 같으면 다시 세지 않는 메모리 캐시다(경로마다 최신 하나). ⑤의 "문서에 스캔 쪽이 있는가"는 범위가 아니라 문서 전체로 본다(`scan_page_flags`).
+  - **다시 번역·직접 고치기:** 경로 → 용어집 상한 → 범위 → 원문 언어 → 기록 키(파일 해시) → 문단 → (다시 번역만) 키. 기록 키가 `record_id`와 다르거나 문단 키가 지금 범위에 없으면(스캔 쪽 문단은 기록의 받아 적은 문단에서 찾는다) `TRANSLATION_RECORD_NOT_FOUND`다. 기록 파일이 아직 없으면(첫 실행의 문단이 모두 실패했다) 새 기록으로 시작하고, 쓸 문단이 생길 때만 파일을 만든다. 다시 번역은 그 문단 하나(ID `"1"`)와 문서 순서의 앞·뒤 문단 원문을 `<context>` 안 JSON(`{"before","after"}`, 없으면 `null`)으로 보낸다(텍스트 묶음 요청은 바이트가 그대로라 `PROMPT_VERSION`을 올리지 않았다). 긴 문단도 조각으로 나누지 않는다. 번역을 받으면 기록의 번역을 바꾸고 고친 글을 지운다. 검증 실패·잘림·거절이면 기록의 글은 그대로 두고 그 상태의 문단(`target: null` + `fail_code`)과 사용량을 돌려준다(화면이 알리고 원래 글을 둔다). 받은 사용량은 기록 누적에 더한다. 다시 번역의 기록 쓰기 실패는 경고만, 직접 고치기의 쓰기 실패는 `WRITE_FAILED`다. 직접 고친 글을 지운 실패 문단은 기록에서 빠진다(기록 문단은 `target`·`edited` 가운데 하나는 있다).
+  - **키:** 키체인 서비스 이름은 앱 식별자(`tauri.conf.json` `identifier`), 계정은 `anthropic-api-key`다. 저장은 앞뒤 공백을 지운 키를 쓴다. 키체인 오류는 종류만 담아 `KEYCHAIN_UNAVAILABLE`이다(`keyring` 오류의 `Debug`는 읽은 바이트를 담을 수 있다). 설정 저장소(`plugin-store` `settings.json`, 프론트와 같은 저장소)를 쓰지 못하면 `WRITE_FAILED`다. 키 확인은 `GET /v1/models?limit=1000`이고 응답 `data[].id`에 두 앱 모델이 모두 있어야 한다(목록을 읽을 수 없어도 `MODEL_UNAVAILABLE`). 재시도·오류 짝은 §7과 같다(전송 trait에 `get_models`를 더했다). 키 형식 상수(`API_KEY_PREFIX`·`API_KEY_MAX_LEN`)도 바인딩 상수로 내보낸다.
+  - **전송:** 앱 상태가 reqwest 전송 하나를 들고 번역·키 확인마다 빌려 준다(연결 풀). TLS를 준비하지 못해도 앱은 뜨고 번역·키 확인만 `NETWORK_UNAVAILABLE`이다.
+  - **테스트:** `src-tauri/src/translate.rs`(고르지 않은 파일 거부, 계획이 전송을 부르지 않음(가짜 전송 호출 0)·문서 전체와 범위 수, 검사 순서와 키체인을 마지막에 읽음, 범위 밖 쪽 채우기와 기록 키(Python `hashlib` 리터럴), 계획·고치기가 번역이 쓴 기록을 찾음, 스캔 쪽 렌더·그림 블록, 한 번에 하나, 파일 해시 캐시), `secrets.rs`(저장 → 키는 키체인에만·힌트 끝 4자리·전송 확인 되돌림, 형식 오류는 키체인·네트워크 전, 힌트만 남은 키, 실패한 `AppError`·로그에 키 없음), `crates/translate`(`tests/plan.rs` 보낼 것만 예상·이어하기, `tests/paragraph.rs` 다시 번역 문맥·고치기 규칙·찾지 못함, `tests/records.rs` 기록 지우기, `tests/glossary.rs` 상한, `http/tests.rs` 키 확인 mock 서버). 키체인 어댑터 자체는 라이브러리 동작이라 단위 테스트가 없다(Step 36에서 실제 OS로 확인).
 
 ### 11. 오류 코드
 
@@ -412,6 +423,7 @@ struct ApiKeyStatus { registered: bool, hint: Option<String> }  // hint = 끝 4�
 | `NO_TRANSLATABLE_TEXT` | 범위 안에 문단이 없고 스캔 쪽도 보내지 않는다 | — |
 | **`SOURCE_LANGUAGE_UNKNOWN`** | 원문 언어가 `auto`인데 감지가 모름이다(화면이 먼저 막는다. 마지막 방어선) | — |
 | `TRANSLATION_RECORD_NOT_FOUND` | 다시 번역·고치기의 기록이나 문단이 없다 | — |
+| **`GLOSSARY_TOO_LARGE`** | 정규화한 용어집이 `MAX_GLOSSARY_TERMS`(500)개 또는 원어·번역어 `MAX_GLOSSARY_TERM_CHARS`(40자)를 넘는다(Step 41, 화면이 먼저 막는다. 마지막 방어선) | — |
 
 기존 코드 `PATH_NOT_ALLOWED`·`UNSUPPORTED_FILE_TYPE`·`INVALID_RANGE`·`CANCELLED`·`JOB_ALREADY_RUNNING`·문서 열기 코드를 그대로 쓴다. 짝짓기는 `error.rs` 한 곳의 `match`다(translate 에러에 변형이 늘면 컴파일이 멈춘다).
 

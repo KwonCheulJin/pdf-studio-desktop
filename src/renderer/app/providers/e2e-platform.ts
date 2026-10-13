@@ -50,6 +50,8 @@ export interface E2eMergeScript {
 
 export interface E2eMockSeed {
   files: E2eMockFile[];
+  /** 열기 다이얼로그를 열 때마다 앞에서부터 하나씩 고를 경로 목록. 다 쓰면 `files`를 모두 고른다. */
+  dialogPicks?: string[][];
   failures?: E2eMockFailures;
   /** `mergePdfs`를 부를 때마다 앞에서부터 하나씩 쓴다. 다 쓰면 mock 그대로 성공한다. */
   mergeScripts?: E2eMergeScript[];
@@ -322,6 +324,7 @@ export function createE2ePlatform(): DesktopPlatform {
   window.__E2E_PDF_CACHE_STATS__ = getPdfCacheStats;
   const mockPlatform = createMockPlatform({
     files: seed.files.map(toMockFile),
+    dialogPicks: seed.dialogPicks,
     mergeOutput: seed.mergeOutput,
     thirdPartyNotices: seed.thirdPartyNotices
   });

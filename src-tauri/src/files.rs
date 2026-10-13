@@ -8,7 +8,7 @@ use std::sync::atomic::AtomicBool;
 use pdf_core::{DocumentError, MAX_INPUT_FILE_BYTES, PdfEngine, convert_tiff, read_pdf_info};
 
 use crate::access::{OPENABLE_EXTENSIONS, PDF_EXTENSION, PathAccess, is_tiff};
-use crate::contract::{OpenedFile, PdfInfo};
+use crate::contract::{OpenedFile, PdfInfo, byte_count};
 use crate::error::{CommandError, read_error, write_error};
 
 /// 파일마다 확장자 판별 → (TIFF면 캐시 폴더로 변환) → 정보 조회를 한다.
@@ -36,6 +36,9 @@ fn open_file(
     path: &Path,
 ) -> Result<OpenedFile, CommandError> {
     let canonical = access.readable(path, &OPENABLE_EXTENSIONS)?;
+    let size_bytes = fs::metadata(&canonical)
+        .map_err(|source| read_error(&canonical, source))?
+        .len();
     let (pdf_path, display_name) = if is_tiff(&canonical) {
         // 파일 추가 중에는 취소하지 않는다.
         let never_cancelled = AtomicBool::new(false);
@@ -55,6 +58,7 @@ fn open_file(
         source_path: path.to_path_buf(),
         pdf_path,
         display_name,
+        size_bytes: byte_count(size_bytes),
         info: PdfInfo::from(info),
     })
 }
@@ -121,6 +125,10 @@ mod tests {
         }
     }
 
+    fn file_size(path: &Path) -> u64 {
+        fs::metadata(path).expect("file metadata").len()
+    }
+
     /// 크기만 상한을 넘는 희소 파일. 내용은 읽지 않으므로 디스크를 차지하지 않는다.
     fn oversized_file(path: &Path) {
         File::create(path)
@@ -179,6 +187,7 @@ mod tests {
         let OpenedFile::Opened {
             pdf_path,
             display_name,
+            size_bytes,
             info,
             ..
         } = &results[0]
@@ -187,11 +196,13 @@ mod tests {
         };
         assert_eq!(pdf_path, &pdf.canonicalize().expect("canonical"));
         assert_eq!(display_name, "report.pdf");
+        assert_eq!(u64::from(*size_bytes), file_size(&pdf));
         assert_eq!(info.page_count, 3);
 
         let OpenedFile::Opened {
             pdf_path,
             display_name,
+            size_bytes,
             info,
             ..
         } = &results[2]
@@ -200,6 +211,9 @@ mod tests {
         };
         assert!(pdf_path.starts_with(&access.directories().converted));
         assert_eq!(display_name, "scan.pdf");
+        // 화면에 보일 크기는 사용자가 고른 TIFF의 크기다(변환 결과 PDF가 아니다).
+        assert_eq!(u64::from(*size_bytes), file_size(&tiff));
+        assert_ne!(file_size(&tiff), file_size(pdf_path));
         assert_eq!(info.page_count, 3);
         assert!(tiff.exists());
     }

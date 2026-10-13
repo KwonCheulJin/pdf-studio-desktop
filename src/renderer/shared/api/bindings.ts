@@ -110,7 +110,9 @@ sourcePath: string;
 /**  표시·병합에 쓸 PDF. TIFF면 변환 결과(앱 캐시 폴더의 고유 이름)다. */
 pdfPath: string; 
 /**  화면에 보일 이름. TIFF면 원본 이름에서 확장자만 `.pdf`로 바꾼 것이다. */
-displayName: string; info: PdfInfo } | { status: "error"; sourcePath: string; error: AppError };
+displayName: string; 
+/**  요청한 파일의 크기(바이트). TIFF면 변환 전 TIFF의 크기다. */
+sizeBytes: number; info: PdfInfo } | { status: "error"; sourcePath: string; error: AppError };
 
 /**
  *  페이지 상자. PDF 사용자 공간 좌표(pt, 원점은 왼쪽 아래)이며 회전 전 값이다.

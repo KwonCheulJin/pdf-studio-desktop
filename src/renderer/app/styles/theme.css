@@ -9,6 +9,7 @@
   --color-paper-line: var(--paper-line);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
+  --color-card-inset: var(--card-inset);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-secondary: var(--secondary);
@@ -25,6 +26,8 @@
   --color-destructive-subtle: var(--destructive-subtle);
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
+  --color-success-subtle: var(--success-subtle);
+  --color-success-subtle-foreground: var(--success-subtle-foreground);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
   --color-scrim: var(--scrim);

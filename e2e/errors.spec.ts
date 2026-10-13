@@ -17,8 +17,8 @@ import type {
 /**
  * 오류 표시(계획서 P0-6 B12, 시안 8)와 병합 진행·취소(시안 7).
  * - 짧은 실패(파일 읽기·다운로드·선택 병합)는 토스트, 문구는 오류 코드로 찾는다.
- * - 전체 병합 실패는 진행 오버레이 자리에 원인·멈춘 단계·코드와 다시 시도 / 이 파일 빼기 / 닫기.
- * - 진행 중에는 전체 %·단계별 %와 취소. 취소는 오류가 아니라 작업 공간으로 조용히 돌아간다.
+ * - 전체 병합 실패는 진행 오버레이 자리에 문제 파일·원인·해결 방법, 멈춘 곳·코드와 이 파일 빼기 / 닫기 / 다시 시도.
+ * - 진행 중에는 전체 %·단계별 %·세부(개수)와 취소. 취소는 오류가 아니라 작업 공간으로 조용히 돌아간다.
  * 실패와 진행률은 E2E 시드(`failures`, `mergeScripts`)로 심는다. 시드 오류의 message는
  * "E2E 시드 실패: …"라서 화면에 그대로 새어 나오면 보인다.
  */
@@ -146,18 +146,23 @@ function mergeButton(page: Page): Locator {
 }
 
 function failureDialog(page: Page): Locator {
-  return page.getByRole("alertdialog", { name: "병합하지 못했습니다" });
+  return page.getByRole("alertdialog", { name: "병합하지 못했어요" });
 }
 
 function progressOverlay(page: Page): Locator {
-  return page.getByRole("status").filter({ hasText: "PDF 병합 중" });
+  return page.getByRole("status").filter({ hasText: "병합하는 중" });
 }
 
-/** 실패 대화상자 안의 항목 값(멈춘 단계·문제 파일·오류 코드) */
+/** 실패 대화상자 안의 항목 값(멈춘 곳·오류 코드) */
 function failureDetail(dialog: Locator, term: string): Locator {
   return dialog
     .locator("div", { has: dialog.page().getByText(term) })
     .locator("dd");
+}
+
+/** 실패 대화상자 본문에서 굵게 보이는 문제 파일 이름 */
+function failedFileName(dialog: Locator): Locator {
+  return dialog.locator("strong");
 }
 
 test("읽지 못한 파일은 넣지 않고 파일 이름과 코드 문구를 토스트로 보인다", async ({
@@ -168,12 +173,12 @@ test("읽지 못한 파일은 넣지 않고 파일 이름과 코드 문구를 �
     failures: { openFiles: { [BROKEN_FILE.path]: "INVALID_PDF" } }
   });
 
-  const toast = page
-    .locator("[data-sonner-toast]")
-    .filter({ hasText: `"${BROKEN_BASE_NAME}" 파일을 열 수 없습니다.` });
+  const toast = page.locator("[data-sonner-toast]").filter({
+    hasText: `"${BROKEN_BASE_NAME}" 파일을 열지 못해 건너뛰었어요.`
+  });
   await expect(toast).toBeVisible();
   await expect(toast).toContainText(
-    "PDF 파일이 손상되었거나 형식이 올바르지 않습니다."
+    "PDF 파일이 손상되었거나 형식이 올바르지 않아요."
   );
   await expect(toast).not.toContainText(SEED_MESSAGE_PREFIX);
 
@@ -210,12 +215,14 @@ test("병합이 실패하면 오버레이 자리에 원인·멈춘 단계·코�
   const dialog = failureDialog(page);
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText(
-    "파일을 저장하지 못했습니다. 저장 공간과 권한을 확인해 주세요."
+    "파일을 저장하지 못했어요. 저장 공간과 권한을 확인해 주세요."
   );
   await expect(dialog).not.toContainText(SEED_MESSAGE_PREFIX);
-  await expect(failureDetail(dialog, "멈춘 단계")).toHaveText("저장");
+  // 저장은 개수를 세지 않는 단계라 단계 이름만
+  await expect(failureDetail(dialog, "멈춘 곳")).toHaveText("저장");
   await expect(failureDetail(dialog, "오류 코드")).toHaveText("WRITE_FAILED");
   // 저장 실패는 소스 파일을 가리키지 않는다
+  await expect(failedFileName(dialog)).toHaveCount(0);
   await expect(
     dialog.getByRole("button", { name: "이 파일 빼기" })
   ).toHaveCount(0);
@@ -255,11 +262,15 @@ test("파일 읽기 중 실패하면 그 파일을 보이고 '이 파일 빼기'
 
   const dialog = failureDialog(page);
   await expect(dialog).toBeVisible();
+  // 문제 파일 이름(굵게) + 원인 + 해결 방법
+  await expect(failedFileName(dialog)).toHaveText("bravo.pdf");
   await expect(dialog).toContainText(
-    "PDF 파일이 손상되었거나 형식이 올바르지 않습니다."
+    "bravo.pdf: PDF 파일이 손상되었거나 형식이 올바르지 않아요. 다른 프로그램에서 다시 저장하거나 이 파일을 빼고 다시 병합하세요."
   );
-  await expect(failureDetail(dialog, "멈춘 단계")).toHaveText("파일 읽기");
-  await expect(failureDetail(dialog, "문제 파일")).toHaveText("bravo.pdf");
+  // 멈춘 단계와 그 단계에서 마지막으로 받은 개수(alpha를 읽고 bravo에서 멈춤)
+  await expect(failureDetail(dialog, "멈춘 곳")).toHaveText(
+    "파일 읽기 · 1 / 2개 파일"
+  );
   await expect(failureDetail(dialog, "오류 코드")).toHaveText("INVALID_PDF");
 
   await dialog.getByRole("button", { name: "이 파일 빼기" }).click();
@@ -288,9 +299,9 @@ test("모르는 코드로 진행 전에 실패하면 일반 문구·'시작 전'
 
   const dialog = failureDialog(page);
   await expect(dialog).toContainText(
-    "알 수 없는 오류가 발생했습니다. 다시 시도해 주세요."
+    "알 수 없는 오류가 생겼어요. 다시 시도해 주세요."
   );
-  await expect(failureDetail(dialog, "멈춘 단계")).toHaveText("시작 전");
+  await expect(failureDetail(dialog, "멈춘 곳")).toHaveText("시작 전");
   await expect(failureDetail(dialog, "오류 코드")).toHaveText("SOMETHING_NEW");
   await expect(statusBar(page)).toContainText("상태: 오류");
   // 대화상자에 포커스가 있는 동안 선택 단축키(Delete)는 꺼져 있다
@@ -320,10 +331,10 @@ test("병합 결과 저장(copyFile)이 실패하면 토스트로 보이고 미�
 
   const toast = page
     .locator("[data-sonner-toast]")
-    .filter({ hasText: "병합 결과를 저장하지 못했습니다." });
+    .filter({ hasText: "병합 결과를 저장하지 못했어요." });
   await expect(toast).toBeVisible();
   await expect(toast).toContainText(
-    "파일을 저장하지 못했습니다. 저장 공간과 권한을 확인해 주세요."
+    "파일을 저장하지 못했어요. 저장 공간과 권한을 확인해 주세요."
   );
   await expect(toast).not.toContainText(SEED_MESSAGE_PREFIX);
   await expect(downloadButton).toBeVisible();
@@ -350,9 +361,9 @@ test("선택 병합이 실패하면 토스트로 보이고 결과 창을 닫는�
 
   const toast = page
     .locator("[data-sonner-toast]")
-    .filter({ hasText: "선택한 항목을 병합하지 못했습니다." });
+    .filter({ hasText: "선택한 항목을 병합하지 못했어요." });
   await expect(toast).toBeVisible();
-  await expect(toast).toContainText("PDF를 처리하는 중 문제가 생겼습니다.");
+  await expect(toast).toContainText("PDF를 처리하는 중 문제가 생겼어요.");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   expect(await readMergeRequests(page)).toHaveLength(1);
 });
@@ -389,6 +400,15 @@ test("진행 중에는 전체 %·단계별 %를 보이고 취소하면 cancelJob
   );
   await expect(percentOf("저장 진행률")).toHaveAttribute("aria-valuenow", "0");
   await expect(overlay).toContainText("55%");
+  // 단계 세부: 지난 단계는 다 센 개수, 지금 단계는 보고된 개수, 저장은 고정 문구
+  const stageRow = (name: string) =>
+    overlay.getByRole("listitem").filter({ hasText: name });
+  await expect(stageRow("파일 읽기")).toContainText("2 / 2개 파일");
+  await expect(stageRow("페이지 합치기")).toContainText("3 / 6쪽");
+  await expect(stageRow("저장")).toContainText("임시 파일에 쓰기");
+  await expect(overlay).toContainText(
+    "취소하면 만들던 파일은 지워요. 원본은 그대로예요."
+  );
 
   await overlay.getByRole("button", { name: "취소" }).click();
 

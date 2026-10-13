@@ -7,6 +7,7 @@ export {
   useMergeView,
   useMergedDocument,
   useTotalActivePages,
+  useTotalDeletedPages,
   useFile
 } from "./model/merge-store";
 export {

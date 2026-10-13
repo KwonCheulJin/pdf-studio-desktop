@@ -90,7 +90,7 @@ export function useSelectedMerge(): UseSelectedMergeResult {
       return true;
     } catch (error) {
       notifyFailure({
-        title: "선택한 항목을 병합하지 못했습니다.",
+        title: "선택한 항목을 병합하지 못했어요.",
         error: toPlatformError(error),
         context: "선택 병합 실패"
       });

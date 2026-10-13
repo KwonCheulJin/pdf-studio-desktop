@@ -12,7 +12,7 @@ import {
 } from "@/renderer/entities/merge-plan";
 import { cn } from "@/renderer/shared/lib/utils";
 import { Button, Checkbox, Tooltip } from "@/renderer/shared/ui";
-import { formatPageRange } from "@/renderer/shared/lib/page-range-format";
+import { formatDocumentCaption } from "../lib/document-caption";
 import { usePageThumbnail } from "../model/use-page-thumbnail";
 import {
   useSelectionStore,
@@ -42,8 +42,8 @@ interface DocumentCardProps {
  * Adobe Acrobat CombineGridItem 스타일
  * - 스택 효과: thumbnailBorderTop + thumbnailBorderLeft
  * - 퀵 액션: Expand, 삭제
- * - 삭제된 페이지가 있으면 "n쪽 삭제됨" 배지 (펼쳐서 복원)
- * - 푸터: 파일명 + 페이지 범위 (삭제 안 된 페이지만)
+ * - 삭제된 페이지가 있으면 썸네일 왼쪽 아래 "n쪽 삭제됨" 배지 (펼쳐서 복원)
+ * - 푸터: 파일명 + 쪽수 (일부만 남았으면 남은 쪽 범위)
  */
 export function DocumentCard({
   document,
@@ -115,7 +115,10 @@ export function DocumentCard({
       .filter((page) => pageIdSet.has(page.id) && !page.isDeleted)
       .map((page) => page.sourcePageIndex + 1);
   }, [document.pages, groupPageIds]);
-  const pageRangeText = formatPageRange(groupPageNumbers);
+  const captionText = formatDocumentCaption({
+    activePageNumbers: groupPageNumbers,
+    totalPageCount: document.pages.length
+  });
 
   // 파일 삭제 핸들러
   const handleRemove = useCallback(
@@ -155,26 +158,24 @@ export function DocumentCard({
       data-testid="document-card"
       className="group flex h-full w-full flex-col"
     >
-      {/* 카드 본문 - 스택 효과 포함, flex-1로 남은 공간 채우기 */}
+      {/* 카드 본문(종이) - 스택 효과 포함, flex-1로 남은 공간 채우기 */}
       <div className="relative flex-1">
-        {/* 스택 효과 (접힘 상태에서만) - Adobe thumbnailBorder 스타일 */}
+        {/* 스택 효과 (접힘 상태에서만) - 뒤에 깔린 종이 */}
         {isStacked && (
-          <div className="border-border bg-card absolute -top-1.5 right-1.5 bottom-1.5 -left-1.5 rounded-xs border" />
+          <div className="border-border bg-paper absolute -top-1.5 right-1.5 bottom-1.5 -left-1.5 rounded-xs border" />
         )}
 
-        {/* 썸네일 영역 - 절대 좌표 기반으로 flex-1 사용 */}
+        {/* 썸네일 영역 - 종이. 고르면 2px primary 테두리 */}
         <div
           className={cn(
-            "bg-card relative h-full w-full cursor-grab rounded-xs border transition-all hover:shadow-lg",
-            isSelected
-              ? "border-primary ring-primary/30 ring-2"
-              : "border-border"
+            "bg-paper shadow-paper relative h-full w-full cursor-grab rounded-xs transition-all hover:shadow-lg",
+            isSelected ? "border-primary border-2" : "border border-transparent"
           )}
         >
-          {/* 선택 체크박스 */}
+          {/* 선택 체크박스 (고르면 늘, 아니면 마우스·포커스일 때) */}
           <div
             className={cn(
-              "bg-media-scrim absolute top-2 left-2 z-10 flex cursor-default items-center justify-center rounded-xs p-2 transition-opacity",
+              "absolute top-2 left-2 z-10 flex cursor-default transition-opacity",
               isSelected
                 ? "opacity-100"
                 : "opacity-0 group-focus-within:opacity-100 group-hover:opacity-100"
@@ -186,19 +187,18 @@ export function DocumentCard({
               onCheckedChange={handleCheckboxChange}
               onClick={(e) => e.stopPropagation()}
               aria-label={`${document.name} 선택`}
-              className="border-media-foreground/50 size-5"
+              className="bg-paper size-5"
             />
           </div>
 
           {/* 퀵 액션 버튼 (우상단) */}
-          <div className="bg-media-scrim pointer-events-none absolute top-2 right-2 z-10 flex flex-col gap-1 rounded-md p-1 opacity-0 transition-opacity group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100">
+          <div className="border-border bg-card pointer-events-none absolute top-2 right-2 z-10 flex flex-col gap-0.5 rounded-md border p-1 opacity-0 shadow-sm transition-opacity group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100">
             <Tooltip content="펼치기">
               <Button
                 variant="card-action"
                 size="icon-sm"
                 onClick={handleExpand}
                 aria-label="펼치기"
-                className="rounded-full"
               >
                 <ChevronsLeftRight size={16} />
               </Button>
@@ -209,18 +209,17 @@ export function DocumentCard({
                 size="icon-sm"
                 onClick={handleRemove}
                 aria-label="파일 삭제"
-                className="rounded-full"
               >
                 <Trash2 size={16} />
               </Button>
             </Tooltip>
           </div>
 
-          {/* 썸네일 이미지 - 고정 크기 컨테이너 */}
-          <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded">
+          {/* 썸네일 이미지 - 회전해도 종이 안에 들도록 정사각형 상자 */}
+          <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-xs">
             <div
               ref={thumbnailRef}
-              className="bg-muted flex items-center justify-center overflow-hidden rounded"
+              className="flex items-center justify-center overflow-hidden"
               style={
                 imageSize ? { width: imageSize, height: imageSize } : undefined
               }
@@ -252,32 +251,32 @@ export function DocumentCard({
                 <button
                   type="button"
                   onClick={handlePreview}
-                  className="bg-foreground/60 text-background hover:bg-foreground/80 focus-visible:ring-ring pointer-events-auto rounded-full p-3 focus-visible:ring-2 focus-visible:outline-none"
+                  className="border-border bg-card text-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring pointer-events-auto rounded-full border p-3 shadow-sm focus-visible:ring-2 focus-visible:outline-none"
                   aria-label="미리보기 확대"
                 >
                   <ZoomIn size={24} />
                 </button>
               </div>
             )}
-
-            {deletedPageCount > 0 && (
-              <span className="bg-destructive text-destructive-foreground pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded px-2 py-0.5 text-xs font-medium whitespace-nowrap">
-                {deletedPageCount}쪽 삭제됨
-              </span>
-            )}
           </div>
+
+          {deletedPageCount > 0 && (
+            <span className="border-border bg-muted text-muted-foreground pointer-events-none absolute bottom-2 left-2 rounded-full border px-2 text-xs/5 font-medium whitespace-nowrap">
+              {deletedPageCount}쪽 삭제됨
+            </span>
+          )}
         </div>
       </div>
 
-      {/* 푸터 (파일명 + 페이지 범위) */}
+      {/* 푸터 (파일명 + 쪽수) */}
       <div className="mt-3 flex flex-col gap-0.5 text-center">
         <p
-          className="text-foreground truncate text-sm font-medium"
+          className="text-foreground truncate text-sm/5.25 font-medium"
           title={document.name}
         >
           {document.name}
         </p>
-        <p className="text-muted-foreground text-xs">{pageRangeText}</p>
+        <p className="text-muted-foreground text-xs/4.25">{captionText}</p>
       </div>
     </div>
   );

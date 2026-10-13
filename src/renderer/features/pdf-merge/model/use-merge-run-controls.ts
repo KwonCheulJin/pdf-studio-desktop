@@ -27,7 +27,7 @@ export function useMergeRunControls(): UseMergeRunControlsResult {
       await getPlatform().cancelJob(jobId);
     } catch (error) {
       notifyFailure({
-        title: "병합을 취소하지 못했습니다.",
+        title: "병합을 취소하지 못했어요.",
         error: toPlatformError(error),
         context: `병합 취소 실패 ${jobId}`
       });

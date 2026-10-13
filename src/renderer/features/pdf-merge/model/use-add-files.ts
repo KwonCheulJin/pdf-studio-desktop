@@ -14,7 +14,7 @@ import { openDocuments, type OpenDocumentsResult } from "../lib/open-documents";
 
 type OpenPaths = (paths: string[]) => Promise<PdfDocument[]>;
 
-const ADD_FILES_FAILED_TITLE = "파일을 추가하지 못했습니다.";
+const ADD_FILES_FAILED_TITLE = "파일을 추가하지 못했어요.";
 
 /**
  * 경로를 열어 문서로 만든다. 열지 못한 파일은 작업 공간에 넣지 않고(B16)
@@ -38,7 +38,7 @@ function useOpenPaths(): OpenPaths {
       const fileName = await getPlatform().fileStem(filePath);
       const platformError = new PlatformError(error);
       notifyFailure({
-        title: `"${fileName}" 파일을 열 수 없습니다.`,
+        title: `"${fileName}" 파일을 열지 못해 건너뛰었어요.`,
         error: platformError,
         context: `파일 로드 실패: ${filePath}`
       });

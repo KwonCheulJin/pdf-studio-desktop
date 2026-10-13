@@ -12,9 +12,9 @@ export function UploadingCard({ fileName }: UploadingCardProps) {
   return (
     <div className="flex h-full w-full flex-col">
       {/* 카드 본체 - flex-1로 남은 공간 채우기 */}
-      <div className="border-primary bg-card flex-1 cursor-default rounded-xl border border-dashed p-3 transition-all">
+      <div className="border-primary bg-paper flex-1 cursor-default rounded-xs border-2 border-dashed p-3 transition-all">
         {/* 썸네일 영역 - 로딩 스피너 */}
-        <div className="bg-muted relative flex h-full w-full items-center justify-center overflow-hidden rounded-sm">
+        <div className="relative flex h-full w-full items-center justify-center overflow-hidden">
           <div className="flex flex-col items-center gap-2">
             <div className="relative">
               <FileText size={32} className="text-muted-foreground" />
@@ -28,14 +28,14 @@ export function UploadingCard({ fileName }: UploadingCardProps) {
       </div>
 
       {/* 텍스트 영역 (카드 외부, 분리, 가운데 정렬) */}
-      <div className="mt-3 text-center">
+      <div className="mt-3 flex flex-col gap-0.5 text-center">
         <p
-          className="text-foreground truncate text-sm font-medium"
+          className="text-foreground truncate text-sm/5.25 font-medium"
           title={fileName}
         >
           {fileName}
         </p>
-        <p className="text-muted-foreground text-xs">업로드 중...</p>
+        <p className="text-muted-foreground text-xs/4.25">업로드 중...</p>
       </div>
     </div>
   );

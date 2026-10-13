@@ -167,7 +167,7 @@ test("홈 병합 카드에 TIFF를 놓으면 변환된 PDF로 추가되고 그 P
 
   await expect(page.getByRole("button", { name: "다운로드" })).toBeVisible();
   await expect(
-    page.getByRole("alertdialog", { name: "병합하지 못했습니다" })
+    page.getByRole("alertdialog", { name: "병합하지 못했어요" })
   ).toHaveCount(0);
   const [request] = await readMergeRequests(page);
   expect(request.sources.map((source) => source.path)).toEqual([

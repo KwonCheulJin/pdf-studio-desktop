@@ -150,16 +150,17 @@ test("삭제한 페이지는 제자리에 남아 병합에서 빠지고, 카드�
     ).toBeVisible();
   }
   expect(await readCardOrder(page)).toEqual(originalOrder);
-  await expect(statusBar(page)).toContainText("전체 페이지: 4");
+  // 상태바: 병합될 페이지 수 옆에 복원할 수 있는 삭제 수(시안 6)
+  await expect(statusBar(page)).toContainText("전체 페이지: 4 (삭제 2)");
 
-  // 접으면 쪽 범위는 남은 페이지만, 삭제가 있으면 "n쪽 삭제됨" 배지
+  // 접으면 쪽수와 남은 페이지 범위, 삭제가 있으면 "n쪽 삭제됨" 배지
   await clickCardAction(sortableCard(page, pageName(FILE_A, 1)), "접기");
   await clickCardAction(sortableCard(page, bravoPage1), "접기");
   const alphaDocument = sortableCard(page, `${FILE_A.displayName} 문서`);
   const bravoDocument = sortableCard(page, `${FILE_B.displayName} 문서`);
-  await expect(alphaDocument).toContainText("1, 3");
+  await expect(alphaDocument).toContainText("2페이지 (1, 3)");
   await expect(alphaDocument).toContainText("1쪽 삭제됨");
-  await expect(bravoDocument).toContainText("2-3");
+  await expect(bravoDocument).toContainText("2페이지 (2-3)");
   await expect(bravoDocument).toContainText("1쪽 삭제됨");
 
   // B14: 삭제 상태로 병합하면 삭제 페이지가 요청에서 빠진다.
@@ -195,5 +196,6 @@ test("삭제한 페이지는 제자리에 남아 병합에서 빠지고, 카드�
   // 원래 자리로 돌아오고, 병합 요청이 삭제 전과 같다.
   expect(await readCardOrder(page)).toEqual(originalOrder);
   await expect(statusBar(page)).toContainText("전체 페이지: 6");
+  await expect(statusBar(page)).not.toContainText("삭제");
   expect(await mergeAndReadPages(page)).toEqual(requestBeforeDelete);
 });

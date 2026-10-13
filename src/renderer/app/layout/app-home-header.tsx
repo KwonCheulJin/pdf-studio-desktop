@@ -1,7 +1,13 @@
+import { SettingsButton } from "./settings-button";
+
 const LOGO_SIZE = 20;
 
-/** 홈 상단바(시안 1): 로고와 앱 이름. 오른쪽 설정 버튼 자리는 설정 화면(Phase 6)까지 비워 둔다. */
-export function AppHomeHeader() {
+interface AppHomeHeaderProps {
+  onOpenSettings: () => void;
+}
+
+/** 홈 상단바(시안 1): 로고와 앱 이름, 오른쪽 설정 톱니 */
+export function AppHomeHeader({ onOpenSettings }: AppHomeHeaderProps) {
   return (
     <header className="border-border flex h-12 shrink-0 items-center gap-3 border-b px-4">
       <svg
@@ -28,6 +34,7 @@ export function AppHomeHeader() {
         />
       </svg>
       <span className="text-[15px]/5.5 font-semibold">PDF Studio</span>
+      <SettingsButton onClick={onOpenSettings} />
     </header>
   );
 }

@@ -95,8 +95,8 @@ project-root/
 └─ src/renderer/               # 화면: React 19 + FSD
    ├─ app/                     # 부팅, 프로바이더(플랫폼 주입), 레이아웃, 전역 스타일, 모드 스토어
    │  ├─ index.tsx
-   │  ├─ layout/               # app-shell(모드별 화면), 툴바·모드 탭(mode-tabs), 상태바
-   │  ├─ model/                # 앱 모드 home|merge|compare (라우터 없음)
+   │  ├─ layout/               # app-shell(모드별 화면, 설정 모달 자리), 툴바·모드 탭(mode-tabs), 상태바, 머리 설정 톱니(settings-button)
+   │  ├─ model/                # 앱 모드 home|merge|compare (라우터 없음), 설정 단축키 ⌘,/Ctrl+,(use-settings-shortcut)
    │  ├─ providers/            # 플랫폼·오류 보고 주입, 테마 적용(theme-provider), 오류 경계
    │  └─ styles/               # index.css, tokens.css, theme.css, base.css
    ├─ pages/
@@ -105,24 +105,28 @@ project-root/
    │  └─ merged-preview/       # 병합 결과 미리보기 화면
    ├─ widgets/
    │  ├─ merge-workspace/      # 병합 작업 영역 조합
+   │  ├─ settings-dialog/      # 설정 모달(시안 14): 탭(일반·번역·오류 보고·정보) + 각 feature 조립, 같은 모달 안 공용 용어집 편집
    │  └─ compare-viewer/       # 비교 결과 페이지 영역: A·B 두 패널(같은 쌍 행 배치, 패널마다 virtuoso 가상화, 동기 스크롤), pdf.js 쪽 + SVG 하이라이트, 영역 전체를 덮는 연결선 오버레이(좌표 변환·경로·컬링 lib/connector-geometry, rAF 갱신), 미니맵, 배율
    ├─ features/                # 사용자 행동
    │  ├─ pdf-merge/            # 파일 추가·선택·회전·병합·다운로드
    │  ├─ pdf-compare/          # 비교 세션(A·B 문서·옵션·결과·고른 변경·필터·보기 방식·연결선 표시)·실행(진행률·취소), 파일 받기, 그릴 연결선·호버, ui/file-slots·options-card·progress-card·결과 머리·종류 칩·연결선 체크박스·이전/다음·차이 목록·안내 띠
    │  ├─ compare-export/       # 결과 내보내기 모달(시안 5): 받을 파일·비교 PDF 옵션, 저장 폴더(이 실행 동안 기억)·만들 이름, 미리보기(오래된 응답 버림), 내보내기 실행·취소·토스트
    │  ├─ pdf-preview/          # 미리보기 모달
-   │  ├─ theme-toggle/         # 테마 system|light|dark 선택·저장
-   │  ├─ error-reporting/      # 오류 보고 켜기·끄기, 첫 실행 안내
+   │  ├─ theme-toggle/         # 테마 system|light|dark 선택·저장(도구 막대 버튼, 설정 › 일반 세그먼트)
+   │  ├─ error-reporting/      # 오류 보고 켜기·끄기, 첫 실행 안내, 설정 › 오류 보고 탭 내용
+   │  ├─ api-key/              # Claude API 키 상태(힌트만)·키 모달(시안 11: 형식 검사·확인·저장)·설정 행(바꾸기·행 안 삭제 확인)
+   │  ├─ translate-settings/   # 번역 설정 저장소(기본 모델·외부 전송 확인·공용 용어집)와 설정 행, 저장된 번역 지우기
    │  ├─ app-update/           # 시작 후 업데이트 확인, 토스트(업데이트 → 받기 % → 진행 중인 작업이 없을 때 설치·재시작)
    │  └─ third-party-notices/  # 앱 정보: 상태 바에서 제3자 고지 대화상자 열기
    ├─ entities/                # 읽기·표시
    │  ├─ merge-plan/           # 병합 대상 문서·페이지 상태(merge-store), 진행 오버레이
+   │  ├─ glossary/             # 용어 행·정규화(ADR 0002 §10)·적용하지 않는 행 찾기, 용어 표 UI(옵션 화면과 설정이 함께 쓴다)
    │  └─ comparison/           # 비교 결과 타입(바인딩 재수출)·선택자(필터·개수·쪽별 묶기·이동·안내 문구), 연결선 끝·모양(connector-ends, Rust connectors.rs의 거울), 하이라이트 상자·견본·배지
    └─ shared/                  # 도메인을 모른다
       ├─ api/bindings.ts       # tauri-specta 생성물 (손으로 고치지 않는다)
       ├─ platform/             # DesktopPlatform 인터페이스, tauri·mock 구현, 진행 중인 작업 세기(running-work)
       ├─ lib/                  # 순수 함수, pdf.js 썸네일, 오류 보고(error-report: 경로 마스킹·전송)
-      ├─ ui/                   # 공용 UI (토큰 클래스만)
+      ├─ ui/                   # 공용 UI (토큰 클래스만): 버튼·대화상자·세그먼트(라디오 묶음)·설정 묶음과 행
       ├─ constants/
       └─ types/
 ```

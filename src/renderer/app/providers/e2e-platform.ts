@@ -281,6 +281,15 @@ declare global {
     __E2E_MOCK_TRANSLATES__?: TranslateRequest[];
     /** 앱이 클립보드에 복사한 글(`copyText`)을 차례로 기록하는 곳 */
     __E2E_MOCK_CLIPBOARD__?: string[];
+    /** 앱이 `verifyApiKey`를 부른 수(키 원문은 남기지 않는다) */
+    __E2E_MOCK_KEY_CHECKS__?: number;
+    /**
+     * 테스트가 넣으면 형식 검사를 통과한 키 확인(`verifyApiKey`)을 이 Promise가 풀릴 때까지 붙잡는다
+     * (확인 중 화면·늦은 응답 확인용).
+     */
+    __E2E_HOLD_VERIFY_API_KEY__?: Promise<void>;
+    /** `__E2E_HOLD_VERIFY_API_KEY__`를 푸는 함수. 테스트가 함께 넣는다. */
+    __E2E_RELEASE_VERIFY_API_KEY__?: () => void;
   }
 }
 
@@ -478,9 +487,12 @@ function injectFailures({
       });
       return platform.exportAnnotatedPdf(request);
     },
-    // Rust처럼 형식 검사를 먼저 하고(네트워크 전), 통과하면 시드 확인 결과를 쓴다.
+    // Rust처럼 형식 검사를 먼저 하고(네트워크 전), 통과하면 붙잡기를 기다린 뒤(네트워크 흉내) 시드 확인 결과를 쓴다.
     verifyApiKey: async (key) => {
+      window.__E2E_MOCK_KEY_CHECKS__ =
+        (window.__E2E_MOCK_KEY_CHECKS__ ?? 0) + 1;
       await platform.verifyApiKey(key);
+      await window.__E2E_HOLD_VERIFY_API_KEY__;
       const code = apiKeyChecks.shift();
       if (code !== undefined && code !== null) {
         throw seededError({ code, detail: VERIFY_API_KEY_DETAIL });
@@ -739,6 +751,7 @@ export function createE2ePlatform(): DesktopPlatform {
   window.__E2E_MOCK_SAVE_DIALOGS__ = saveDialogs;
   window.__E2E_MOCK_TRANSLATES__ = translates;
   window.__E2E_MOCK_CLIPBOARD__ = clipboard;
+  window.__E2E_MOCK_KEY_CHECKS__ = 0;
   window.__E2E_PDF_CACHE_STATS__ = getPdfCacheStats;
   const mockPlatform = createMockPlatform({
     files: seed.files.map(toMockFile),

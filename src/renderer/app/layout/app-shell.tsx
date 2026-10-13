@@ -1,10 +1,11 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { ComparePage } from "@/renderer/pages/compare";
 import { HomePage } from "@/renderer/pages/home";
 import { MergedPreviewPage } from "@/renderer/pages/merged-preview";
 import { TranslatePage } from "@/renderer/pages/translate";
 import { MergeWorkspace } from "@/renderer/widgets/merge-workspace";
+import { SettingsDialog } from "@/renderer/widgets/settings-dialog";
 import { useCompareFilePaths } from "@/renderer/features/pdf-compare";
 import { MergeProgressOverlay } from "@/renderer/features/pdf-merge";
 import { useTranslateFilePaths } from "@/renderer/features/pdf-translate";
@@ -15,7 +16,13 @@ import {
   type MergeView
 } from "@/renderer/entities/merge-plan";
 import { usePdfDocumentRetention } from "@/renderer/shared/lib/pdfjs";
-import { APP_MODE, useAppMode, useAppModeStore, type AppMode } from "../model";
+import {
+  APP_MODE,
+  useAppMode,
+  useAppModeStore,
+  useSettingsShortcut,
+  type AppMode
+} from "../model";
 import { AppCompareStatusBar } from "./app-compare-status-bar";
 import { AppHomeHeader } from "./app-home-header";
 import { AppHomeStatusBar } from "./app-home-status-bar";
@@ -31,14 +38,18 @@ interface ModeScreenProps {
   mergeView: MergeView;
 }
 
-function ModeHeader({ mode, mergeView }: ModeScreenProps) {
+interface ModeHeaderProps extends ModeScreenProps {
+  onOpenSettings: () => void;
+}
+
+function ModeHeader({ mode, mergeView, onOpenSettings }: ModeHeaderProps) {
   switch (mode) {
     case APP_MODE.HOME:
-      return <AppHomeHeader />;
+      return <AppHomeHeader onOpenSettings={onOpenSettings} />;
     case APP_MODE.COMPARE:
       return <AppToolbarCompare />;
     case APP_MODE.TRANSLATE:
-      return <AppToolbarTranslate />;
+      return <AppToolbarTranslate onOpenSettings={onOpenSettings} />;
     default:
       return mergeView === MERGE_VIEW.PREVIEW ? (
         <AppToolbarPreview />
@@ -94,6 +105,10 @@ export function AppShell() {
     () => setMode(APP_MODE.HOME),
     [setMode]
   );
+  // 설정 모달은 홈·번역 머리 톱니와 모든 화면의 ⌘,/Ctrl+,로 연다(Q16).
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const handleOpenSettings = useCallback(() => setIsSettingsOpen(true), []);
+  useSettingsShortcut(handleOpenSettings);
 
   const renderContent = () => {
     switch (mode) {
@@ -120,10 +135,18 @@ export function AppShell() {
 
   return (
     <div className="bg-background text-foreground flex h-screen flex-col">
-      <ModeHeader mode={mode} mergeView={view} />
+      <ModeHeader
+        mode={mode}
+        mergeView={view}
+        onOpenSettings={handleOpenSettings}
+      />
       <main className="flex flex-1 overflow-hidden">{renderContent()}</main>
       <ModeStatusBar mode={mode} />
       <MergeProgressOverlay />
+      <SettingsDialog
+        isOpen={isSettingsOpen}
+        onOpenChange={setIsSettingsOpen}
+      />
     </div>
   );
 }

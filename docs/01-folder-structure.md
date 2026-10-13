@@ -6,8 +6,8 @@
 
 ## 설계 기준
 
-- **처리(도메인):** Rust `crates/pdf-core`. Tauri·웹뷰를 모르고 `cargo test`만으로
-  검증한다.
+- **처리(도메인):** Rust `crates/pdf-core`(PDF 처리)와 `crates/translate`(번역 규칙,
+  pdf-core를 모른다). Tauri·웹뷰를 모르고 `cargo test`만으로 검증한다.
 - **어댑터:** `src-tauri`(Tauri 커맨드·경로 검증·작업 큐)와 렌더러의
   `shared/platform`(`DesktopPlatform` 구현).
 - **화면:** `src/renderer`, FSD(`app → pages → widgets → features → entities →
@@ -20,7 +20,7 @@
 ```
 project-root/
 ├─ package.json                # 버전 단일 소스 (tauri.conf.json 이 가리킨다)
-├─ Cargo.toml                  # [workspace] members = src-tauri, crates/pdf-core
+├─ Cargo.toml                  # [workspace] members = src-tauri, crates/pdf-core, crates/translate
 ├─ vite.config.ts              # 렌더러 빌드 (dev 서버 1420, dist/ 출력)
 ├─ vitest.config.mts
 ├─ index.html
@@ -49,6 +49,16 @@ project-root/
 │  │  └─ output.rs             # 원자적 쓰기(임시 파일 + rename)
 │  └─ tests/                   # 통합 테스트, fixtures/(생성 스크립트 포함), golden/(비교 엔진 기대 JSON), pdfium_concurrency.rs(동시 호출 재현)
 │
+├─ crates/translate/           # 번역 도메인(ADR 0002): Tauri·pdfium·키체인·pdf-core 의존 없음
+│  ├─ src/
+│  │  ├─ source.rs             # 입력(SourcePage: 글자층 문단 | 스캔 쪽 그림 크기). src-tauri가 pdf-core 문단에서 옮긴다
+│  │  ├─ chunk.rs              # 묶음(문단 자르지 않음·긴 문단 조각·스캔 쪽 한 묶음)과 예상 토큰·max_tokens·예상 요금
+│  │  ├─ models.rs             # 모델 표(API ID·출력 상한·요금·기준일)
+│  │  ├─ language.rs           # 원문 언어 감지(한자·라틴 비율, 간체·번체 글자 짝)
+│  │  ├─ glossary.rs           # 용어집 정규화(공백·NFC·같은 원어)와 원문에 나오는 용어 찾기
+│  │  └─ script.rs, per_mille.rs # 글자 갈래(한자·라틴) 판정, 천분율 비율 상수
+│  └─ tests/                   # 묶음·예상치·언어 감지·용어집(cargo test -p translate, pdfium 없이)
+│
 ├─ src-tauri/                  # 어댑터: Tauri 셸
 │  ├─ src/
 │  │  ├─ lib.rs, main.rs       # 앱 부팅, 플러그인·커맨드 등록
@@ -62,7 +72,7 @@ project-root/
 │  │  ├─ pdf_engine.rs         # 번들 pdfium 바인딩, 엔진을 앱 상태로
 │  │  ├─ notices.rs            # 번들한 제3자 고지 읽기(리소스 폴더 고정 파일)
 │  │  └─ error.rs              # 커맨드 에러 → { code, message, path }
-│  ├─ capabilities/            # main 창 권한
+│  ├─ capabilities/            # main 창 권한(default.json, 데스크톱 전용 updater·process는 desktop.json)
 │  ├─ icons/
 │  ├─ Entitlements.plist
 │  ├─ windows-app-manifest.xml # Windows 앱·테스트 exe 매니페스트 (build.rs가 링커로 넣는다)
@@ -89,13 +99,14 @@ project-root/
    │  ├─ pdf-preview/          # 미리보기 모달
    │  ├─ theme-toggle/         # 테마 system|light|dark 선택·저장
    │  ├─ error-reporting/      # 오류 보고 켜기·끄기, 첫 실행 안내
+   │  ├─ app-update/           # 시작 후 업데이트 확인, 토스트(업데이트 → 받기 % → 진행 중인 작업이 없을 때 설치·재시작)
    │  └─ third-party-notices/  # 앱 정보: 상태 바에서 제3자 고지 대화상자 열기
    ├─ entities/                # 읽기·표시
    │  ├─ merge-plan/           # 병합 대상 문서·페이지 상태(merge-store), 진행 오버레이
    │  └─ comparison/           # 비교 결과 타입(바인딩 재수출)·선택자(필터·개수·쪽별 묶기·이동·안내 문구), 연결선 끝·모양(connector-ends, Rust connectors.rs의 거울), 하이라이트 상자·견본·배지
    └─ shared/                  # 도메인을 모른다
       ├─ api/bindings.ts       # tauri-specta 생성물 (손으로 고치지 않는다)
-      ├─ platform/             # DesktopPlatform 인터페이스, tauri·mock 구현
+      ├─ platform/             # DesktopPlatform 인터페이스, tauri·mock 구현, 진행 중인 작업 세기(running-work)
       ├─ lib/                  # 순수 함수, pdf.js 썸네일, 오류 보고(error-report: 경로 마스킹·전송)
       ├─ ui/                   # 공용 UI (토큰 클래스만)
       ├─ constants/
@@ -116,6 +127,7 @@ project-root/
 | 위치                | 역할                         | 예시                              |
 | ------------------- | ---------------------------- | --------------------------------- |
 | `crates/pdf-core`   | 처리 규칙 (도메인)           | 병합, 회전 정규화, TIFF 변환      |
+| `crates/translate`  | 번역 규칙 (도메인)           | 묶음·예상치, 언어 감지, 용어집    |
 | `src-tauri`         | 커맨드·경로 검증·작업 큐     | `merge_pdfs`, `open_files`        |
 | `renderer/shared`   | 공통 유틸·UI·플랫폼 어댑터   | `DesktopPlatform`, 바인딩         |
 | `renderer/entities` | 읽기·표시                    | 병합 계획 스토어, 진행 오버레이   |

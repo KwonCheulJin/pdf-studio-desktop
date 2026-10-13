@@ -1,6 +1,7 @@
 name: Release
 
 # v* 태그 푸시: macOS(aarch64 .dmg·.app)와 Windows(NSIS)를 빌드해 그 태그의 Draft Release에 올린다(계획서 P4-2).
+# 자동 업데이트(P4-4): 업데이트 파일(.app.tar.gz·setup.exe)과 서명(.sig), latest.json도 함께 올린다.
 # workflow_dispatch(입력 없음): 같은 빌드를 돌리되 릴리스는 만들지 않고 워크플로 아티팩트로만 올린다(검증용).
 on:
   push:
@@ -30,10 +31,10 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            tauri-args: --bundles app,dmg
+            tauri-args: --bundles app,dmg --config target/release-bundle.conf.json
           # pdfium.dll·onnxruntime.dll은 아래 단계가 만드는 config로 설치 폴더(resource_dir)에 넣는다(ci.yml과 같다).
           - os: windows-latest
-            tauri-args: --bundles nsis --config target/windows-bundle.conf.json
+            tauri-args: --bundles nsis --config target/release-bundle.conf.json
     steps:
       - uses: actions/checkout@v4
 
@@ -91,19 +92,30 @@ jobs:
 
       - run: pnpm fetch:ocr
 
-      # JSON을 인자로 넘기면 Windows 셸 인용에 깨지므로 파일로 넘긴다.
-      - name: Windows 번들 리소스 config
+      # 업데이트 파일·서명은 릴리스 빌드에서만 만든다. tauri.conf.json에 두면 서명 키가 없는
+      # 로컬·CI 빌드가 실패한다. JSON을 인자로 넘기면 Windows 셸 인용에 깨지므로 파일로 넘긴다.
+      - name: 릴리스 번들 config (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p target
+          echo '{"bundle":{"createUpdaterArtifacts":true}}' > target/release-bundle.conf.json
+
+      - name: 릴리스 번들 config (Windows)
         if: runner.os == 'Windows'
         run: |
           mkdir -p target
-          echo '{"bundle":{"resources":{"pdfium/x86_64-pc-windows-msvc/pdfium.dll":"pdfium.dll","onnxruntime/x86_64-pc-windows-msvc/onnxruntime.dll":"onnxruntime.dll"}}}' > target/windows-bundle.conf.json
+          echo '{"bundle":{"createUpdaterArtifacts":true,"resources":{"pdfium/x86_64-pc-windows-msvc/pdfium.dll":"pdfium.dll","onnxruntime/x86_64-pc-windows-msvc/onnxruntime.dll":"onnxruntime.dll"}}}' > target/release-bundle.conf.json
 
       # macOS는 tauri.conf.json의 signingIdentity "-"로 ad-hoc 서명한다(Frameworks의 dylib → 실행 파일 → 앱 순).
       # 태그가 없으면(workflow_dispatch) 릴리스를 건너뛰고 uploadWorkflowArtifacts로만 올린다.
+      # 업데이트 파일은 리포 시크릿의 서명 키로 서명한다(공개 키는 tauri.conf.json plugins.updater.pubkey).
       - name: 빌드·업로드 (tauri-action)
         uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD:
+            ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.event_name == 'push' && github.ref_name || '' }}
           releaseName: PDF Studio v__VERSION__
@@ -111,8 +123,8 @@ jobs:
             macOS(Apple Silicon)는 ad-hoc 서명이라 처음 열 때 Gatekeeper 경고가 뜬다. Finder에서 우클릭 → 열기, 또는 `xattr -dr com.apple.quarantine "/Applications/PDF Studio.app"`.
             Windows 설치 파일은 서명하지 않아 SmartScreen 경고가 뜬다(추가 정보 → 실행).
           releaseDraft: true
-          # 자동 업데이트(P4-4)는 아직 없다.
-          uploadUpdaterJson: false
+          # 앱은 releases/latest/download/latest.json을 본다. Draft를 공개해야 latest가 된다.
+          uploadUpdaterJson: true
           uploadWorkflowArtifacts:
             ${{ github.event_name == 'workflow_dispatch' }}
           args: ${{ matrix.tauri-args }}

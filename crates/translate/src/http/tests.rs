@@ -15,6 +15,10 @@ use crate::models::TranslateModel;
 
 const KEY: &str = "sk-ant-api03-local-mock-key";
 const TEST_TIMEOUT: Duration = Duration::from_millis(300);
+/// 거절 연결 테스트의 요청 시간 제한. 앱과 같게 연결 시간 제한(`API_CONNECT_TIMEOUT` 10초)보다 길게 둔다. Windows는
+/// 닫힌 포트에서 RST 대신 SYN을 약 2초 재시도한 뒤 연결 실패를 내는데, 요청 시간 제한이 그보다 짧으면 연결 오류보다
+/// 먼저 요청 시간 초과(`is_connect()`가 아닌 타임아웃)가 발동해 `Timeout`이 된다.
+const REFUSED_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const HEADER_END: &[u8] = b"\r\n\r\n";
 
 /// 서버가 받은 요청
@@ -151,8 +155,10 @@ async fn refused_connection_is_connection_error() {
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let base_url = format!("http://{}", listener.local_addr().expect("addr"));
     drop(listener);
+    let transport =
+        ReqwestTransport::for_local_server(&base_url, REFUSED_REQUEST_TIMEOUT).expect("client");
 
-    let result = transport(&base_url).post_messages(&key(), b"{}").await;
+    let result = transport.post_messages(&key(), b"{}").await;
 
     assert_eq!(result, Err(TransportError::Connection));
 }

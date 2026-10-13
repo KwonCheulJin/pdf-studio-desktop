@@ -75,6 +75,11 @@ jobs:
 
       - run: pnpm fetch:pdfium
 
+      # 고지의 pdfium 원문을 aarch64-apple-darwin 폴더에서 읽으므로 arm64 macOS 잡에서만 돈다(계획서 P4-5).
+      - name: 라이선스 검사
+        if: runner.os == 'macOS'
+        run: pnpm licenses:check
+
       # Windows에서도 구분자가 맞는 절대 경로가 되도록 node로 푼다.
       - name: PDFIUM_LIB_PATH 설정
         run: |

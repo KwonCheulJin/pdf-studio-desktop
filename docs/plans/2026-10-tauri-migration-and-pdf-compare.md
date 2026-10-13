@@ -835,7 +835,7 @@ A의 변경 상자와 B의 대응 상자를 거터를 가로지르는 곡선으�
 - 루트에 `LICENSE`(MIT) 파일을 둔다.
 - `THIRD_PARTY_NOTICES.md`를 만들어 앱과 함께 번들한다: pdfium(BSD-3/Apache-2.0), pdf.js(Apache-2.0), IBM Plex(OFL), ONNX Runtime(MIT), PaddleOCR 모델(Apache-2.0), Rust·npm 의존성. CI에서 §1.2 허용 목록 밖 라이선스가 들어오면 실패시킨다.
 - 생성 도구는 새로 설치하지 않고 기본 명령으로 한다(2026-10-13 변경, 원래 `cargo-about`·`license-checker`류): `pnpm licenses:generate`(`scripts/generate-notices.mjs`)가 Rust는 `cargo metadata`(워크스페이스 멤버의 normal 의존성만, dev·build 의존성 제외, 모든 타깃), npm은 `pnpm licenses list --json --prod`로 모으고 패키지 폴더의 LICENSE·NOTICE 원문을 싣는다. 번들 바이너리·자산(pdfium, ONNX Runtime, OCR 모델, 글꼴, pdf.js 자산)은 `scripts/third-party/bundled.mjs`의 고정 목록이다. pdfium 원문은 `src-tauri/pdfium/aarch64-apple-darwin/`에서 읽으므로 그 타깃을 받아 둔다.
-- `pnpm licenses:check`(`scripts/check-licenses.mjs`)는 허용 목록·예외(§1.2) 밖 라이선스가 있거나 커밋한 고지가 지금 의존성으로 만든 것과 다르면 0이 아닌 코드로 끝난다. CI 연결은 Step 30(P4-1) PR이 병합된 뒤 한다: `node scripts/fetch-pdfium.mjs --target aarch64-apple-darwin && pnpm licenses:check`.
+- `pnpm licenses:check`(`scripts/check-licenses.mjs`)는 허용 목록·예외(§1.2) 밖 라이선스가 있거나 커밋한 고지가 지금 의존성으로 만든 것과 다르면 0이 아닌 코드로 끝난다. CI는 arm64 macOS 잡에서 `pnpm fetch:pdfium`(aarch64-apple-darwin을 받는다) 뒤 `pnpm licenses:check`를 돈다(Step 30 PR에서 연결).
 - 앱 정보: 상태 바 버전 옆 "오픈소스 라이선스"가 번들한 고지(`bundle.resources`)를 Rust 커맨드 `read_third_party_notices`로 읽어 대화상자로 보여 준다. 저장소 `LICENSE`도 함께 번들한다.
 
 ---

@@ -1,7 +1,10 @@
 import { create } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import type { GlossaryRow } from "@/renderer/entities/glossary";
-import { SOURCE_LANGUAGE } from "@/renderer/entities/translation";
+import {
+  firstRangePageOf,
+  SOURCE_LANGUAGE
+} from "@/renderer/entities/translation";
 import type {
   SourceLanguage,
   TranslateModel,
@@ -13,6 +16,11 @@ import type {
 } from "@/renderer/shared/api/bindings";
 import type { PlatformErrorCode } from "@/renderer/shared/platform";
 import type { ValueOf } from "@/renderer/shared/types/common";
+import {
+  RESULT_VIEW_MODE,
+  RESULT_ZOOM,
+  type ResultViewMode
+} from "../config/translate-result";
 
 /** 번역할 문서(`openFiles`로 연 PDF) */
 export interface TranslateFile {
@@ -86,6 +94,17 @@ export const TRANSLATE_VIEW = {
 
 export type TranslateView = ValueOf<typeof TRANSLATE_VIEW>;
 
+/** 결과 화면(시안 13)에서 고른 보기. 모드를 오가도 남고, 새 결과를 받으면 쪽·고른 문단만 처음으로 돌린다. */
+export interface TranslateResultView {
+  viewMode: ResultViewMode;
+  /** 보고 있는 쪽(0부터, 결과 `pages` 색인) */
+  page: number;
+  /** 글자 크기 배율(%) */
+  zoomPercent: number;
+  /** 고른 문단 키. 쪽을 옮기면 비운다. */
+  activeParagraphKey: string | null;
+}
+
 interface StartRunParams {
   request: TranslateRequest;
   info: TranslateRunInfo;
@@ -95,6 +114,28 @@ interface StartRunParams {
 interface UpdateProgressParams {
   jobId: string;
   progress: TranslateProgress;
+}
+
+/** 결과 첫 쪽(쪽 번호는 0부터) */
+const FIRST_PAGE = 0;
+
+const INITIAL_RESULT_VIEW: TranslateResultView = {
+  viewMode: RESULT_VIEW_MODE.SIDE_BY_SIDE,
+  page: FIRST_PAGE,
+  zoomPercent: RESULT_ZOOM.DEFAULT_PERCENT,
+  activeParagraphKey: null
+};
+
+const LAST_INDEX_OFFSET = 1;
+
+interface ClampParams {
+  value: number;
+  min: number;
+  max: number;
+}
+
+function clamp({ value, min, max }: ClampParams): number {
+  return Math.min(max, Math.max(min, value));
 }
 
 const INITIAL_OPTIONS: TranslateSessionOptions = {
@@ -118,6 +159,7 @@ interface TranslateSessionState {
   failure: TranslateFailure | null;
   result: TranslationResult | null;
   view: TranslateView;
+  resultView: TranslateResultView;
 }
 
 interface TranslateSessionActions {
@@ -146,6 +188,14 @@ interface TranslateSessionActions {
   closeFailure: () => void;
   /** 결과 화면에서 옵션 화면으로(결과는 남는다) */
   showOptions: () => void;
+  /** 결과 화면 "새 번역": 문서·옵션·결과를 비운 옵션 화면(기록은 Rust 쪽에 남는다) */
+  startNewTranslation: () => void;
+  setResultViewMode: (viewMode: ResultViewMode) => void;
+  /** 결과의 쪽으로 옮긴다(범위 밖 값은 끝 쪽으로 자른다). 고른 문단은 비운다. */
+  setResultPage: (page: number) => void;
+  /** 글자 크기 배율(50~200%로 자른다) */
+  setResultZoomPercent: (zoomPercent: number) => void;
+  selectParagraph: (key: string | null) => void;
 }
 
 interface OptionChange<K extends keyof TranslateSessionOptions> {
@@ -172,6 +222,7 @@ export const useTranslateSessionStore = create<
     failure: null,
     result: null,
     view: TRANSLATE_VIEW.OPTIONS,
+    resultView: INITIAL_RESULT_VIEW,
     setFile: (file) =>
       set({
         file,
@@ -229,7 +280,12 @@ export const useTranslateSessionStore = create<
         run: null,
         result,
         view: TRANSLATE_VIEW.RESULT,
-        planRevision: state.planRevision + 1
+        planRevision: state.planRevision + 1,
+        resultView: {
+          ...state.resultView,
+          page: firstRangePageOf(result),
+          activeParagraphKey: null
+        }
       })),
     failRun: (code) =>
       set((state) => ({
@@ -249,7 +305,51 @@ export const useTranslateSessionStore = create<
         planRevision: state.planRevision + 1
       })),
     closeFailure: () => set({ failure: null, view: TRANSLATE_VIEW.OPTIONS }),
-    showOptions: () => set({ view: TRANSLATE_VIEW.OPTIONS })
+    showOptions: () => set({ view: TRANSLATE_VIEW.OPTIONS }),
+    startNewTranslation: () =>
+      set({
+        file: null,
+        options: INITIAL_OPTIONS,
+        isTransferConsentChecked: false,
+        plan: null,
+        failure: null,
+        result: null,
+        view: TRANSLATE_VIEW.OPTIONS
+      }),
+    setResultViewMode: (viewMode) =>
+      set((state) => ({ resultView: { ...state.resultView, viewMode } })),
+    setResultPage: (page) =>
+      set((state) => {
+        if (state.result === null) return state;
+        const nextPage = clamp({
+          value: page,
+          min: FIRST_PAGE,
+          max: state.result.pages.length - LAST_INDEX_OFFSET
+        });
+        if (nextPage === state.resultView.page) return state;
+        return {
+          resultView: {
+            ...state.resultView,
+            page: nextPage,
+            activeParagraphKey: null
+          }
+        };
+      }),
+    setResultZoomPercent: (zoomPercent) =>
+      set((state) => ({
+        resultView: {
+          ...state.resultView,
+          zoomPercent: clamp({
+            value: zoomPercent,
+            min: RESULT_ZOOM.MIN_PERCENT,
+            max: RESULT_ZOOM.MAX_PERCENT
+          })
+        }
+      })),
+    selectParagraph: (activeParagraphKey) =>
+      set((state) => ({
+        resultView: { ...state.resultView, activeParagraphKey }
+      }))
   };
 });
 
@@ -261,6 +361,24 @@ export const useTranslateSessionOptions = () =>
 
 export const useTranslateRun = () =>
   useTranslateSessionStore((state) => state.run);
+
+/** 끝난 번역 결과(결과 화면). 없으면 `null` */
+export const useTranslateResult = () =>
+  useTranslateSessionStore((state) => state.result);
+
+export const useTranslateResultView = () =>
+  useTranslateSessionStore((state) => state.resultView);
+
+/** 결과 화면 보기 바꾸기(보기 방식·쪽·배율·고른 문단) */
+export const useTranslateResultViewActions = () =>
+  useTranslateSessionStore(
+    useShallow((state) => ({
+      setViewMode: state.setResultViewMode,
+      setPage: state.setResultPage,
+      setZoomPercent: state.setResultZoomPercent,
+      selectParagraph: state.selectParagraph
+    }))
+  );
 
 /** 세션에 든 문서 경로(없으면 빈 목록). 모드를 오가도 문서를 다시 읽지 않게 잡아 두는 데 쓴다. */
 export const useTranslateFilePaths = () =>

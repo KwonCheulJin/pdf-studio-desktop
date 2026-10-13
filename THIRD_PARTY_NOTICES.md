@@ -8,7 +8,7 @@ PDF Studio는 MIT 라이선스로 배포한다(`LICENSE`). 앱에는 아래 제3
 
 - 번들 바이너리·자산: 11개
 - Rust 크레이트: 518개
-- npm 패키지: 161개
+- npm 패키지: 164개
 
 ## 1. 번들 바이너리·자산
 
@@ -686,13 +686,16 @@ PDF Studio는 MIT 라이선스로 배포한다(`LICENSE`). 앱에는 아래 제3
 | @radix-ui/react-dialog | 1.1.15 | MIT | https://radix-ui.com/primitives | 286 |
 | @radix-ui/react-direction | 1.1.1 | MIT | https://radix-ui.com/primitives | — |
 | @radix-ui/react-dismissable-layer | 1.1.11 | MIT | https://radix-ui.com/primitives | 286 |
+| @radix-ui/react-dropdown-menu | 2.1.16 | MIT | https://radix-ui.com/primitives | 286 |
 | @radix-ui/react-focus-guards | 1.1.3 | MIT | https://radix-ui.com/primitives | 286 |
 | @radix-ui/react-focus-scope | 1.1.7 | MIT | https://radix-ui.com/primitives | 286 |
 | @radix-ui/react-id | 1.1.1 | MIT | https://radix-ui.com/primitives | — |
+| @radix-ui/react-menu | 2.1.16 | MIT | https://radix-ui.com/primitives | 286 |
 | @radix-ui/react-popper | 1.2.8 | MIT | https://radix-ui.com/primitives | 286 |
 | @radix-ui/react-portal | 1.1.9 | MIT | https://radix-ui.com/primitives | 286 |
 | @radix-ui/react-presence | 1.1.5 | MIT | https://radix-ui.com/primitives | 286 |
 | @radix-ui/react-primitive | 2.1.3 | MIT | https://radix-ui.com/primitives | 286 |
+| @radix-ui/react-roving-focus | 1.1.11 | MIT | https://radix-ui.com/primitives | 286 |
 | @radix-ui/react-slider | 1.3.6 | MIT | https://radix-ui.com/primitives | 286 |
 | @radix-ui/react-slot | 1.2.3 | MIT | https://radix-ui.com/primitives | 286 |
 | @radix-ui/react-tooltip | 1.2.8 | MIT | https://radix-ui.com/primitives | 286 |
@@ -19559,7 +19562,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ### 원문 286
 
-적용: @radix-ui/primitive 1.1.3 (LICENSE), @radix-ui/react-arrow 1.1.7 (LICENSE), @radix-ui/react-checkbox 1.3.3 (LICENSE), @radix-ui/react-collection 1.1.7 (LICENSE), @radix-ui/react-dialog 1.1.15 (LICENSE), @radix-ui/react-dismissable-layer 1.1.11 (LICENSE), @radix-ui/react-focus-guards 1.1.3 (LICENSE), @radix-ui/react-focus-scope 1.1.7 (LICENSE), @radix-ui/react-popper 1.2.8 (LICENSE), @radix-ui/react-portal 1.1.9 (LICENSE), @radix-ui/react-presence 1.1.5 (LICENSE), @radix-ui/react-primitive 2.1.3 (LICENSE), @radix-ui/react-slider 1.3.6 (LICENSE), @radix-ui/react-slot 1.2.3 (LICENSE), @radix-ui/react-tooltip 1.2.8 (LICENSE), @radix-ui/react-use-controllable-state 1.2.2 (LICENSE), @radix-ui/react-use-effect-event 0.0.2 (LICENSE), @radix-ui/react-visually-hidden 1.2.3 (LICENSE)
+적용: @radix-ui/primitive 1.1.3 (LICENSE), @radix-ui/react-arrow 1.1.7 (LICENSE), @radix-ui/react-checkbox 1.3.3 (LICENSE), @radix-ui/react-collection 1.1.7 (LICENSE), @radix-ui/react-dialog 1.1.15 (LICENSE), @radix-ui/react-dismissable-layer 1.1.11 (LICENSE), @radix-ui/react-dropdown-menu 2.1.16 (LICENSE), @radix-ui/react-focus-guards 1.1.3 (LICENSE), @radix-ui/react-focus-scope 1.1.7 (LICENSE), @radix-ui/react-menu 2.1.16 (LICENSE), @radix-ui/react-popper 1.2.8 (LICENSE), @radix-ui/react-portal 1.1.9 (LICENSE), @radix-ui/react-presence 1.1.5 (LICENSE), @radix-ui/react-primitive 2.1.3 (LICENSE), @radix-ui/react-roving-focus 1.1.11 (LICENSE), @radix-ui/react-slider 1.3.6 (LICENSE), @radix-ui/react-slot 1.2.3 (LICENSE), @radix-ui/react-tooltip 1.2.8 (LICENSE), @radix-ui/react-use-controllable-state 1.2.2 (LICENSE), @radix-ui/react-use-effect-event 0.0.2 (LICENSE), @radix-ui/react-visually-hidden 1.2.3 (LICENSE)
 
 ~~~text
 MIT License

@@ -85,7 +85,8 @@ export function useCompareExecution(): UseCompareExecutionResult {
       [COMPARE_SLOT.BEFORE]: before.name,
       [COMPARE_SLOT.AFTER]: after.name
     };
-    run.startRun({ request, names, startedAt: Date.now() });
+    const startedAt = Date.now();
+    run.startRun({ request, names, startedAt });
 
     try {
       const result = await getPlatform().comparePdfs({
@@ -99,7 +100,14 @@ export function useCompareExecution(): UseCompareExecutionResult {
       endRun();
       // 취소를 누른 뒤에 끝난 결과는 보이지 않는다.
       if (!isCancelRequested) {
-        useCompareSessionStore.getState().showResult(result);
+        // 실행 중에 슬롯이 바뀌어도 결과는 실행할 때의 두 문서·옵션을 기억한다.
+        useCompareSessionStore.getState().showResult({
+          jobId: request.jobId,
+          result,
+          files: { [COMPARE_SLOT.BEFORE]: before, [COMPARE_SLOT.AFTER]: after },
+          options: request.options,
+          elapsedMs: Date.now() - startedAt
+        });
       }
     } catch (error) {
       const platformError = toPlatformError(error);

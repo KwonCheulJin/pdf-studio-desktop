@@ -1,10 +1,14 @@
 import { getPlatform } from "@/renderer/shared/platform";
+import { toPageGeometry, type PageGeometry } from "./page-geometry";
 import { PdfDocumentCache } from "./pdf-document-cache";
 import { renderPageToBitmap } from "./render-page";
 import { RenderedPageCache } from "./rendered-page-cache";
 
 /** 쓰지 않는 렌더 결과(PNG)를 남겨 두는 상한. 썸네일 수백 장 또는 미리보기 수십 장 */
 const MAX_RENDERED_PAGE_CACHE_BYTES = 64 * 1024 * 1024;
+
+/** 화면 변환은 배율 1 viewport로 만든다(쓰는 쪽이 비율로 맞춘다). */
+const GEOMETRY_VIEWPORT_SCALE = 1;
 
 const renderedPageCache = new RenderedPageCache({
   maxBytes: MAX_RENDERED_PAGE_CACHE_BYTES
@@ -26,6 +30,18 @@ export interface RenderedPageRequest {
 
 export interface RenderedPageLease {
   urlPromise: Promise<string>;
+  /** 여러 번 불러도 한 번만 놓는다. */
+  release: () => void;
+}
+
+export interface PageGeometryRequest {
+  path: string;
+  /** 0부터 센 원본 페이지 번호 */
+  pageIndex: number;
+}
+
+export interface PageGeometryLease {
+  geometryPromise: Promise<PageGeometry>;
   /** 여러 번 불러도 한 번만 놓는다. */
   release: () => void;
 }
@@ -82,6 +98,40 @@ export function acquireRenderedPage(
       documentCache.release(path);
     }
   };
+}
+
+/** 문서를 잡고 쪽 하나의 화면 변환(`PageGeometry`)을 받는다. 그리지 않는다. */
+export function acquirePageGeometry({
+  path,
+  pageIndex
+}: PageGeometryRequest): PageGeometryLease {
+  const geometryPromise = documentCache.acquire(path).then(async (document) => {
+    const page = await document.getPage(pageIndex + 1);
+    return toPageGeometry(page.getViewport({ scale: GEOMETRY_VIEWPORT_SCALE }));
+  });
+  let isReleased = false;
+  return {
+    geometryPromise,
+    release: () => {
+      if (isReleased) {
+        return;
+      }
+      isReleased = true;
+      documentCache.release(path);
+    }
+  };
+}
+
+/** 한 번만 쓰는 화면 변환(스크롤 위치 계산 등). 다 받으면 바로 놓는다. */
+export async function readPageGeometry(
+  request: PageGeometryRequest
+): Promise<PageGeometry> {
+  const lease = acquirePageGeometry(request);
+  try {
+    return await lease.geometryPromise;
+  } finally {
+    lease.release();
+  }
 }
 
 /** E2E 확인용. 개발 서버의 E2E 플랫폼만 부른다. */

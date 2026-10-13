@@ -15,7 +15,7 @@ export type CompareScreen = ValueOf<typeof COMPARE_SCREEN>;
 export function useCompareScreen(): CompareScreen {
   const isRunning = useCompareRunStore((state) => state.jobId !== null);
   const isShowingResult = useCompareSessionStore(
-    (state) => state.view === COMPARE_VIEW.RESULT && state.result !== null
+    (state) => state.view === COMPARE_VIEW.RESULT && state.completed !== null
   );
   if (isRunning) return COMPARE_SCREEN.PROGRESS;
   return isShowingResult ? COMPARE_SCREEN.RESULT : COMPARE_SCREEN.OPTIONS;

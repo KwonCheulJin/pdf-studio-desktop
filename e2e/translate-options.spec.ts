@@ -267,12 +267,9 @@ async function translateRequests(page: Page) {
   return page.evaluate(() => window.__E2E_MOCK_TRANSLATES__ ?? []);
 }
 
-/** 번역이 끝나면 결과 자리(Step 46 전)가 뜬다. 옵션 화면으로 돌아간다. */
+/** 번역이 끝나면 결과 화면이 뜬다. 머리의 뒤로 버튼으로 옵션 화면으로 돌아간다. */
 async function backToOptions(page: Page): Promise<void> {
-  await page
-    .getByRole("region", { name: "번역을 마쳤어요" })
-    .getByRole("button", { name: "옵션으로 돌아가기" })
-    .click();
+  await page.getByRole("button", { name: "옵션으로 돌아가기" }).click();
   await expect(summaryCard(page)).toBeVisible();
 }
 
@@ -847,7 +844,7 @@ test("번역 요청에 고른 옵션과 합친 용어집(문서별 먼저·정�
   expect((await lastPlanRequest(page))?.options).toEqual(request.options);
 });
 
-test("번역을 시작하면 진행 화면이 되고, 끝나면 결과 자리로 넘어가며 계획을 다시 받는다", async ({
+test("번역을 시작하면 진행 화면이 되고, 끝나면 결과 화면으로 넘어가며 계획을 다시 받는다", async ({
   page
 }) => {
   await openTranslate(page, {

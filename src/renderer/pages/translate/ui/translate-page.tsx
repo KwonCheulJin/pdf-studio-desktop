@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { TranslationViewer } from "@/renderer/widgets/translation-viewer";
 import {
   ApiKeyDialog,
   ApiKeyStatusRow,
@@ -11,7 +12,6 @@ import {
   TranslateFileCard,
   TranslateOptionsCard,
   TranslateProgressCard,
-  TranslateResultPlaceholder,
   TranslateRunSummaryCard,
   useTranslateRequestOptions,
   useTranslateScreen,
@@ -19,7 +19,7 @@ import {
 } from "@/renderer/features/pdf-translate";
 import { useTranslateSettingsStore } from "@/renderer/features/translate-settings";
 
-/** 진행·실패·결과 자리 카드를 가운데 위에 두는 바탕(시안 12: 위아래 40px, 좌우 24px) */
+/** 진행·실패 카드를 가운데 위에 두는 바탕(시안 12: 위아래 40px, 좌우 24px) */
 const CENTERED_SCREEN_CLASS =
   "bg-canvas flex flex-1 justify-center overflow-auto px-6 py-10 text-sm/5.25";
 
@@ -30,7 +30,7 @@ interface TranslatePageProps {
 
 /**
  * 번역 화면. 옵션 화면(시안 10: 왼쪽 문서 카드·번역 옵션 카드, 오른쪽 실행 전 확인 카드 `1fr | 340px`),
- * 실행하면 그 자리에 진행 카드(시안 12), 실패하면 같은 자리에 실패, 끝나면 결과 자리(Step 46)를 보인다.
+ * 실행하면 그 자리에 진행 카드(시안 12), 실패하면 같은 자리에 실패, 끝나면 결과 대역 보기(시안 13)를 보인다.
  * 설정의 기본 모델·공용 용어집·외부 전송 확인과 키 상태를 읽어 번역 기능에 넘긴다(FSD: 같은 레이어끼리 import 금지).
  * 계획은 화면이 바뀌어도 받는다(취소·실패 뒤 옵션 화면의 이어하기 표시).
  */
@@ -73,11 +73,7 @@ export function TranslatePage({ onOpenTranslateSettings }: TranslatePageProps) {
           </div>
         );
       case TRANSLATE_SCREEN.RESULT:
-        return (
-          <div className={CENTERED_SCREEN_CLASS}>
-            <TranslateResultPlaceholder />
-          </div>
-        );
+        return <TranslationViewer />;
       default:
         return (
           <div className="bg-canvas flex-1 overflow-auto px-6 py-5 text-sm/5.25">

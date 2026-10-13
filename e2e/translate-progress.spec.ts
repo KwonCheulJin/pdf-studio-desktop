@@ -17,7 +17,7 @@ import type {
 /**
  * 번역 진행 화면(계획서 P6-10, 진행 가이드 Step 45, 시안 12).
  * - 실행하면 옵션 화면 자리에 진행 카드: 문서·언어·모델, 전체 %·경과·막대, 3단계 행(상태·세부·%·막대), 사용 토큰·예상 합계.
- * - 다른 모드 상태바에 "번역 중 n%"가 보이고 돌아오면 카드가 그대로다. 끝나면 결과 화면 자리(Step 46 전)다.
+ * - 다른 모드 상태바에 "번역 중 n%"가 보이고 돌아오면 카드가 그대로다. 끝나면 결과 화면(Step 46)이다.
  * - 취소하면 `cancelJob`을 보내고 옵션 화면으로 돌아가 남은 문단(다시 받은 계획의 이어하기)을 보인다.
  * - 실패하면 같은 자리에 원인·멈춘 곳·코드와 "다시 시도(이어서)"·"닫기", 키 오류면 "키 바꾸기".
  * 진행률은 시드 `translateScripts`이고 ADR 0002 §9 공식으로 손으로 셈한 값이다(앱은 받은 값을 그대로 보인다).
@@ -160,7 +160,8 @@ const TEXT = {
   CONSENT: "문서 내용이 번역을 위해 Anthropic API로 전송되는 것을 확인했어요.",
   RESUMABLE:
     "번역한 문단 159 / 318개가 남아 있어요. 번역 시작하면 이어서 해요.",
-  DONE_SUMMARY: "문단 3개 · 사용 입력 31,420 · 출력 35,880 토큰",
+  DONE_TITLE: "spec-v3 · 한국어",
+  DONE_SUMMARY: "문단 3개|사용 입력 31,420 · 출력 35,880 토큰",
   API_UNAVAILABLE:
     "Anthropic API가 지금 응답하지 않아요. 잠시 후 이어서 다시 시도해 주세요.",
   API_KEY_INVALID: "API 키가 올바르지 않아요. 키를 다시 확인해 주세요."
@@ -253,8 +254,8 @@ function failureCard(page: Page): Locator {
   return page.getByRole("alertdialog", { name: "번역하지 못했어요" });
 }
 
-function doneCard(page: Page): Locator {
-  return page.getByRole("region", { name: "번역을 마쳤어요" });
+function resultHeading(page: Page): Locator {
+  return page.getByRole("heading", { name: TEXT.DONE_TITLE, level: 1 });
 }
 
 async function translateRequests(page: Page) {
@@ -330,7 +331,7 @@ test("실행하면 진행 카드에 문서·언어·모델, 전체 %·경과, 3�
   await expect(card).toContainText("예상 합계 약 67,300");
 });
 
-test("진행 중 다른 모드로 가도 상태바에 번역 % 가 보이고, 돌아오면 카드가 그대로이며, 끝나면 결과 자리로 간다", async ({
+test("진행 중 다른 모드로 가도 상태바에 번역 % 가 보이고, 돌아오면 카드가 그대로이며, 끝나면 결과 화면으로 간다", async ({
   page
 }) => {
   await openTranslate(page, {
@@ -363,17 +364,12 @@ test("진행 중 다른 모드로 가도 상태바에 번역 % 가 보이고, �
   await expect(statusText(page, "번역 중")).toHaveCount(0);
 
   await modeTab(page, "번역").click();
-  await expect(doneCard(page)).toBeVisible();
-  await expect(doneCard(page)).toContainText(TEXT.DONE_SUMMARY);
-  await expect(statusText(page, "상태: 준비")).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "새 번역", level: 1 })
-  ).toBeVisible();
+  await expect(resultHeading(page)).toBeVisible();
+  await expect(statusBar(page)).toContainText(TEXT.DONE_SUMMARY);
+  await expect(statusText(page, "상태: 완료")).toBeVisible();
 
   // 옵션으로 돌아가면 같은 문서·옵션이 그대로다.
-  await doneCard(page)
-    .getByRole("button", { name: "옵션으로 돌아가기" })
-    .click();
+  await page.getByRole("button", { name: "옵션으로 돌아가기" }).click();
   await expect(summaryCard(page)).toBeVisible();
   await expect(page.getByRole("region", { name: "번역할 문서" })).toContainText(
     "spec-v3.pdf"
@@ -447,7 +443,7 @@ test("실패하면 진행 카드 자리에 원인·멈춘 곳·코드가 보이�
 
   await failure.getByRole("button", { name: "다시 시도(이어서)" }).click();
 
-  await expect(doneCard(page)).toBeVisible();
+  await expect(resultHeading(page)).toBeVisible();
   const requests = await translateRequests(page);
   expect(requests).toHaveLength(2);
   const [first, retry] = requests;

@@ -67,10 +67,7 @@ export const TRANSLATE_PROGRESS_TEXT = {
   NOT_STARTED: "시작 전",
   RETRY: "다시 시도(이어서)",
   CLOSE: "닫기",
-  CHANGE_KEY: "키 바꾸기",
-  /** 결과 화면(Step 46) 자리 */
-  DONE_TITLE: "번역을 마쳤어요",
-  BACK_TO_OPTIONS: "옵션으로 돌아가기"
+  CHANGE_KEY: "키 바꾸기"
 } as const;
 
 const DETAIL_SEPARATOR = " · ";
@@ -90,12 +87,6 @@ interface StageCountParams {
 interface LanguagePairParams {
   source: string;
   target: string;
-}
-
-interface DoneSummaryParams {
-  paragraphs: number;
-  inputTokens: number;
-  outputTokens: number;
 }
 
 interface ParagraphProgressParams {
@@ -123,8 +114,5 @@ export const translateProgressText = {
   joinDetail: (parts: readonly string[]) => parts.join(DETAIL_SEPARATOR),
   tokenCount: (count: number) => NUMBER_FORMAT.format(count),
   estimatedTotal: (count: number) =>
-    `예상 합계 약 ${NUMBER_FORMAT.format(count)}`,
-  /** 결과 화면 자리(Step 46 전): `문단 318개 · 사용 입력 31,420 · 출력 35,880 토큰` */
-  doneSummary: ({ paragraphs, inputTokens, outputTokens }: DoneSummaryParams) =>
-    `문단 ${NUMBER_FORMAT.format(paragraphs)}개 · 사용 입력 ${NUMBER_FORMAT.format(inputTokens)} · 출력 ${NUMBER_FORMAT.format(outputTokens)} 토큰`
+    `예상 합계 약 ${NUMBER_FORMAT.format(count)}`
 } as const;

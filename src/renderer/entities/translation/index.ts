@@ -13,4 +13,9 @@ export {
   TRANSLATE_MODEL_ORDER,
   type TranslateModelInfo
 } from "./config/translate-model";
-export { paragraphCountOf } from "./lib/translation-result";
+export { PAGE_KIND, PARAGRAPH_STATUS } from "./config/translation-result";
+export {
+  firstRangePageOf,
+  paragraphCountOf,
+  rangePageCountOf
+} from "./lib/translation-result";

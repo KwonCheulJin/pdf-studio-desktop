@@ -43,7 +43,7 @@ const CHANGE_ID_HASH_BYTES: usize = 8;
 /// 다음 글자 상자가 지금 상자와 세로로 이만큼(낮은 쪽 높이 기준 비율) 겹쳐야 같은 줄이다.
 /// tight 상자는 글자마다 높이가 다르므로(`.`과 `가`) 겹침을 낮은 쪽 높이로 잰다. 줄 간격이 좁아
 /// 윗줄 아래 끝과 아랫줄 위 끝이 조금 겹쳐도 다른 줄로 본다. 연결선 줄 세기(`connectors.rs`)도 쓴다.
-pub(super) const SAME_LINE_MIN_OVERLAP: f32 = 0.5;
+pub(crate) const SAME_LINE_MIN_OVERLAP: f32 = 0.5;
 /// 같은 줄 두 상자 사이 가로 간격이 높은 쪽 높이(≈ 글꼴 크기)의 이 배수를 넘으면 합치지 않는다.
 /// 단어 사이 공백(0.25~0.5em)은 합치고, 표의 다른 칸처럼 멀리 떨어진 글자는 따로 둔다.
 const SAME_LINE_MAX_GAP: f32 = 1.0;
@@ -566,7 +566,7 @@ fn highlight_boxes(boxes: &[TextBox], marked: &[bool]) -> Vec<TextBox> {
 /// `next`가 `current`(같은 줄에서 합쳐 온 상자)에 이어지는 같은 줄 글자인가. 같은 쪽이고, 세로로
 /// 충분히 겹치고, 오른쪽으로 너무 멀지 않아야 한다. 사용자 공간에서 세로로 흐르는 글자(돌려
 /// 그린 글자)는 세로로 겹치지 않으므로 글자마다 상자가 따로 남는다.
-pub(super) fn continues_line(current: &TextBox, next: &TextBox) -> bool {
+pub(crate) fn continues_line(current: &TextBox, next: &TextBox) -> bool {
     let overlap = (current.y + current.h).min(next.y + next.h) - current.y.max(next.y);
     let gap = next.x - (current.x + current.w);
     current.page == next.page

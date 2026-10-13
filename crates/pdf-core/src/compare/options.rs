@@ -108,14 +108,19 @@ pub fn parse_page_range(
     input: &str,
     page_count: u32,
 ) -> Result<Vec<u32>, CompareOptionsError> {
-    if input.trim().is_empty() {
-        return Ok((0..page_count).collect());
-    }
-    let invalid = || CompareOptionsError::InvalidRange {
+    page_numbers(input, page_count).ok_or_else(|| CompareOptionsError::InvalidRange {
         side,
         range: input.to_owned(),
         page_count,
-    };
+    })
+}
+
+/// [`parse_page_range`]의 규칙 그대로 쪽 번호 목록을 만든다. 잘못된 범위면 `None`이다. 문서가 하나인
+/// 번역 문단 추출(ADR 0002 §2)도 쓴다.
+pub(crate) fn page_numbers(input: &str, page_count: u32) -> Option<Vec<u32>> {
+    if input.trim().is_empty() {
+        return Some((0..page_count).collect());
+    }
     let mut selected = vec![false; page_count as usize];
     for item in input.split(',') {
         let (first, last) = match item.split_once('-') {
@@ -129,13 +134,15 @@ pub fn parse_page_range(
             (Some(first), Some(last)) if 1 <= first && first <= last && last <= page_count => {
                 selected[(first - 1) as usize..last as usize].fill(true);
             }
-            _ => return Err(invalid()),
+            _ => return None,
         }
     }
-    Ok((0..page_count)
-        .zip(selected)
-        .filter_map(|(page, is_selected)| is_selected.then_some(page))
-        .collect())
+    Some(
+        (0..page_count)
+            .zip(selected)
+            .filter_map(|(page, is_selected)| is_selected.then_some(page))
+            .collect(),
+    )
 }
 
 /// 앞뒤 공백을 뗀 10진수 숫자(부호 없음). 숫자가 아니거나 `u32`를 넘으면 `None`
@@ -243,7 +250,7 @@ pub(super) fn display_size(size: &PageSize) -> (f32, f32) {
 
 /// 사용자 공간 상자를 화면 방향 좌표로 옮긴다. `/Rotate`는 시계 방향이라 90이면 사용자 공간
 /// 왼쪽 가장자리가 화면 위, 180이면 아래쪽 가장자리가 화면 위, 270이면 오른쪽 가장자리가 화면 위다.
-pub(super) fn to_display(bounds: &TextBox, size: &PageSize) -> TextBox {
+pub(crate) fn to_display(bounds: &TextBox, size: &PageSize) -> TextBox {
     let view = size.view_box;
     let (x, y) = (bounds.x - view.left, bounds.y - view.bottom);
     let (width, height) = (view.right - view.left, view.top - view.bottom);

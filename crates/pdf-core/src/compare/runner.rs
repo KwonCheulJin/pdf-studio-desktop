@@ -19,7 +19,7 @@ use std::sync::atomic::AtomicBool;
 
 use pdfium_render::prelude::PdfDocument;
 
-use self::cache::{FileKey, ReadText};
+pub(crate) use self::cache::{FileKey, ReadText};
 use self::progress::ProgressReporter;
 use super::anchors::ComparedPages;
 use super::diff::{DIFF_TIME_LIMIT, diff_tokens_with_progress};

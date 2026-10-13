@@ -15,6 +15,7 @@ import {
 import type { CompareFile } from "@/renderer/features/pdf-compare";
 import { VIEWER_LAYOUT, missingPageText } from "../config/viewer-layout";
 import type { PanePadding } from "../lib/pane-layout";
+import type { PageRowBands } from "../lib/row-bands";
 import type { RowSlot, ViewerRow } from "../lib/row-layout";
 import { PageView } from "./page-view";
 
@@ -91,6 +92,7 @@ interface PaneRowProps {
   file: CompareFile;
   pageSources: PageSources;
   highlights: PageHighlights;
+  rowBands: PageRowBands;
   activeChangeId: string | null;
   hoveredChangeId: string | null;
   renderScale: number;
@@ -107,6 +109,7 @@ export function PaneRow({
   file,
   pageSources,
   highlights,
+  rowBands,
   activeChangeId,
   hoveredChangeId,
   renderScale
@@ -136,6 +139,7 @@ export function PaneRow({
           heightPx={slot.heightPx}
           renderScale={renderScale}
           highlights={highlights.get(slot.page) ?? NO_HIGHLIGHTS}
+          rowBands={rowBands.get(slot.page) ?? NO_HIGHLIGHTS}
           activeChangeId={activeChangeId}
           hoveredChangeId={hoveredChangeId}
         />

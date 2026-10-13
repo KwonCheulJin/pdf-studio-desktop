@@ -1,6 +1,7 @@
 import type { PageHighlight, Side } from "@/renderer/entities/comparison";
 import { usePageGeometry, useRenderedPage } from "@/renderer/shared/lib/pdfjs";
 import { VIEWER_TEXT } from "../config/viewer-layout";
+import type { RowBand } from "../lib/row-bands";
 import { HighlightOverlay } from "./highlight-overlay";
 
 interface PageViewProps {
@@ -15,14 +16,16 @@ interface PageViewProps {
   /** pdf.js로 그리는 배율(화면 배율 × 기기 픽셀 비율, 단위로 올림) */
   renderScale: number;
   highlights: readonly PageHighlight[];
+  /** 연결선 끝의 줄 표시 */
+  rowBands: readonly RowBand[];
   activeChangeId: string | null;
   hoveredChangeId: string | null;
 }
 
 /**
  * 비교 결과의 쪽 하나(시안 4 종이: `paper` + `radius-paper` + `shadow-paper`). 행이 화면 근처에 있어
- * 마운트된 동안만 렌더 캐시에서 그림을 받고, 받기 전에는 스켈레톤을 보인다. 그 쪽에 변경 상자가
- * 있으면 pdf.js 화면 변환을 받아 하이라이트를 얹는다.
+ * 마운트된 동안만 렌더 캐시에서 그림을 받고, 받기 전에는 스켈레톤을 보인다. 그 쪽에 변경 상자나
+ * 연결선 줄 표시가 있으면 pdf.js 화면 변환을 받아 하이라이트를 얹는다.
  */
 export function PageView({
   path,
@@ -33,9 +36,11 @@ export function PageView({
   heightPx,
   renderScale,
   highlights,
+  rowBands,
   activeChangeId,
   hoveredChangeId
 }: PageViewProps) {
+  const hasOverlay = highlights.length > 0 || rowBands.length > 0;
   const { url, isLoading, hasError } = useRenderedPage({
     path,
     pageIndex: page,
@@ -45,7 +50,7 @@ export function PageView({
   const geometry = usePageGeometry({
     path,
     pageIndex: page,
-    isEnabled: highlights.length > 0
+    isEnabled: hasOverlay
   });
 
   return (
@@ -72,10 +77,11 @@ export function PageView({
           {VIEWER_TEXT.RENDER_FAILED}
         </div>
       )}
-      {geometry && highlights.length > 0 && (
+      {geometry && hasOverlay && (
         <HighlightOverlay
           geometry={geometry}
           highlights={highlights}
+          rowBands={rowBands}
           side={side}
           activeChangeId={activeChangeId}
           hoveredChangeId={hoveredChangeId}

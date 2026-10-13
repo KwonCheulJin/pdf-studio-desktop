@@ -336,6 +336,7 @@ HTTP 200 응답만 여기로 온다(그 밖은 §7). 사용량은 모든 200 응
 | `translate_pdf` | `(request, Channel<TranslateProgress>) -> TranslationResult` | 작업 ID·취소 토큰 등록, 한 번에 하나(`JOB_ALREADY_RUNNING`). 검사 순서: 경로 → 범위 → **원문 언어(`auto`인데 모름이면 `SOURCE_LANGUAGE_UNKNOWN`)** → 번역할 것(`NO_TRANSLATABLE_TEXT`) → 키(`API_KEY_MISSING`·`KEYCHAIN_UNAVAILABLE`). 키는 시작할 때 한 번 읽어 작업 동안만 메모리에 둔다. |
 | `retranslate_paragraph` | `(request) -> RetranslateResult` | 문단 하나 + 앞뒤 문단 문맥(§5). 기록 고침, 사용량 누적. 작업 ID 등록(`cancel_job`으로 취소). 기록 없음 `TRANSLATION_RECORD_NOT_FOUND`, 문단 키 없음도 같은 코드. **응답에 사용량을 싣는다.** |
 | `edit_translated_paragraph` | `(request) -> TranslatedParagraph` | 기록에 `edited` 저장(앞뒤 공백 지움, 빈 글이면 `edited`를 지워 원래 번역으로 돌린다). 네트워크 없음. **요청에 `path`·`options`를 더했다(Step 41)**: 다시 번역처럼 기록 키를 다시 세어 맞춰 보고, 돌려줄 문단의 원문·제목(기록에 없다, §8)을 다시 추출해 얻는다. |
+| `count_translation_records` | `() -> u32` | §8 "지우기" 옆 "n개". |
 | `delete_translation_records` | `() -> ()` | §8 "지우기". |
 | `cancel_job` | 기존 | 번역·다시 번역도 취소한다. |
 

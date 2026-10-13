@@ -54,5 +54,6 @@ export const TRANSLATE_SETTINGS_TEXT = {
 } as const;
 
 export const translateSettingsText = {
-  glossaryCount: (count: number) => `용어 ${count}개`
+  glossaryCount: (count: number) => `용어 ${count}개`,
+  recordCount: (count: number) => `${count}개`
 } as const;

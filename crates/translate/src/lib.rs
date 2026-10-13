@@ -47,7 +47,8 @@ pub use paragraph::{
 pub use plan::{PlanInput, ResumeState, TranslationPlan, plan_translation};
 pub use progress::{ProgressReporter, TranslateProgress, TranslateStage};
 pub use record::{
-    TranslationRecord, delete_translation_records, has_translation_records, load_translation_record,
+    TranslationRecord, count_translation_records, delete_translation_records,
+    has_translation_records, load_translation_record,
 };
 pub use record_key::{TranslationOptions, file_sha256, paragraph_key};
 pub use request::PROMPT_VERSION;

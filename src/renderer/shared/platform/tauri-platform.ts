@@ -238,6 +238,7 @@ export function createTauriPlatform(): DesktopPlatform {
       unwrap(commands.retranslateParagraph(request)),
     editTranslatedParagraph: (request) =>
       unwrap(commands.editTranslatedParagraph(request)),
+    countTranslationRecords: () => unwrap(commands.countTranslationRecords()),
     deleteTranslationRecords: async () => {
       await unwrap(commands.deleteTranslationRecords());
     },

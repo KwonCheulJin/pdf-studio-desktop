@@ -89,6 +89,8 @@ export interface MockPlatformOptions {
   update?: MockUpdate;
   /** 시작할 때의 API 키 상태. 없으면 등록되지 않았다. 등록됐으면 키체인에 키가 있는 것으로 본다. */
   apiKey?: ApiKeyStatus;
+  /** 시작할 때 저장돼 있는 번역 기록의 ID들(내용은 비어 있다). 저장된 번역 수를 보이는 데 쓴다. */
+  savedRecordIds?: string[];
 }
 
 export interface MockPlatform extends DesktopPlatform {
@@ -496,7 +498,8 @@ export function createMockPlatform({
   thirdPartyNotices,
   directoryPicks = [],
   update,
-  apiKey
+  apiKey,
+  savedRecordIds = []
 }: MockPlatformOptions = {}): MockPlatform {
   const filesByPath = new Map(files.map((file) => [file.path, file]));
   const convertedFiles = new Map(
@@ -518,7 +521,9 @@ export function createMockPlatform({
   const exportedPaths = new Set<string>();
   let apiKeyStatus: ApiKeyStatus = apiKey ?? { registered: false, hint: null };
   /** 기록 키 → 문단 키 → 기억한 문단(Rust 이어하기 기록 대신) */
-  const translations = new Map<string, Map<string, RememberedParagraph>>();
+  const translations = new Map<string, Map<string, RememberedParagraph>>(
+    savedRecordIds.map((recordId) => [recordId, new Map()])
+  );
 
   const rememberTranslation = (result: TranslationResult): void => {
     const paragraphs = new Map(
@@ -957,6 +962,7 @@ export function createMockPlatform({
         ?.set(request.key, { ...remembered, paragraph: edited });
       return edited;
     },
+    countTranslationRecords: async () => translations.size,
     deleteTranslationRecords: async () => {
       translations.clear();
     },

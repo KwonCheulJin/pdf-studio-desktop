@@ -7,6 +7,7 @@
 //!   `target`·`edited`가 둘 다 없는 문단은 버리고, 그런 문단이 든 스캔 쪽은 쪽째 버린다(다시 보낸다).
 //! - 쓰기: 같은 폴더의 임시 파일에 쓰고 디스크에 내린 뒤 rename한다. 쓴 뒤 `.json`이
 //!   `MAX_TRANSLATION_RECORDS`개를 넘으면 수정 시각이 오래된 것부터 지운다(방금 쓴 기록은 남긴다).
+//! - 세기([`count_translation_records`]): 폴더의 `.json` 수(설정 '일반'의 "n개"). 임시 파일은 세지 않는다.
 //! - 지우기([`delete_translation_records`]): 폴더의 `.json`과 남은 임시 파일을 모두 지운다(설정 '일반').
 
 use std::collections::BTreeMap;
@@ -54,6 +55,16 @@ pub fn has_translation_records(record_dir: &Path) -> bool {
         entries
             .filter_map(Result::ok)
             .any(|entry| is_record_file(&entry.path()))
+    })
+}
+
+/// 기록 폴더의 기록(`.json`) 수. 임시 파일·다른 파일은 세지 않고, 폴더가 없거나 읽을 수 없으면 0이다.
+pub fn count_translation_records(record_dir: &Path) -> usize {
+    fs::read_dir(record_dir).map_or(0, |entries| {
+        entries
+            .filter_map(Result::ok)
+            .filter(|entry| is_record_file(&entry.path()))
+            .count()
     })
 }
 

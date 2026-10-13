@@ -95,6 +95,7 @@ pub(crate) fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             translate_pdf,
             retranslate_paragraph,
             edit_translated_paragraph,
+            count_translation_records,
             delete_translation_records,
         ])
         .constant(OPENABLE_EXTENSIONS_CONSTANT, OPENABLE_EXTENSIONS)
@@ -514,6 +515,13 @@ pub(crate) async fn edit_translated_paragraph(
         translation::edit(deps.state, located, &request.text)
     })
     .await
+}
+
+/// 저장된 이어하기 기록 수.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn count_translation_records(app: AppHandle) -> Result<u32, AppError> {
+    run_blocking(app, |app| Ok(translate_state(app)?.count_records())).await
 }
 
 /// 이어하기 기록을 모두 지운다.

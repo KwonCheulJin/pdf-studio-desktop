@@ -90,6 +90,11 @@ impl<T> TranslateState<T> {
         Ok(RunningTranslation(&self.running))
     }
 
+    /// 저장된 이어하기 기록 수(설정 '일반'의 "n개"). JS 숫자로 보내려고 `u32`로 줄인다(상한을 넘을 수 없다).
+    pub(crate) fn count_records(&self) -> u32 {
+        u32::try_from(translate::count_translation_records(&self.record_dir)).unwrap_or(u32::MAX)
+    }
+
     /// 이어하기 기록을 모두 지운다(설정 '일반'의 "저장된 번역 지우기").
     pub(crate) fn delete_records(&self) -> Result<(), CommandError> {
         translate::delete_translation_records(&self.record_dir)

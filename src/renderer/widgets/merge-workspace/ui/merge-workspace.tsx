@@ -46,8 +46,11 @@ export function MergeWorkspace() {
   // FloatingActionBar에서 사용하는 훅
   const { handleRotateSelectedCw, handleRotateSelectedCcw } =
     usePageRotation(files);
-  const { handleDeleteSelected, hasDeletedInSelection, handleRestoreSelected } =
-    useSelectionActions(files);
+  const {
+    handleDeleteSelected,
+    deletedInSelectionCount,
+    handleRestoreSelected
+  } = useSelectionActions(files);
 
   // 선택 파일 병합
   const [isMergePreviewOpen, setIsMergePreviewOpen] = useState(false);
@@ -130,8 +133,9 @@ export function MergeWorkspace() {
 
   return (
     <div
-      className={`flex flex-1 flex-col overflow-auto py-6 transition-colors ${
-        isEmptyDragOver ? "bg-primary/5" : ""
+      // 아래 여백(pb-24 + 그리드 여백 24px)은 플로팅 바에 가리지 않게 둔다(시안 2: 120px)
+      className={`flex flex-1 flex-col overflow-auto pb-24 transition-colors ${
+        isEmptyDragOver ? "bg-primary/5" : "bg-canvas"
       }`}
     >
       {hasFiles ? (
@@ -168,7 +172,7 @@ export function MergeWorkspace() {
         selectedCount={selectedCount}
         selectionType={selectionType}
         hasFiles={hasFiles}
-        hasDeletedInSelection={hasDeletedInSelection}
+        deletedInSelectionCount={deletedInSelectionCount}
         onDelete={handleDeleteSelected}
         onRestore={handleRestoreSelected}
         onRotateCw={handleRotateSelectedCw}

@@ -177,7 +177,7 @@ export function FileGrid({
   // 카드만 놓은 기본 레이아웃 (드롭 자리 계산용)
   const {
     columns,
-    cardSize,
+    cardWidth,
     cardHeight,
     imageSize,
     positions: cardPositions
@@ -191,7 +191,7 @@ export function FileGrid({
     calculateDropIndex({
       point,
       positions: cardPositions,
-      cardWidth: cardSize,
+      cardWidth,
       cardHeight,
       gap: GRID_CONFIG.GAP
     });
@@ -235,7 +235,7 @@ export function FileGrid({
       const prevCardPos = positions[activeDropIndex - 1];
       if (prevCardPos) {
         // 이전 카드 오른쪽 끝과 현재 카드 왼쪽 끝 사이의 중앙
-        const prevCardRightX = prevCardPos.x + cardSize;
+        const prevCardRightX = prevCardPos.x + cardWidth;
         const gapCenterX = (prevCardRightX + currentCardPos.x) / 2;
         indicatorX = gapCenterX - expandedGapWidth / 2 - DROP_INDICATOR_OFFSET;
       } else {
@@ -248,7 +248,7 @@ export function FileGrid({
       y: currentCardPos.y,
       width: expandedGapWidth
     };
-  }, [activeDropIndex, positions, columns, cardSize]);
+  }, [activeDropIndex, positions, columns, cardWidth]);
 
   // 실제 렌더링할 카드와 업로드 중인 카드를 합친 배열 생성
   const renderItems = useMemo(
@@ -293,7 +293,7 @@ export function FileGrid({
                 <GridItemWrapper
                   key={`uploading-${item.file.id}`}
                   position={position}
-                  cardWidth={cardSize}
+                  cardWidth={cardWidth}
                   cardHeight={cardHeight}
                 >
                   <UploadingCard fileName={item.file.name} />
@@ -311,7 +311,7 @@ export function FileGrid({
                 id={sortId}
                 label={getCardLabel(card)}
                 position={position}
-                cardWidth={cardSize}
+                cardWidth={cardWidth}
                 cardHeight={cardHeight}
                 onClick={(event) => handleCardClick({ card, event })}
               >

@@ -320,6 +320,15 @@ export const useTotalActivePages = () =>
     )
   );
 
+// 삭제 표시된(복원할 수 있는) 페이지 수
+export const useTotalDeletedPages = () =>
+  useMergeStore((state) =>
+    state.files.reduce(
+      (sum, file) => sum + file.pages.filter((page) => page.isDeleted).length,
+      0
+    )
+  );
+
 // 특정 파일 찾기
 export const useFile = (fileId: string) =>
   useMergeStore((state) =>

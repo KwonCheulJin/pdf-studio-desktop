@@ -34,10 +34,10 @@ export function Slider({
       step={step}
       disabled={disabled}
     >
-      <SliderPrimitive.Track className="bg-muted relative h-1.5 w-full grow overflow-hidden rounded-full">
-        <SliderPrimitive.Range className="bg-primary absolute h-full" />
+      <SliderPrimitive.Track className="bg-secondary relative h-1 w-full grow overflow-hidden rounded-full">
+        <SliderPrimitive.Range className="bg-primary absolute h-full rounded-full" />
       </SliderPrimitive.Track>
-      <SliderPrimitive.Thumb className="border-primary bg-background focus-visible:ring-ring block h-4 w-4 cursor-pointer rounded-full border-2 shadow transition-colors focus-visible:ring-1 focus-visible:outline-none disabled:pointer-events-none" />
+      <SliderPrimitive.Thumb className="border-primary bg-card focus-visible:ring-ring block h-4 w-4 cursor-pointer rounded-full border-2 transition-colors focus-visible:ring-1 focus-visible:outline-none disabled:pointer-events-none" />
     </SliderPrimitive.Root>
   );
 }

@@ -78,7 +78,7 @@ function documentCheckbox(page: Page, file: E2eMockFile): Locator {
 
 /** 플로팅 바의 선택 수 문구 */
 function selectionLabel(page: Page): Locator {
-  return page.getByText(/^\d+개 (페이지|파일) 선택됨$/);
+  return page.getByText(/^\d+개 (페이지|파일) 선택( \(삭제됨 \d+\))?$/);
 }
 
 function statusBar(page: Page): Locator {
@@ -132,16 +132,16 @@ test("클릭은 단일, ⌘+클릭은 추가·해제, Shift+클릭은 기준점�
 
   // 클릭 = 단일 선택(앞 선택을 바꾼다)
   await sortableCard(page, pageName(FILE_A, 1)).click();
-  await expect(selectionLabel(page)).toHaveText("1개 페이지 선택됨");
+  await expect(selectionLabel(page)).toHaveText("1개 페이지 선택");
   await sortableCard(page, pageName(FILE_A, 2)).click();
-  await expect(selectionLabel(page)).toHaveText("1개 페이지 선택됨");
+  await expect(selectionLabel(page)).toHaveText("1개 페이지 선택");
   expect(await readCheckedPages(page)).toEqual([pageName(FILE_A, 2)]);
 
   // Shift+클릭 = 기준점(alpha 2쪽)부터 범위
   await sortableCard(page, pageName(FILE_B, 2)).click({
     modifiers: ["Shift"]
   });
-  await expect(selectionLabel(page)).toHaveText("4개 페이지 선택됨");
+  await expect(selectionLabel(page)).toHaveText("4개 페이지 선택");
   expect(await readCheckedPages(page)).toEqual([
     pageName(FILE_A, 2),
     pageName(FILE_A, 3),
@@ -153,7 +153,7 @@ test("클릭은 단일, ⌘+클릭은 추가·해제, Shift+클릭은 기준점�
   await sortableCard(page, pageName(FILE_A, 3)).click({
     modifiers: ["Shift"]
   });
-  await expect(selectionLabel(page)).toHaveText("2개 페이지 선택됨");
+  await expect(selectionLabel(page)).toHaveText("2개 페이지 선택");
   expect(await readCheckedPages(page)).toEqual([
     pageName(FILE_A, 2),
     pageName(FILE_A, 3)
@@ -166,7 +166,7 @@ test("클릭은 단일, ⌘+클릭은 추가·해제, Shift+클릭은 기준점�
   await sortableCard(page, pageName(FILE_C, 3)).click({
     modifiers: ["Meta"]
   });
-  await expect(selectionLabel(page)).toHaveText("4개 페이지 선택됨");
+  await expect(selectionLabel(page)).toHaveText("4개 페이지 선택");
   await sortableCard(page, pageName(FILE_C, 1)).click({
     modifiers: ["Meta"]
   });
@@ -224,7 +224,7 @@ test("카드 버튼으로 지운 페이지·파일은 선택에서 빠지고, �
   await sortableCard(page, pageName(FILE_B, 2)).click({
     modifiers: ["Meta"]
   });
-  await expect(selectionLabel(page)).toHaveText("2개 페이지 선택됨");
+  await expect(selectionLabel(page)).toHaveText("2개 페이지 선택");
   await bravoPage1.hover();
   await bravoPage1
     .getByRole("button", { name: "페이지 삭제", exact: true })
@@ -232,17 +232,18 @@ test("카드 버튼으로 지운 페이지·파일은 선택에서 빠지고, �
   await expect(
     bravoPage1.getByText(DELETED_BADGE, { exact: true })
   ).toBeVisible();
-  await expect(selectionLabel(page)).toHaveText("1개 페이지 선택됨");
+  await expect(selectionLabel(page)).toHaveText("1개 페이지 선택");
   await expect(pageCheckbox(page, FILE_B, 1)).not.toBeChecked();
   await expect(
     page.getByRole("button", { name: "선택 페이지 복원", exact: true })
   ).toHaveCount(0);
 
-  // 지운 카드를 다시 고르면 플로팅 바에 복원 버튼이 나온다
+  // 지운 카드를 다시 고르면 플로팅 바에 복원 버튼이 나오고 선택 수 옆에 삭제된 수를 보인다
   await pageCheckbox(page, FILE_B, 1).click();
   await expect(
     page.getByRole("button", { name: "선택 페이지 복원", exact: true })
   ).toBeVisible();
+  await expect(selectionLabel(page)).toHaveText("2개 페이지 선택 (삭제됨 1)");
 });
 
 test("⌘A는 전체 선택, Esc는 선택 해제이고, 카드를 집었거나 모달이 열린 동안에는 가로채지 않는다", async ({
@@ -278,7 +279,7 @@ test("⌘A는 전체 선택, Esc는 선택 해제이고, 카드를 집었거나 
 
   await expandAll(page);
   await sortableCard(page, pageName(FILE_A, 1)).click();
-  await expect(selectionLabel(page)).toHaveText("1개 페이지 선택됨");
+  await expect(selectionLabel(page)).toHaveText("1개 페이지 선택");
 
   // 카드를 집은 동안: Delete는 지우지 않고, Esc는 집기만 취소한다
   const bravoPage1 = pageName(FILE_B, 1);
@@ -288,7 +289,7 @@ test("⌘A는 전체 선택, Esc는 선택 해제이고, 카드를 집었거나 
   await page.keyboard.press("Delete");
   await page.keyboard.press("Escape");
   await expect(announcer(page)).toContainText("이동을 취소했습니다.");
-  await expect(selectionLabel(page)).toHaveText("1개 페이지 선택됨");
+  await expect(selectionLabel(page)).toHaveText("1개 페이지 선택");
   await expect(page.getByText(DELETED_BADGE, { exact: true })).toHaveCount(0);
 
   // 모달이 열린 동안: Delete는 지우지 않고, Esc는 모달만 닫는다
@@ -301,7 +302,7 @@ test("⌘A는 전체 선택, Esc는 선택 해제이고, 카드를 집었거나 
   await page.keyboard.press("Delete");
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(selectionLabel(page)).toHaveText("1개 페이지 선택됨");
+  await expect(selectionLabel(page)).toHaveText("1개 페이지 선택");
   await expect(page.getByText(DELETED_BADGE, { exact: true })).toHaveCount(0);
 
   // 그다음 Esc는 선택을 푼다
@@ -353,7 +354,7 @@ test("병합 진행 오버레이는 role=status live region이다", async ({ pag
   });
 
   await page.getByRole("button", { name: "병합", exact: true }).click();
-  const progress = page.getByRole("status").filter({ hasText: "PDF 병합 중" });
+  const progress = page.getByRole("status").filter({ hasText: "병합하는 중" });
   await expect(progress).toBeVisible();
   await expect(progress).toHaveAttribute("aria-live", "polite");
 
@@ -372,17 +373,17 @@ test("파일 모드 선택 수는 고른 파일 수이고 '병합하기'도 파�
   });
 
   await sortableCard(page, documentName(FILE_A)).click();
-  await expect(selectionLabel(page)).toHaveText("1개 파일 선택됨");
+  await expect(selectionLabel(page)).toHaveText("1개 파일 선택");
   await expect(mergeSelected).toHaveCount(0);
 
   await sortableCard(page, documentName(FILE_B)).click({
     modifiers: ["Meta"]
   });
-  await expect(selectionLabel(page)).toHaveText("2개 파일 선택됨");
+  await expect(selectionLabel(page)).toHaveText("2개 파일 선택");
   await expect(mergeSelected).toBeVisible();
 
   await page.keyboard.press("Meta+a");
-  await expect(selectionLabel(page)).toHaveText("3개 파일 선택됨");
+  await expect(selectionLabel(page)).toHaveText("3개 파일 선택");
 });
 
 test("카드를 집은 채로 전체 삭제해도 파일을 다시 넣으면 선택 단축키가 동작한다", async ({
@@ -404,6 +405,6 @@ test("카드를 집은 채로 전체 삭제해도 파일을 다시 넣으면 선
   );
   await page.keyboard.press("Meta+a");
   await expect(selectionLabel(page)).toHaveText(
-    `${SEED_FILES.length}개 파일 선택됨`
+    `${SEED_FILES.length}개 파일 선택`
   );
 });

@@ -12,8 +12,8 @@ import { SELECTION_TYPE } from "../config/selection-type";
 
 interface UseSelectionActionsResult {
   handleDeleteSelected: () => void;
-  /** 선택에 삭제된 페이지가 섞여 있는지 (복원 버튼 표시용) */
-  hasDeletedInSelection: boolean;
+  /** 선택에 섞인 삭제된 페이지 수 (0보다 크면 복원 버튼, 선택 수 옆 "(삭제됨 n)") */
+  deletedInSelectionCount: number;
   handleRestoreSelected: () => void;
   handleDeletePage: (fileId: string, pageId: string) => void;
 }
@@ -90,7 +90,7 @@ export function useSelectionActions(
 
   return {
     handleDeleteSelected,
-    hasDeletedInSelection: selectedDeletedPages.length > 0,
+    deletedInSelectionCount: selectedDeletedPages.length,
     handleRestoreSelected,
     handleDeletePage
   };

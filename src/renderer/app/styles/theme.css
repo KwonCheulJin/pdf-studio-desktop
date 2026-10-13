@@ -23,6 +23,7 @@
   --color-input: var(--input);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-subtle: var(--destructive-subtle);
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
   --color-success-subtle: var(--success-subtle);

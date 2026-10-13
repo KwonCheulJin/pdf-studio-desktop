@@ -390,7 +390,7 @@ test("PDF가 아닌 파일·열 수 없는 파일·3개 이상은 알리고 슬�
   await dropOn(page, slot(page, BEFORE), [FILE_LOCKED.path]);
   await expect(
     toast(page, `"${LOCKED_STEM}" 파일을 열 수 없어요.`)
-  ).toContainText("암호가 걸린 PDF는 열 수 없습니다.");
+  ).toContainText("암호가 걸린 PDF라 열 수 없어요.");
   await expect(slot(page, BEFORE)).toContainText(FILE_V1.displayName);
 
   await dropOn(page, slot(page, AFTER), [

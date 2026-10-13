@@ -14,11 +14,11 @@ const buttonVariants = cva(
           "border border-border bg-background hover:bg-accent hover:text-accent-foreground",
         destructive:
           "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-        // 카드 액션용 (반투명 배경, hover 시 강조)
+        // 병합 카드 위 동작 버튼용 (카드색 막대 안 ghost, hover 시 강조)
         "card-action":
-          "text-media-foreground/80 hover:bg-media-foreground/20 hover:text-media-foreground rounded bg-transparent p-1",
+          "text-foreground hover:bg-accent hover:text-accent-foreground rounded-md bg-transparent p-1",
         "card-action-destructive":
-          "text-media-foreground/80 hover:bg-destructive hover:text-destructive-foreground rounded bg-transparent p-1"
+          "text-foreground hover:bg-destructive hover:text-destructive-foreground rounded-md bg-transparent p-1"
       },
       size: {
         default: "h-10 px-4",

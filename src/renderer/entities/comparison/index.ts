@@ -33,6 +33,7 @@ export {
   indexPagePairs,
   numberChanges,
   rowOfChange,
+  type BoxesPlacement,
   type ChangeGroup,
   type NumberedChange,
   type PageHighlight,

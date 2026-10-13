@@ -12,7 +12,7 @@ use std::cmp::Ordering;
 
 use serde::Serialize;
 
-use super::model::{Change, ChangeKind, ChangeSide, CompareResult, PageSize, TextBox};
+use super::model::{Change, ChangeKind, CompareResult, PageSize, Placement, TextBox};
 use crate::info::{PageBox, PageRotation};
 
 /// 이웃한 두 변경을 한 묶음으로 붙이는 세로 간격의 상한(pt). 양쪽(A·B) 모두 이 값 이하여야 한다.
@@ -88,10 +88,10 @@ impl<'r> RowPage<'r> {
         Some(Self { page, size })
     }
 
-    /// 그 쪽에 있는 상자들의 합집합과 화면 방향 가장자리. 그 쪽에 상자가 없으면 `None`이다.
-    fn place(&self, side: &ChangeSide) -> Option<Placed> {
+    /// 그 쪽에 있는 상자들의 합집합과 화면 방향 가장자리. 그 쪽에 상자가 없으면(앵커 포함) `None`이다.
+    fn place(&self, side: &Placement) -> Option<Placed> {
         let bounds = side
-            .boxes
+            .boxes()
             .iter()
             .filter(|bounds| bounds.page == self.page)
             .map(edges)
@@ -166,8 +166,8 @@ impl Row<'_> {
         Some(Linked {
             index,
             id: &change.id,
-            before: self.before.place(change.before.as_ref()?)?,
-            after: self.after.place(change.after.as_ref()?)?,
+            before: self.before.place(&change.before)?,
+            after: self.after.place(&change.after)?,
         })
     }
 }
@@ -300,7 +300,7 @@ mod tests {
 
     /// 왼쪽 아래가 (`x`, `y`)이고 높이가 [`LINE_HEIGHT`]인 상자 하나를 A·B에 둔 `Replace`
     fn replace(id: &str, before: (f32, f32), after: (f32, f32)) -> Change {
-        let side = |(x, y): (f32, f32)| ChangeSide {
+        let side = |(x, y): (f32, f32)| Placement::Boxes {
             text: id.to_owned(),
             boxes: vec![TextBox {
                 page: PAGE,
@@ -314,8 +314,8 @@ mod tests {
         Change {
             id: id.to_owned(),
             kind: ChangeKind::Replace,
-            before: Some(side(before)),
-            after: Some(side(after)),
+            before: side(before),
+            after: side(after),
             page_pair: (Some(PAGE), Some(PAGE)),
             needs_review: false,
         }

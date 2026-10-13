@@ -3,6 +3,7 @@
     "id": "95606f4583b2146f",
     "kind": "replace",
     "before": {
+      "kind": "boxes",
       "text": "2026년 12월 31일까지로",
       "boxes": [
         {"page":0,"x":82.404,"y":713.868,"w":5.592003,"h":8.627991},
@@ -12,6 +13,7 @@
       "minConfidence": null
     },
     "after": {
+      "kind": "boxes",
       "text": "2027년 6월 30일까지로",
       "boxes": [
         {"page":0,"x":82.42799,"y":714.0,"w":5.496002,"h":8.495972},
@@ -30,13 +32,20 @@
     "id": "3dcee9584f74e780",
     "kind": "delete",
     "before": {
+      "kind": "boxes",
       "text": "용역",
       "boxes": [
         {"page":0,"x":180.52802,"y":690.176,"w":19.692001,"h":11.195984}
       ],
       "minConfidence": null
     },
-    "after": null,
+    "after": {
+      "kind": "anchor",
+      "page": 0,
+      "x": 176.24402,
+      "y": 690.332,
+      "h": 11.040039
+    },
     "pagePair": [
       0,
       null
@@ -47,6 +56,7 @@
     "id": "12037affb0bd76c7",
     "kind": "replace",
     "before": {
+      "kind": "boxes",
       "text": "1,000,000원을",
       "boxes": [
         {"page":0,"x":274.68,"y":691.868,"w":5.76001,"h":8.783997}
@@ -54,6 +64,7 @@
       "minConfidence": null
     },
     "after": {
+      "kind": "boxes",
       "text": "1,500,000원을",
       "boxes": [
         {"page":0,"x":250.644,"y":691.868,"w":5.43602,"h":8.627991}
@@ -70,6 +81,7 @@
     "id": "8335b6f7513a6f5e",
     "kind": "replace",
     "before": {
+      "kind": "boxes",
       "text": "5%로",
       "boxes": [
         {"page":0,"x":182.55603,"y":669.868,"w":27.64798,"h":8.856018}
@@ -77,6 +89,7 @@
       "minConfidence": null
     },
     "after": {
+      "kind": "boxes",
       "text": "15%로",
       "boxes": [
         {"page":0,"x":182.24402,"y":670.0,"w":5.951996,"h":8.495972}
@@ -92,8 +105,15 @@
   {
     "id": "b59aae01508f7407",
     "kind": "insert",
-    "before": null,
+    "before": {
+      "kind": "anchor",
+      "page": 1,
+      "x": 203.67601,
+      "y": 756.536,
+      "h": 10.835999
+    },
     "after": {
+      "kind": "boxes",
       "text": "이 의무는 계약이 끝난 후에도 3년간 유지된다.",
       "boxes": [
         {"page":1,"x":208.17603,"y":756.296,"w":103.931946,"h":11.075989},
@@ -110,8 +130,15 @@
   {
     "id": "e89f9dcb0aaf5d7f",
     "kind": "insert",
-    "before": null,
+    "before": {
+      "kind": "anchor",
+      "page": 1,
+      "x": 303.024,
+      "y": 734.236,
+      "h": 11.135986
+    },
     "after": {
+      "kind": "boxes",
       "text": "14일 전에",
       "boxes": [
         {"page":1,"x":306.92395,"y":712.332,"w":47.736053,"h":11.040039}
@@ -128,6 +155,7 @@
     "id": "9a10802bfbbb4dfa",
     "kind": "replace",
     "before": {
+      "kind": "boxes",
       "text": "서울중앙지방법원을",
       "boxes": [
         {"page":1,"x":229.104,"y":690.176,"w":42.13199,"h":11.207947}
@@ -135,6 +163,7 @@
       "minConfidence": null
     },
     "after": {
+      "kind": "boxes",
       "text": "수원지방법원을",
       "boxes": [
         {"page":1,"x":229.008,"y":668.404,"w":19.955994,"h":10.968018}

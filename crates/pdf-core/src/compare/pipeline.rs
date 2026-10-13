@@ -12,6 +12,7 @@ use std::time::Duration;
 
 use pdfium_render::prelude::PdfDocument;
 
+use super::anchors::ComparedPages;
 use super::diff::diff_tokens;
 use super::extract::{ExtractedPage, read_text_layer};
 use super::model::{Change, NoTextReason, Notice, PageSizes, PageSources, Side, TextSource};
@@ -209,7 +210,20 @@ pub fn compare_texts(
         options,
         |_| {},
     );
-    let diff = diff_tokens(&before_tokens, &after_tokens, time_limit);
+    let sizes = |document: &DocumentText| document.pages.iter().map(|page| page.size).collect();
+    let page_sizes = PageSizes {
+        before: sizes(before),
+        after: sizes(after),
+    };
+    // 비교 범위는 문서 전체다. 쪽 수는 pdfium의 c_int 범위라 u32로 센다(ADR 0001 §1).
+    let all_pages = |document: &DocumentText| (0_u32..).take(document.pages.len()).collect();
+    let (before_pages, after_pages): (Vec<u32>, Vec<u32>) = (all_pages(before), all_pages(after));
+    let pages = ComparedPages {
+        before: &before_pages,
+        after: &after_pages,
+        sizes: &page_sizes,
+    };
+    let diff = diff_tokens(&before_tokens, &after_tokens, &pages, time_limit);
 
     let low_confidence = [before, after].map(|document| {
         (0_u32..)
@@ -226,14 +240,10 @@ pub fn compare_texts(
         diff.truncated,
     );
 
-    let sizes = |document: &DocumentText| document.pages.iter().map(|page| page.size).collect();
     let sources = |document: &DocumentText| document.sources.iter().copied().map(Some).collect();
     TextComparison {
         changes: diff.changes,
-        page_sizes: PageSizes {
-            before: sizes(before),
-            after: sizes(after),
-        },
+        page_sizes,
         page_sources: PageSources {
             before: sources(before),
             after: sources(after),

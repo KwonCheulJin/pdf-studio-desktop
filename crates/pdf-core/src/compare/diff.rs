@@ -9,6 +9,7 @@
 //!   하므로 `Replace`로 내고, OCR 토큰이 걸리면 확인 필요 `Replace`로 낸다(ADR 0001 §5).
 //! - `needs_review`·`min_confidence`는 걸린 토큰의 OCR 신뢰도로 정한다(`review.rs`).
 //! - `Replace`의 상자는 키 글자 단위 2차 diff에서 실제로 다른 글자만 덮는다.
+//! - 한쪽에만 있는 변경(`Insert`·`Delete`)의 빈 쪽은 반대쪽 문서의 들어갈 자리(앵커, `anchors.rs`)다.
 //! - 시간 제한이 지나면 남은 정밀 diff(앵커 구간의 토큰 diff, `Replace`의 글자 diff)를 하지
 //!   않고 통째로 낸 뒤 `Truncated`로 알린다.
 
@@ -19,7 +20,9 @@ use std::time::{Duration, Instant};
 use sha2::{Digest, Sha256};
 use similar::{Algorithm, DiffTag, capture_diff_deadline, capture_diff_slices_deadline};
 
-use super::model::{Change, ChangeKind, ChangeSide, Notice, TextBox};
+use super::anchors::{ComparedPages, anchor};
+use super::model::{Change, ChangeKind, Notice, Placement, Side, TextBox};
+use super::pages::pair_pages;
 use super::review::{has_ocr_token, min_confidence, needs_review};
 use super::tokenize::{Token, union};
 
@@ -57,10 +60,16 @@ pub struct TokenDiff {
     pub matches: Vec<(usize, usize)>,
 }
 
-/// 두 토큰열을 비교해 변경 목록을 만든다. `time_limit`(보통 [`DIFF_TIME_LIMIT`])이 지나면 남은
-/// 정밀 diff를 하지 않는다.
-pub fn diff_tokens(before: &[Token], after: &[Token], time_limit: Duration) -> TokenDiff {
-    diff_tokens_with_progress(before, after, time_limit, |_, _| {})
+/// 두 토큰열을 비교해 변경 목록을 만든다. `pages`는 두 토큰열을 만든 비교 범위의 쪽과 쪽 크기다
+/// (반대쪽에 토큰이 하나도 없는 변경의 앵커를 놓는다). `time_limit`(보통 [`DIFF_TIME_LIMIT`])이
+/// 지나면 남은 정밀 diff를 하지 않는다.
+pub fn diff_tokens(
+    before: &[Token],
+    after: &[Token],
+    pages: &ComparedPages,
+    time_limit: Duration,
+) -> TokenDiff {
+    diff_tokens_with_progress(before, after, pages, time_limit, |_, _| {})
 }
 
 /// [`diff_tokens`]와 같다. 앵커 사이 구간마다 비교를 시작하기 전에 `on_gap(끝낸 구간 수, 구간 수)`를
@@ -68,6 +77,7 @@ pub fn diff_tokens(before: &[Token], after: &[Token], time_limit: Duration) -> T
 pub(super) fn diff_tokens_with_progress(
     before: &[Token],
     after: &[Token],
+    pages: &ComparedPages,
     time_limit: Duration,
     mut on_gap: impl FnMut(usize, usize),
 ) -> TokenDiff {
@@ -90,15 +100,44 @@ pub(super) fn diff_tokens_with_progress(
         let Some(kind) = change_kind(before_tokens, after_tokens) else {
             continue;
         };
-        let precise = match kind {
-            ChangeKind::Replace if !hunk.truncated => {
-                replace_sides(before_tokens, after_tokens, deadline)
+        // 반대쪽에 토큰이 없을 때만 쓴다. 그때는 공통 토큰이 없어 `matches`가 비므로 결과의
+        // `page_pairs`(실행기가 같은 인자로 부른다)와 같은 행이다.
+        let rows = || pair_pages(pages.before, pages.after, before, after, &matches);
+        let (before_side, after_side, is_truncated) = match kind {
+            ChangeKind::Insert => {
+                let after_side = whole_side(after_tokens);
+                let before_side = anchor(
+                    Side::Before,
+                    before,
+                    hunk.before.start,
+                    after_side.boxes(),
+                    pages,
+                    rows,
+                );
+                (before_side, after_side, hunk.truncated)
             }
-            _ => None,
+            ChangeKind::Delete => {
+                let before_side = whole_side(before_tokens);
+                let after_side = anchor(
+                    Side::After,
+                    after,
+                    hunk.after.start,
+                    before_side.boxes(),
+                    pages,
+                    rows,
+                );
+                (before_side, after_side, hunk.truncated)
+            }
+            ChangeKind::Replace => {
+                let precise = (!hunk.truncated)
+                    .then(|| replace_sides(before_tokens, after_tokens, deadline))
+                    .flatten();
+                let is_truncated = precise.is_none();
+                let (before_side, after_side) = precise
+                    .unwrap_or_else(|| (whole_side(before_tokens), whole_side(after_tokens)));
+                (before_side, after_side, is_truncated)
+            }
         };
-        let is_truncated = hunk.truncated || (kind == ChangeKind::Replace && precise.is_none());
-        let (before_side, after_side) =
-            precise.unwrap_or_else(|| (whole_side(before_tokens), whole_side(after_tokens)));
         if is_truncated {
             before_pages.extend(token_pages(before_tokens));
             after_pages.extend(token_pages(after_tokens));
@@ -423,8 +462,8 @@ fn joined_key_chars(tokens: &[Token]) -> impl Iterator<Item = char> + '_ {
     tokens.iter().flat_map(|token| token.key.chars())
 }
 
-/// 걸린 토큰 전체 글자를 덮는 쪽. 토큰이 없으면 `None`이다.
-fn whole_side(tokens: &[Token]) -> Option<ChangeSide> {
+/// 걸린 토큰(하나 이상) 전체 글자를 덮는 쪽
+fn whole_side(tokens: &[Token]) -> Placement {
     let boxes: Vec<TextBox> = key_boxes(tokens).collect();
     let marked = vec![true; boxes.len()];
     side(tokens, &boxes, &marked)
@@ -436,7 +475,7 @@ fn replace_sides(
     before: &[Token],
     after: &[Token],
     deadline: Option<Instant>,
-) -> Option<(Option<ChangeSide>, Option<ChangeSide>)> {
+) -> Option<(Placement, Placement)> {
     if is_past(deadline) {
         return None;
     }
@@ -475,20 +514,24 @@ fn key_boxes(tokens: &[Token]) -> impl Iterator<Item = TextBox> + '_ {
         .flat_map(|token| token.key_boxes.iter().copied())
 }
 
-fn side(tokens: &[Token], boxes: &[TextBox], marked: &[bool]) -> Option<ChangeSide> {
-    if tokens.is_empty() {
-        return None;
-    }
+/// 걸린 토큰(하나 이상)의 글자와 표시한 글자 상자
+fn side(tokens: &[Token], boxes: &[TextBox], marked: &[bool]) -> Placement {
     let text = tokens
         .iter()
         .map(|token| token.text.as_str())
         .collect::<Vec<_>>()
         .join(" ");
-    Some(ChangeSide {
+    Placement::Boxes {
         text,
         boxes: highlight_boxes(boxes, marked),
         min_confidence: min_confidence(tokens),
-    })
+    }
+}
+
+/// 상자들을 텍스트 순서로 같은 줄끼리 합친 줄 상자(모든 글자를 표시한 [`highlight_boxes`]).
+/// 앵커(`anchors.rs`)가 이웃 토큰의 줄 상자를 구할 때 쓴다.
+pub(super) fn line_boxes(boxes: &[TextBox]) -> Vec<TextBox> {
+    highlight_boxes(boxes, &vec![true; boxes.len()])
 }
 
 /// 표시한 키 글자의 상자를 텍스트 순서로 합친다.
@@ -532,10 +575,9 @@ pub(super) fn continues_line(current: &TextBox, next: &TextBox) -> bool {
         && gap <= SAME_LINE_MAX_GAP * current.h.max(next.h)
 }
 
-fn first_page(side: &Option<ChangeSide>) -> Option<u32> {
-    side.as_ref()
-        .and_then(|side| side.boxes.first())
-        .map(|bounds| bounds.page)
+/// 그 쪽 첫 상자의 쪽. 앵커는 상자가 없어 `None`이다(ADR 0001 §3).
+fn first_page(side: &Placement) -> Option<u32> {
+    side.boxes().first().map(|bounds| bounds.page)
 }
 
 /// 토큰 글자 상자가 걸친 쪽(하이픈으로 이은 토큰은 두 쪽에 걸칠 수 있다)
@@ -588,6 +630,8 @@ fn change_id(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::compare::model::{PageSize, PageSizes};
+    use crate::info::{PageBox, PageRotation};
 
     const GLYPH_WIDTH: f32 = 10.0;
     const GLYPH_HEIGHT: f32 = 12.0;
@@ -601,6 +645,32 @@ mod tests {
             w: GLYPH_WIDTH,
             h: GLYPH_HEIGHT,
         }
+    }
+
+    /// 테스트 토큰이 놓이는 쪽(두 문서 모두 A4 네 쪽)
+    const PAGES: [u32; 4] = [0, 1, 2, 3];
+
+    /// 두 문서가 [`PAGES`]인 비교. 테스트 토큰열은 양쪽 모두 비지 않아 쪽 크기를 쓰지 않는다.
+    fn diff_on_a4(before: &[Token], after: &[Token], time_limit: Duration) -> TokenDiff {
+        let a4 = PageSize {
+            view_box: PageBox {
+                left: 0.0,
+                bottom: 0.0,
+                right: 595.0,
+                top: 842.0,
+            },
+            rotation: PageRotation::Degrees0,
+        };
+        let sizes = PageSizes {
+            before: vec![a4; PAGES.len()],
+            after: vec![a4; PAGES.len()],
+        };
+        let pages = ComparedPages {
+            before: &PAGES,
+            after: &PAGES,
+            sizes: &sizes,
+        };
+        diff_tokens(before, after, &pages, time_limit)
     }
 
     /// `page` 쪽 한 줄에 왼쪽부터 놓은 단어(키 = 원문). 글자는 `GLYPH_WIDTH`, 단어 사이는
@@ -656,7 +726,7 @@ mod tests {
             ],
         );
 
-        let diff = diff_tokens(&before, &after, DIFF_TIME_LIMIT);
+        let diff = diff_on_a4(&before, &after, DIFF_TIME_LIMIT);
 
         let ids: Vec<&str> = diff
             .changes
@@ -680,7 +750,7 @@ mod tests {
         let before = line(0, &[clause("X"), clause("X")].concat());
         let after = line(0, &[clause("Y"), clause("Y")].concat());
 
-        let diff = diff_tokens(&before, &after, DIFF_TIME_LIMIT);
+        let diff = diff_on_a4(&before, &after, DIFF_TIME_LIMIT);
 
         let [first, second] = diff.changes.as_slice() else {
             panic!("expected two changes, got {:#?}", diff.changes);
@@ -705,7 +775,7 @@ mod tests {
         ]
         .concat();
 
-        let diff = diff_tokens(&before, &after, Duration::ZERO);
+        let diff = diff_on_a4(&before, &after, Duration::ZERO);
 
         let whole_token = |page| TextBox {
             w: 5.0 * GLYPH_WIDTH,
@@ -715,9 +785,9 @@ mod tests {
             .changes
             .iter()
             .map(|change| {
-                let side = |side: &Option<ChangeSide>| {
-                    side.as_ref()
-                        .map(|side| (side.text.clone(), side.boxes.clone()))
+                let side = |side: &Placement| {
+                    side.text()
+                        .map(|text| (text.to_owned(), side.boxes().to_vec()))
                 };
                 (change.kind, side(&change.before), side(&change.after))
             })
@@ -764,16 +834,15 @@ mod tests {
         }];
         let after = line(0, &["[주]한빛"]);
 
-        let diff = diff_tokens(&before, &after, DIFF_TIME_LIMIT);
+        let diff = diff_on_a4(&before, &after, DIFF_TIME_LIMIT);
 
         let [change] = diff.changes.as_slice() else {
             panic!("expected one change, got {:#?}", diff.changes);
         };
-        let boxes = |side: &Option<ChangeSide>| side.as_ref().map(|side| side.boxes.clone());
-        assert_eq!(boxes(&change.before), Some(vec![circled]));
+        assert_eq!(change.before.boxes(), [circled]);
         assert_eq!(
-            boxes(&change.after),
-            Some(vec![glyph(0, 0.0), glyph(0, 2.0 * GLYPH_WIDTH)])
+            change.after.boxes(),
+            [glyph(0, 0.0), glyph(0, 2.0 * GLYPH_WIDTH)]
         );
     }
 
@@ -800,12 +869,8 @@ mod tests {
 
     /// 변경마다 (종류, A 원문, B 원문)
     fn change_texts(before: &[&str], after: &[&str]) -> Vec<(ChangeKind, String, String)> {
-        let text = |side: &Option<ChangeSide>| {
-            side.as_ref()
-                .map(|side| side.text.clone())
-                .unwrap_or_default()
-        };
-        diff_tokens(&line(0, before), &line(0, after), DIFF_TIME_LIMIT)
+        let text = |side: &Placement| side.text().unwrap_or_default().to_owned();
+        diff_on_a4(&line(0, before), &line(0, after), DIFF_TIME_LIMIT)
             .changes
             .iter()
             .map(|change| (change.kind, text(&change.before), text(&change.after)))

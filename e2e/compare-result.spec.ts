@@ -10,6 +10,7 @@ import type {
   CompareResult,
   PageInfo,
   PageSize,
+  Placement,
   TextSource
 } from "../src/renderer/shared/api/bindings";
 
@@ -528,8 +529,9 @@ test("짝 없는 쪽은 반대편에 자리표시를 두고, 목록 머리와 �
   const newPage: Change = {
     id: "new-page",
     kind: "insert",
-    before: null,
+    before: { kind: "anchor", page: 1, x: 300, y: 600, h: 14 },
     after: {
+      kind: "boxes",
       text: "새 쪽",
       boxes: [{ page: 2, x: 60, y: 700, w: 200, h: 14 }],
       minConfidence: null
@@ -736,7 +738,8 @@ test("하이라이트 사각형이 pdf.js 글자 위치와 맞는다(CropBox 오
     firstLineOf(GEOMETRY_PAGES[pageIndex])
   );
   const changes: Change[] = GEOMETRY_CASES.map(({ page: pageIndex }, index) => {
-    const side = {
+    const side: Placement = {
+      kind: "boxes",
       text: lines[index].text,
       boxes: [lines[index].box],
       minConfidence: null
@@ -962,11 +965,12 @@ test("100쪽 결과: 화면 근처 행만 그리고, 멀리 건너뛰어도 사�
     id: "far",
     kind: "delete",
     before: {
+      kind: "boxes",
       text: `Page ${farPage + 1}`,
       boxes: [{ page: farPage, x: 72, y: 712, w: 150, h: 36 }],
       minConfidence: null
     },
-    after: null,
+    after: { kind: "anchor", page: farPage, x: 72, y: 712, h: 36 },
     pagePair: [farPage, null],
     needsReview: false
   };

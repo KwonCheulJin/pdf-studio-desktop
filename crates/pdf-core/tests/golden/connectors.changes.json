@@ -3,6 +3,7 @@
     "id": "e387bdb799d57c08",
     "kind": "replace",
     "before": {
+      "kind": "boxes",
       "text": "서면으로 통지한",
       "boxes": [
         {"page":0,"x":282.62396,"y":778.596,"w":19.812012,"h":10.776001},
@@ -11,6 +12,7 @@
       "minConfidence": null
     },
     "after": {
+      "kind": "boxes",
       "text": "전자우편으로 알린",
       "boxes": [
         {"page":0,"x":282.792,"y":778.404,"w":41.05197,"h":10.968018},
@@ -28,6 +30,7 @@
     "id": "a3eaff9fa07e5ac5",
     "kind": "replace",
     "before": {
+      "kind": "boxes",
       "text": "1,000,000원으로",
       "boxes": [
         {"page":0,"x":204.79202,"y":699.868,"w":5.7599945,"h":8.783997}
@@ -35,6 +38,7 @@
       "minConfidence": null
     },
     "after": {
+      "kind": "boxes",
       "text": "1,200,000원으로",
       "boxes": [
         {"page":0,"x":204.90002,"y":700.0,"w":5.567993,"h":8.651978}
@@ -51,6 +55,7 @@
     "id": "76272daf7ebc9546",
     "kind": "replace",
     "before": {
+      "kind": "boxes",
       "text": "30%로",
       "boxes": [
         {"page":0,"x":165.33601,"y":677.868,"w":5.5559998,"h":8.783997}
@@ -58,6 +63,7 @@
       "minConfidence": null
     },
     "after": {
+      "kind": "boxes",
       "text": "40%로",
       "boxes": [
         {"page":0,"x":165.28802,"y":678.0,"w":6.215988,"h":8.495972}
@@ -74,6 +80,7 @@
     "id": "a5a8f1b0f2a77dec",
     "kind": "replace",
     "before": {
+      "kind": "boxes",
       "text": "14일",
       "boxes": [
         {"page":0,"x":189.68402,"y":656.0,"w":13.2599945,"h":8.495972}
@@ -81,6 +88,7 @@
       "minConfidence": null
     },
     "after": {
+      "kind": "boxes",
       "text": "7일",
       "boxes": [
         {"page":0,"x":189.90002,"y":656.0,"w":5.496002,"h":8.495972}
@@ -97,6 +105,7 @@
     "id": "0e2d6cb0d6a51ff4",
     "kind": "replace",
     "before": {
+      "kind": "boxes",
       "text": "2일부터",
       "boxes": [
         {"page":0,"x":251.172,"y":600.0,"w":5.567993,"h":8.651978}
@@ -104,6 +113,7 @@
       "minConfidence": null
     },
     "after": {
+      "kind": "boxes",
       "text": "9일부터",
       "boxes": [
         {"page":0,"x":251.148,"y":600.0,"w":5.5919952,"h":8.651978}
@@ -120,6 +130,7 @@
     "id": "90594a00945c7201",
     "kind": "replace",
     "before": {
+      "kind": "boxes",
       "text": "10일로",
       "boxes": [
         {"page":0,"x":231.936,"y":573.868,"w":5.7599945,"h":8.783997}
@@ -127,6 +138,7 @@
       "minConfidence": null
     },
     "after": {
+      "kind": "boxes",
       "text": "15일로",
       "boxes": [
         {"page":0,"x":232.14,"y":573.868,"w":5.4360046,"h":8.627991}
@@ -143,6 +155,7 @@
     "id": "f86d76bcf7d6d95d",
     "kind": "replace",
     "before": {
+      "kind": "boxes",
       "text": "1년으로",
       "boxes": [
         {"page":0,"x":204.92401,"y":520.0,"w":5.951996,"h":8.495972}
@@ -150,6 +163,7 @@
       "minConfidence": null
     },
     "after": {
+      "kind": "boxes",
       "text": "2년으로",
       "boxes": [
         {"page":0,"x":205.14001,"y":520.0,"w":5.567993,"h":8.651978}
@@ -166,6 +180,7 @@
     "id": "35109fec5eb7834c",
     "kind": "replace",
     "before": {
+      "kind": "boxes",
       "text": "5%로",
       "boxes": [
         {"page":0,"x":165.75601,"y":487.868,"w":5.4360046,"h":8.627991}
@@ -173,6 +188,7 @@
       "minConfidence": null
     },
     "after": {
+      "kind": "boxes",
       "text": "3%로",
       "boxes": [
         {"page":0,"x":165.33601,"y":487.868,"w":5.5559998,"h":8.783997}
@@ -189,6 +205,7 @@
     "id": "024e1b0456aacf24",
     "kind": "replace",
     "before": {
+      "kind": "boxes",
       "text": "0.1%로",
       "boxes": [
         {"page":0,"x":282.44397,"y":430.0,"w":5.951996,"h":8.496002}
@@ -196,6 +213,7 @@
       "minConfidence": null
     },
     "after": {
+      "kind": "boxes",
       "text": "0.2%로",
       "boxes": [
         {"page":0,"x":282.65997,"y":430.0,"w":5.567993,"h":8.652008}
@@ -212,6 +230,7 @@
     "id": "1df92b9ddbd49293",
     "kind": "replace",
     "before": {
+      "kind": "boxes",
       "text": "10%를",
       "boxes": [
         {"page":0,"x":200.38802,"y":404.0,"w":5.951996,"h":8.496002}
@@ -219,6 +238,7 @@
       "minConfidence": null
     },
     "after": {
+      "kind": "boxes",
       "text": "20%를",
       "boxes": [
         {"page":0,"x":200.60402,"y":398.0,"w":5.567993,"h":8.652008}
@@ -235,6 +255,7 @@
     "id": "7f3af8fea08fcf3f",
     "kind": "replace",
     "before": {
+      "kind": "boxes",
       "text": "갑의",
       "boxes": [
         {"page":0,"x":156.504,"y":348.392,"w":9.900009,"h":10.980011}
@@ -242,6 +263,7 @@
       "minConfidence": null
     },
     "after": {
+      "kind": "boxes",
       "text": "을의",
       "boxes": [
         {"page":0,"x":156.28801,"y":326.332,"w":9.792007,"h":11.040009}
@@ -258,6 +280,7 @@
     "id": "8b590db15945d8e7",
     "kind": "replace",
     "before": {
+      "kind": "boxes",
       "text": "2통을",
       "boxes": [
         {"page":0,"x":120.01201,"y":328.0,"w":5.567993,"h":8.652008}
@@ -265,6 +288,7 @@
       "minConfidence": null
     },
     "after": {
+      "kind": "boxes",
       "text": "3통을",
       "boxes": [
         {"page":0,"x":119.688,"y":349.868,"w":5.5559998,"h":8.783997}
@@ -280,8 +304,15 @@
   {
     "id": "dc51a1a0382ab2f8",
     "kind": "insert",
-    "before": null,
+    "before": {
+      "kind": "anchor",
+      "page": 0,
+      "x": 225.264,
+      "y": 258.2,
+      "h": 11.171997
+    },
     "after": {
+      "kind": "boxes",
       "text": "서로 협의해",
       "boxes": [
         {"page":0,"x":229.104,"y":258.392,"w":54.803986,"h":10.980011}
@@ -298,13 +329,20 @@
     "id": "813c80b548d3819e",
     "kind": "delete",
     "before": {
+      "kind": "boxes",
       "text": "이",
       "boxes": [
         {"page":0,"x":130.656,"y":198.824,"w":8.615997,"h":10.547989}
       ],
       "minConfidence": null
     },
-    "after": null,
+    "after": {
+      "kind": "anchor",
+      "page": 0,
+      "x": 126.600006,
+      "y": 198.392,
+      "h": 10.979996
+    },
     "pagePair": [
       0,
       null
@@ -315,6 +353,7 @@
     "id": "be7ed9a9fb5e2cc1",
     "kind": "replace",
     "before": {
+      "kind": "boxes",
       "text": "7일",
       "boxes": [
         {"page":1,"x":111.504,"y":141.716,"w":8.496002,"h":5.496002}
@@ -322,6 +361,7 @@
       "minConfidence": null
     },
     "after": {
+      "kind": "boxes",
       "text": "10일",
       "boxes": [
         {"page":1,"x":121.5,"y":514.868,"w":13.068008,"h":8.783997}
@@ -338,6 +378,7 @@
     "id": "c029cb739954bd63",
     "kind": "replace",
     "before": {
+      "kind": "boxes",
       "text": "5일을",
       "boxes": [
         {"page":1,"x":133.504,"y":304.12396,"w":8.628006,"h":5.436035}
@@ -345,6 +386,7 @@
       "minConfidence": null
     },
     "after": {
+      "kind": "boxes",
       "text": "3일을",
       "boxes": [
         {"page":1,"x":283.70398,"y":492.868,"w":5.5559998,"h":8.783997}
@@ -361,6 +403,7 @@
     "id": "d3c77aa4c6559962",
     "kind": "replace",
     "before": {
+      "kind": "boxes",
       "text": "2026년",
       "boxes": [
         {"page":1,"x":231.504,"y":150.884,"w":8.628006,"h":5.5919952}
@@ -368,6 +411,7 @@
       "minConfidence": null
     },
     "after": {
+      "kind": "boxes",
       "text": "2027년",
       "boxes": [
         {"page":1,"x":130.908,"y":395.0,"w":5.495987,"h":8.496002}

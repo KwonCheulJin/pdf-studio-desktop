@@ -1,14 +1,17 @@
 import type {
   Change,
   ChangeKind,
-  ChangeSide,
   CompareResult,
   PageSize,
   Side,
   TextBox
 } from "@/renderer/shared/api/bindings";
 import { COMPARE_SIDE } from "../config/change-kind";
-import type { PagePair } from "./change-rows";
+import {
+  changeSideOf,
+  type BoxesPlacement,
+  type PagePair
+} from "./change-rows";
 
 /**
  * 이웃한 두 변경을 한 묶음으로 붙이는 세로 간격의 상한(pt). Rust `CONNECTOR_GAP_PT`와 같은 값이다
@@ -124,7 +127,7 @@ interface RowPage {
 }
 
 /** 그 쪽에 있는 상자들의 합집합과 화면 방향 가장자리. 그 쪽에 상자가 없으면 `null` */
-function placeOn(side: ChangeSide, { page, size }: RowPage): Placed | null {
+function placeOn(side: BoxesPlacement, { page, size }: RowPage): Placed | null {
   const onPage = side.boxes.filter((box) => box.page === page).map(edgesOf);
   if (onPage.length === 0) return null;
   const bounds = onPage.reduce(unionOf);
@@ -213,8 +216,10 @@ export function rowConnectorStems({
   const linked = changes.flatMap((change, index): Linked[] => {
     const [changeBefore, changeAfter] = change.pagePair;
     if (changeBefore !== beforePage || changeAfter !== afterPage) return [];
-    const before = change.before && placeOn(change.before, beforeRow);
-    const after = change.after && placeOn(change.after, afterRow);
+    const beforeSide = changeSideOf({ change, side: COMPARE_SIDE.BEFORE });
+    const afterSide = changeSideOf({ change, side: COMPARE_SIDE.AFTER });
+    const before = beforeSide && placeOn(beforeSide, beforeRow);
+    const after = afterSide && placeOn(afterSide, afterRow);
     return before && after ? [{ index, change, before, after }] : [];
   });
   const afterRank = readingOrderOf({ linked, side: COMPARE_SIDE.AFTER }).reduce(

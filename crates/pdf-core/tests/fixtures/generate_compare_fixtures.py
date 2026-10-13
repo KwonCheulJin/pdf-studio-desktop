@@ -23,6 +23,9 @@
 - connectors-a.pdf·connectors-b.pdf(Step 28): 연결선 묶기 사례(여러 줄 변경, 인접 변경 3개, 20pt
   경계 안·밖, A만 경계 안, 순서가 뒤바뀐 변경, 추가·삭제)를 둔 세로 쪽과 가로 쪽(A는 /Rotate 90에
   돌려 그린 글자, B는 가로 MediaBox) 2쪽.
+- placement-a.pdf·placement-b.pdf·placement-blank.pdf(Step 28-b): 앵커 사례(문서 맨 앞·줄 가운데·
+  줄 경계·쪽 경계·문서 맨 끝 삽입, 줄 가운데 삭제)와 같은 줄 상자 병합 사례(한 줄 두 낱말, 줄을 넘는
+  삽입, 같은 높이 두 단에 걸친 삽입)를 둔 3쪽 짝과, 반대쪽이 빈 쪽인 사례에 쓰는 글자 없는 한 쪽.
 
     python3 crates/pdf-core/tests/fixtures/generate_compare_fixtures.py
 
@@ -1066,6 +1069,81 @@ def connectors_pdf(side: str) -> bytes:
     return build_document(specs, font.objects, font.encode)
 
 
+# --- 앵커·상자 병합(Step 28-b) -------------------------------------------------------
+
+# 0·1쪽은 한 단 본문이다. B는 앵커 사례(문서 맨 앞 `전문`, 줄 가운데 `서로의 모든`, 줄 경계 `총`, 쪽
+# 경계 `부칙`, 문서 맨 끝 `끝.` 삽입과 줄 가운데 `금` 삭제)와 병합 사례(한 줄 두 낱말 `서로의 모든`,
+# 줄을 넘는 삽입 `상대방은 서면으로 통지하고 그 뒤에`)를 둔다. 줄을 넘는 삽입의 둘째 줄은 들여 써서
+# (`PLACEMENT_INDENT`) 첫째 줄 상자 왼쪽 끝보다 오른쪽에서 시작한다. 그래야 같은 줄 판정 중 세로
+# 겹침만이 두 줄을 가른다. 줄은 문자열(왼쪽 여백에서 시작) 또는 (x, 문자열)이다.
+PLACEMENT_INDENT = 72
+PLACEMENT_BEFORE_PAGES = [
+    [
+        "제1조(목적) 이 계약은 갑과 을의 권리와 의무를 정한다.",
+        "계약 금액은 금 1,000,000원으로 하고",
+        "잔금은 검수를 마친 뒤에 지급한다.",
+    ],
+    ["제2조(해지) 어느 한쪽이 위반하면 해지할 수 있다.", "이 계약서는 2통을 만든다."],
+]
+PLACEMENT_AFTER_PAGES = [
+    [
+        "전문 제1조(목적) 이 계약은 갑과 을의 서로의 모든 권리와 의무를 정한다.",
+        "총 계약 금액은 1,000,000원으로 하고",
+        "잔금은 검수를 마친 뒤에 지급한다.",
+    ],
+    [
+        "부칙 제2조(해지) 어느 한쪽이 위반하면",
+        "상대방은 서면으로 통지하고",
+        (PLACEMENT_INDENT, "그 뒤에 해지할 수 있다."),
+        "이 계약서는 2통을 만든다. 끝.",
+    ],
+]
+# 2쪽은 두 단이다. 같은 높이의 왼쪽 단 줄과 오른쪽 단 줄을 번갈아 그려(내용 스트림 순서가 글자
+# 순서다) 한 변경이 같은 높이의 두 단에 걸치게 한다. B는 왼쪽 단 첫 줄 끝에 `모두`, 오른쪽 단 첫 줄
+# 앞에 `또한`을 넣는다. 두 낱말 사이는 단 사이 간격(약 18pt, 흔한 단 간격 0.25인치)이라 글자
+# 높이(약 11pt) 기준 병합 한도를 넘어 상자 둘로 남아야 한다.
+PLACEMENT_COLUMN_X = (TOKENIZE_LEFT, 208)
+PLACEMENT_BEFORE_COLUMNS = [
+    ("제3조(갑) 갑은 대금을", "제4조(을) 을은 물품을"),
+    ("기한 안에 낸다.", "기한 안에 넘긴다."),
+]
+PLACEMENT_AFTER_COLUMNS = [
+    ("제3조(갑) 갑은 대금을 모두", "또한 제4조(을) 을은 물품을"),
+    ("기한 안에 낸다.", "기한 안에 넘긴다."),
+]
+
+
+def column_page(rows: list[tuple[str, str]]) -> PageSpec:
+    return PageSpec(
+        media_box=A4_MEDIA_BOX,
+        runs=[
+            TextRun(x, TOKENIZE_TOP - index * TOKENIZE_LINE_GAP, text, TOKENIZE_FONT_SIZE)
+            for index, row in enumerate(rows)
+            for x, text in zip(PLACEMENT_COLUMN_X, row)
+        ],
+    )
+
+
+def placement_runs(lines: list[str | tuple[float, str]]) -> list[TextRun]:
+    runs = []
+    for index, line in enumerate(lines):
+        x, text = line if isinstance(line, tuple) else (TOKENIZE_LEFT, line)
+        runs.append(TextRun(x, TOKENIZE_TOP - index * TOKENIZE_LINE_GAP, text, TOKENIZE_FONT_SIZE))
+    return runs
+
+
+def placement_pdf(pages: list[list[str | tuple[float, str]]], columns: list[tuple[str, str]]) -> bytes:
+    specs = [PageSpec(media_box=A4_MEDIA_BOX, runs=placement_runs(lines)) for lines in pages]
+    specs.append(column_page(columns))
+    font = korean_font(specs)
+    return build_document(specs, font.objects, font.encode)
+
+
+def blank_pdf() -> bytes:
+    """글자가 없는 A4 한 쪽(반대쪽이 빈 쪽인 앵커 사례)"""
+    return build_document([PageSpec(media_box=A4_MEDIA_BOX, runs=[])], HELVETICA, pdf_literal)
+
+
 def main() -> None:
     fixtures = {
         "text-geometry.pdf": text_geometry_pdf(),
@@ -1083,6 +1161,9 @@ def main() -> None:
         "pages-push.pdf": diff_pdf(PAGES_PUSH),
         "connectors-a.pdf": connectors_pdf("before"),
         "connectors-b.pdf": connectors_pdf("after"),
+        "placement-a.pdf": placement_pdf(PLACEMENT_BEFORE_PAGES, PLACEMENT_BEFORE_COLUMNS),
+        "placement-b.pdf": placement_pdf(PLACEMENT_AFTER_PAGES, PLACEMENT_AFTER_COLUMNS),
+        "placement-blank.pdf": blank_pdf(),
     }
     for name, data in fixtures.items():
         (OUTPUT_DIR / name).write_bytes(data)

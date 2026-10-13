@@ -4,9 +4,10 @@
 use std::time::Duration;
 
 use pdf_core::{
-    CompareOptions, CompareOptionsError, DIFF_TIME_LIMIT, ExtractedChar, ExtractedPage, Glyph,
-    LineExclusions, PageBox, PageRotation, PageSize, Side, TextBox, diff_tokens, exclude_lines,
-    pair_pages, parse_page_range, select_pages, tokenize,
+    CompareOptions, CompareOptionsError, ComparedPages, DIFF_TIME_LIMIT, ExtractedChar,
+    ExtractedPage, Glyph, LineExclusions, PageBox, PageRotation, PageSize, PageSizes, Side,
+    TextBox, Token, TokenDiff, diff_tokens, exclude_lines, pair_pages, parse_page_range,
+    select_pages, tokenize,
 };
 
 const PAGE_WIDTH: f32 = 612.0;
@@ -60,6 +61,26 @@ fn line(page: u32, x: f32, y: f32, text: &str, vertical: bool) -> Vec<ExtractedC
         confidence: None,
     });
     chars
+}
+
+/// 두 문서(쪽 전체)의 비교 범위 `ranges`(A, B)에서 만든 토큰열을 diff한다.
+fn diff_in(
+    documents: [&[ExtractedPage]; 2],
+    ranges: [&[u32]; 2],
+    tokens: [&[Token]; 2],
+    time_limit: Duration,
+) -> TokenDiff {
+    let sizes = |pages: &[ExtractedPage]| pages.iter().map(|page| page.size).collect();
+    let page_sizes = PageSizes {
+        before: sizes(documents[0]),
+        after: sizes(documents[1]),
+    };
+    let pages = ComparedPages {
+        before: ranges[0],
+        after: ranges[1],
+        sizes: &page_sizes,
+    };
+    diff_tokens(tokens[0], tokens[1], &pages, time_limit)
 }
 
 fn page(rotation: PageRotation, lines: Vec<Vec<ExtractedChar>>) -> ExtractedPage {
@@ -290,7 +311,9 @@ fn ignore_case_reaches_the_diff() {
     let changes = |options: &CompareOptions| {
         let normalize = options.normalize_options();
         let (a, b) = (tokenize(&before, normalize), tokenize(&after, normalize));
-        diff_tokens(&a, &b, DIFF_TIME_LIMIT).changes.len()
+        diff_in([&before, &after], [&[0], &[0]], [&a, &b], DIFF_TIME_LIMIT)
+            .changes
+            .len()
     };
     let sensitive = CompareOptions::default();
     let insensitive = CompareOptions {
@@ -356,7 +379,12 @@ fn pairs_use_original_page_numbers_for_a_non_zero_based_range() {
         tokenize(&selected, options.normalize_options())
     };
     let (tokens_a, tokens_b) = (prepare(&pages_a, &numbers_a), prepare(&pages_b, &numbers_b));
-    let diff = diff_tokens(&tokens_a, &tokens_b, Duration::from_secs(10));
+    let diff = diff_in(
+        [&pages_a, &pages_b],
+        [&numbers_a, &numbers_b],
+        [&tokens_a, &tokens_b],
+        Duration::from_secs(10),
+    );
     assert!(diff.changes.is_empty());
     assert_eq!(
         pair_pages(&numbers_a, &numbers_b, &tokens_a, &tokens_b, &diff.matches),

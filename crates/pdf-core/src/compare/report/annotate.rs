@@ -9,7 +9,7 @@ use pdfium_render::prelude::{
     PdfQuadPoints, PdfRect, Pdfium, PdfiumError,
 };
 
-use super::super::model::{Change, ChangeKind, CompareResult, PageSize, Side, TextBox};
+use super::super::model::{Change, ChangeKind, CompareResult, PageSize, Placement, Side, TextBox};
 use super::compose::ensure_page_in_range;
 use super::{ReportError, count, ensure_not_cancelled, kind_colors};
 use crate::document::{DocumentError, open_document};
@@ -99,7 +99,8 @@ pub(super) fn annotate<'a>(
 /// 변경 하나의 주석들. 추가·변경은 B 상자가 있는 쪽마다 하나, 삭제는 메모 하나다.
 fn notes_for(change: &Change, result: &CompareResult) -> Vec<Note> {
     let contents = contents_of(change);
-    let Some(after) = &change.after else {
+    // 삭제는 B에 글자가 없다(앵커). 메모 위치는 아래 근사로 정한다.
+    let Placement::Boxes { boxes, .. } = &change.after else {
         return delete_note(change, result)
             .map(|(page, rect)| Note {
                 page,
@@ -109,7 +110,7 @@ fn notes_for(change: &Change, result: &CompareResult) -> Vec<Note> {
             .into_iter()
             .collect();
     };
-    group_by_page(&after.boxes)
+    group_by_page(boxes)
         .into_iter()
         .map(|(page, boxes)| {
             let shape = if change.needs_review {
@@ -168,7 +169,7 @@ fn group_by_page(boxes: &[TextBox]) -> Vec<(u32, PageBoxes)> {
 /// 없으면 앞 행 중 가장 가까운 B 쪽, 그것도 없으면 뒤 행 중 가장 가까운 B 쪽이다. 위치는 A 첫 상자의
 /// 왼쪽 위 모서리를 A `view_box` 안의 비율로 B `view_box`에 옮긴 점이다(근사).
 fn delete_note(change: &Change, result: &CompareResult) -> Option<(u32, PageBox)> {
-    let first = change.before.as_ref()?.boxes.first()?;
+    let first = change.before.boxes().first()?;
     let row = result
         .page_pairs
         .iter()
@@ -220,9 +221,7 @@ fn ratio(offset: f32, length: f32) -> f32 {
 
 /// 주석 내용: 변경 전후 글자. 확인 필요 변경은 앞에 표시를 붙인다.
 fn contents_of(change: &Change) -> String {
-    let before = change.before.as_ref().map(|side| side.text.as_str());
-    let after = change.after.as_ref().map(|side| side.text.as_str());
-    let body = match (before, after) {
+    let body = match (change.before.text(), change.after.text()) {
         (Some(before), Some(after)) => {
             format!("{BEFORE_LABEL}: {before}\n{AFTER_LABEL}: {after}")
         }

@@ -13,9 +13,9 @@ use std::sync::atomic::AtomicBool;
 
 use common::{assert_matches_golden, engine, fixture_path};
 use pdf_core::{
-    ChangeKind, ChangeSide, DIFF_TIME_LIMIT, DocumentText, ExtractedPage, NoTextReason,
-    NormalizeOptions, Notice, OcrCache, OcrEngine, OcrFailure, PageRotation, Side, TextBox,
-    TextComparison, TextSource, compare_texts, read_document_text,
+    ChangeKind, DIFF_TIME_LIMIT, DocumentText, ExtractedPage, NoTextReason, NormalizeOptions,
+    Notice, OcrCache, OcrEngine, OcrFailure, PageRotation, Side, TextBox, TextComparison,
+    TextSource, compare_texts, read_document_text,
 };
 use serde::Serialize;
 use similar::{Algorithm, DiffTag, capture_diff_slices};
@@ -159,10 +159,6 @@ struct ChangeText<'a> {
     needs_review: bool,
 }
 
-fn side_text(side: &Option<ChangeSide>) -> Option<&str> {
-    side.as_ref().map(|side| side.text.as_str())
-}
-
 /// 텍스트본 A ↔ 금액·날짜·비율·조항을 바꾼 B의 스캔본: 차이는 바꾼 곳뿐이고, 바꾼 곳은 모두
 /// 변경으로 나온다(금액은 OCR 숫자 토큰 신뢰도가 기준 미만이라 확인 필요). 나머지는 OCR의 끝
 /// 마침표·띄어쓰기 차이로 확인 필요다.
@@ -181,8 +177,8 @@ fn edited_scan_reports_edited_places_as_differences() {
         .iter()
         .map(|change| ChangeText {
             kind: change.kind,
-            before: side_text(&change.before),
-            after: side_text(&change.after),
+            before: change.before.text(),
+            after: change.after.text(),
             needs_review: change.needs_review,
         })
         .collect();

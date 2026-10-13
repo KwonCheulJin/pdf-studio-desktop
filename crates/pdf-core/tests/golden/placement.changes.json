@@ -1,0 +1,196 @@
+[
+  {
+    "id": "c2113290ea582cc4",
+    "kind": "insert",
+    "before": {
+      "kind": "anchor",
+      "page": 0,
+      "x": 60.42,
+      "y": 778.296,
+      "h": 11.075989
+    },
+    "after": {
+      "kind": "boxes",
+      "text": "전문",
+      "boxes": [
+        {"page":0,"x":60.72,"y":778.536,"w":20.231995,"h":10.835999}
+      ],
+      "minConfidence": null
+    },
+    "pagePair": [
+      null,
+      0
+    ],
+    "needsReview": false
+  },
+  {
+    "id": "4f7cf1eea6acb7dc",
+    "kind": "insert",
+    "before": {
+      "kind": "anchor",
+      "page": 0,
+      "x": 213.70801,
+      "y": 778.332,
+      "h": 11.040039
+    },
+    "after": {
+      "kind": "boxes",
+      "text": "서로의 모든",
+      "boxes": [
+        {"page":0,"x":242.63998,"y":778.608,"w":55.343964,"h":10.764038}
+      ],
+      "minConfidence": null
+    },
+    "pagePair": [
+      null,
+      0
+    ],
+    "needsReview": false
+  },
+  {
+    "id": "4d74d6409f7b6ec5",
+    "kind": "insert",
+    "before": {
+      "kind": "anchor",
+      "page": 0,
+      "x": 322.21198,
+      "y": 778.236,
+      "h": 11.135986
+    },
+    "after": {
+      "kind": "boxes",
+      "text": "총",
+      "boxes": [
+        {"page":0,"x":60.456,"y":756.152,"w":9.792,"h":11.160034}
+      ],
+      "minConfidence": null
+    },
+    "pagePair": [
+      null,
+      0
+    ],
+    "needsReview": false
+  },
+  {
+    "id": "6aae2ee0e000efce",
+    "kind": "delete",
+    "before": {
+      "kind": "boxes",
+      "text": "금",
+      "boxes": [
+        {"page":0,"x":119.64001,"y":756.416,"w":9.792,"h":10.57196}
+      ],
+      "minConfidence": null
+    },
+    "after": {
+      "kind": "anchor",
+      "page": 0,
+      "x": 129.432,
+      "y": 756.296,
+      "h": 11.075989
+    },
+    "pagePair": [
+      0,
+      null
+    ],
+    "needsReview": false
+  },
+  {
+    "id": "31c11f44c8eb6b44",
+    "kind": "insert",
+    "before": {
+      "kind": "anchor",
+      "page": 0,
+      "x": 223.548,
+      "y": 734.416,
+      "h": 10.955994
+    },
+    "after": {
+      "kind": "boxes",
+      "text": "부칙",
+      "boxes": [
+        {"page":1,"x":60.456,"y":778.296,"w":19.692001,"h":11.075989}
+      ],
+      "minConfidence": null
+    },
+    "pagePair": [
+      null,
+      1
+    ],
+    "needsReview": false
+  },
+  {
+    "id": "4c3895a1541a8ba1",
+    "kind": "insert",
+    "before": {
+      "kind": "anchor",
+      "page": 1,
+      "x": 221.84401,
+      "y": 778.596,
+      "h": 10.776001
+    },
+    "after": {
+      "kind": "boxes",
+      "text": "상대방은 서면으로 통지하고 그 뒤에",
+      "boxes": [
+        {"page":1,"x":60.42,"y":756.152,"w":133.23602,"h":11.220032},
+        {"page":1,"x":72.456,"y":734.824,"w":33.491997,"h":10.548035}
+      ],
+      "minConfidence": null
+    },
+    "pagePair": [
+      null,
+      1
+    ],
+    "needsReview": false
+  },
+  {
+    "id": "3ac7ee086c1db193",
+    "kind": "insert",
+    "before": {
+      "kind": "anchor",
+      "page": 1,
+      "x": 185.1,
+      "y": 756.596,
+      "h": 10.776001
+    },
+    "after": {
+      "kind": "boxes",
+      "text": "끝.",
+      "boxes": [
+        {"page":1,"x":189.28801,"y":712.356,"w":12.6119995,"h":10.716003}
+      ],
+      "minConfidence": null
+    },
+    "pagePair": [
+      null,
+      1
+    ],
+    "needsReview": false
+  },
+  {
+    "id": "c83563a6e60dde28",
+    "kind": "insert",
+    "before": {
+      "kind": "anchor",
+      "page": 2,
+      "x": 166.08002,
+      "y": 778.332,
+      "h": 11.040039
+    },
+    "after": {
+      "kind": "boxes",
+      "text": "모두 또한",
+      "boxes": [
+        {"page":2,"x":169.824,"y":778.404,"w":20.496002,"h":10.5720215},
+        {"page":2,"x":208.456,"y":778.536,"w":20.820007,"h":10.835999}
+      ],
+      "minConfidence": null
+    },
+    "pagePair": [
+      null,
+      2
+    ],
+    "needsReview": false
+  }
+]

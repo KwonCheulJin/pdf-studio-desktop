@@ -390,16 +390,34 @@ pub(crate) enum TextSource {
     Ocr,
 }
 
+/// 변경의 한쪽이 그 문서에 놓이는 곳(ADR 0001 §4). `kind`로 가른다.
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct ChangeSide {
-    /// 변경에 걸린 토큰을 공백 하나로 이은 원문 글자
-    pub(crate) text: String,
-    /// 텍스트 순서. 비어 있지 않다.
-    pub(crate) boxes: Vec<TextBox>,
-    /// 걸린 OCR 토큰의 가장 낮은 신뢰도(0~1, NaN 없음). OCR 토큰이 없으면 `null`
-    #[specta(type = Option<Number>)]
-    pub(crate) min_confidence: Option<f32>,
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub(crate) enum Placement {
+    /// 그 쪽에 변경 글자가 있다.
+    #[serde(rename_all = "camelCase")]
+    Boxes {
+        /// 변경에 걸린 토큰을 공백 하나로 이은 원문 글자
+        text: String,
+        /// 텍스트 순서. 비어 있지 않다.
+        boxes: Vec<TextBox>,
+        /// 걸린 OCR 토큰의 가장 낮은 신뢰도(0~1, NaN 없음). OCR 토큰이 없으면 `null`
+        #[specta(type = Option<Number>)]
+        min_confidence: Option<f32>,
+    },
+    /// 그 쪽에 글자가 없다(삽입의 A 쪽, 삭제의 B 쪽). 반대쪽 글자가 들어갈 자리로, (`x`, `y`)부터
+    /// (`x`, `y + h`)까지 사용자 공간 세로 막대다. `page`가 `page_sizes`에 없으면(쪽이 0개인 PDF)
+    /// 놓을 곳이 없다.
+    Anchor {
+        /// 0부터 센 쪽 번호
+        page: u32,
+        #[specta(type = Number)]
+        x: f32,
+        #[specta(type = Number)]
+        y: f32,
+        #[specta(type = Number)]
+        h: f32,
+    },
 }
 
 /// `[A 쪽, B 쪽]`(0부터). 그 문서에 해당하는 쪽이 없으면 `null`이다.
@@ -411,8 +429,9 @@ pub(crate) struct Change {
     /// 같은 입력·옵션이면 다시 실행해도 같은 키(ADR 0001 §4)
     pub(crate) id: String,
     pub(crate) kind: ChangeKind,
-    pub(crate) before: Option<ChangeSide>,
-    pub(crate) after: Option<ChangeSide>,
+    pub(crate) before: Placement,
+    pub(crate) after: Placement,
+    /// 각 쪽 첫 상자의 쪽. 앵커 쪽은 `null`이다(ADR 0001 §3).
     pub(crate) page_pair: PagePair,
     /// "확인 필요". 차이 개수와 따로 센다(ADR 0001 §5).
     pub(crate) needs_review: bool,
@@ -520,12 +539,19 @@ impl From<pdf_core::TextSource> for TextSource {
     }
 }
 
-impl From<pdf_core::ChangeSide> for ChangeSide {
-    fn from(side: pdf_core::ChangeSide) -> Self {
-        Self {
-            text: side.text,
-            boxes: side.boxes.into_iter().map(TextBox::from).collect(),
-            min_confidence: side.min_confidence,
+impl From<pdf_core::Placement> for Placement {
+    fn from(placement: pdf_core::Placement) -> Self {
+        match placement {
+            pdf_core::Placement::Boxes {
+                text,
+                boxes,
+                min_confidence,
+            } => Self::Boxes {
+                text,
+                boxes: boxes.into_iter().map(TextBox::from).collect(),
+                min_confidence,
+            },
+            pdf_core::Placement::Anchor { page, x, y, h } => Self::Anchor { page, x, y, h },
         }
     }
 }
@@ -535,8 +561,8 @@ impl From<pdf_core::Change> for Change {
         Self {
             id: change.id,
             kind: change.kind.into(),
-            before: change.before.map(ChangeSide::from),
-            after: change.after.map(ChangeSide::from),
+            before: change.before.into(),
+            after: change.after.into(),
             page_pair: change.page_pair,
             needs_review: change.needs_review,
         }
@@ -676,16 +702,19 @@ impl From<TextSource> for pdf_core::TextSource {
     }
 }
 
-impl From<ChangeSide> for pdf_core::ChangeSide {
-    fn from(side: ChangeSide) -> Self {
-        Self {
-            text: side.text,
-            boxes: side
-                .boxes
-                .into_iter()
-                .map(pdf_core::TextBox::from)
-                .collect(),
-            min_confidence: side.min_confidence,
+impl From<Placement> for pdf_core::Placement {
+    fn from(placement: Placement) -> Self {
+        match placement {
+            Placement::Boxes {
+                text,
+                boxes,
+                min_confidence,
+            } => Self::Boxes {
+                text,
+                boxes: boxes.into_iter().map(pdf_core::TextBox::from).collect(),
+                min_confidence,
+            },
+            Placement::Anchor { page, x, y, h } => Self::Anchor { page, x, y, h },
         }
     }
 }
@@ -695,8 +724,8 @@ impl From<Change> for pdf_core::Change {
         Self {
             id: change.id,
             kind: change.kind.into(),
-            before: change.before.map(pdf_core::ChangeSide::from),
-            after: change.after.map(pdf_core::ChangeSide::from),
+            before: change.before.into(),
+            after: change.after.into(),
             page_pair: change.page_pair,
             needs_review: change.needs_review,
         }

@@ -20,7 +20,7 @@ pub enum Side {
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TextBox {
-    /// 상자가 있는 쪽(0부터). 어느 문서인지는 상자를 담은 [`ChangeSide`]가 정한다.
+    /// 상자가 있는 쪽(0부터). 어느 문서인지는 상자를 담은 [`Placement`]가 정한다.
     pub page: u32,
     /// 왼쪽 아래 모서리
     pub x: f32,
@@ -32,11 +32,11 @@ pub struct TextBox {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ChangeKind {
-    /// `before`가 `None`, `after`가 `Some`
+    /// `before`가 [`Placement::Anchor`], `after`가 [`Placement::Boxes`]
     Insert,
-    /// `before`가 `Some`, `after`가 `None`
+    /// `before`가 [`Placement::Boxes`], `after`가 [`Placement::Anchor`]
     Delete,
-    /// 둘 다 `Some`
+    /// 둘 다 [`Placement::Boxes`]
     Replace,
 }
 
@@ -47,15 +47,52 @@ pub enum TextSource {
     Ocr,
 }
 
+/// 변경의 한쪽(A 또는 B)이 그 문서에 놓이는 곳(ADR 0001 §4)
 #[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ChangeSide {
-    /// 변경에 걸린 토큰을 공백 하나로 이은 원문 글자(NFC만 적용, 대소문자 그대로)
-    pub text: String,
-    /// 텍스트 순서. 비어 있지 않다.
-    pub boxes: Vec<TextBox>,
-    /// 걸린 토큰 중 OCR 토큰의 가장 낮은 신뢰도(0~1). OCR 토큰이 없으면 `None`
-    pub min_confidence: Option<f32>,
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum Placement {
+    /// 그 쪽에 변경 글자가 있다.
+    Boxes {
+        /// 변경에 걸린 토큰을 공백 하나로 이은 원문 글자(NFC만 적용, 대소문자 그대로)
+        text: String,
+        /// 텍스트 순서. 비어 있지 않다.
+        boxes: Vec<TextBox>,
+        /// 걸린 토큰 중 OCR 토큰의 가장 낮은 신뢰도(0~1). OCR 토큰이 없으면 `None`
+        min_confidence: Option<f32>,
+    },
+    /// 그 쪽에 글자가 없다(삽입의 A 쪽, 삭제의 B 쪽). 반대쪽 글자가 이 문서에서 들어갈 자리이고,
+    /// (`x`, `y`)부터 (`x`, `y + h`)까지 사용자 공간 세로 막대다(너비 0인 [`TextBox`]와 같은 뜻).
+    Anchor {
+        /// 0부터 센 쪽 번호
+        page: u32,
+        x: f32,
+        /// 막대 아래 끝(줄 상자 아래 모서리. 기준선의 근사)
+        y: f32,
+        /// 막대 높이(이웃 줄 상자 높이, 0 이상)
+        h: f32,
+    },
+}
+
+impl Placement {
+    /// 변경 글자 상자. 앵커는 상자가 없다.
+    pub fn boxes(&self) -> &[TextBox] {
+        match self {
+            Self::Boxes { boxes, .. } => boxes,
+            Self::Anchor { .. } => &[],
+        }
+    }
+
+    /// 변경 글자. 앵커는 글자가 없다.
+    pub fn text(&self) -> Option<&str> {
+        match self {
+            Self::Boxes { text, .. } => Some(text),
+            Self::Anchor { .. } => None,
+        }
+    }
 }
 
 /// `(A 쪽, B 쪽)`. 0부터 센 쪽 번호이고, 그 문서에 해당하는 쪽이 없으면 `None`이다.
@@ -67,9 +104,9 @@ pub struct Change {
     /// 같은 입력·옵션이면 다시 실행해도 같은 키(ADR 0001의 계산 규칙)
     pub id: String,
     pub kind: ChangeKind,
-    pub before: Option<ChangeSide>,
-    pub after: Option<ChangeSide>,
-    /// 각 쪽 첫 상자의 쪽 번호. 그 쪽이 없으면 `None`
+    pub before: Placement,
+    pub after: Placement,
+    /// 각 쪽 첫 상자의 쪽 번호. 그 쪽이 앵커면 `None`(앵커의 쪽은 [`Placement::Anchor`]의 `page`)
     pub page_pair: PagePair,
     /// OCR 신뢰도 기준 미만 토큰이나 OCR 띄어쓰기만 다른 치환이 걸린 변경("확인 필요").
     /// 차이 개수와 따로 센다.

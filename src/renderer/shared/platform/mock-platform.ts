@@ -11,6 +11,7 @@ import {
   type OpenedFile,
   type PageInfo,
   type PageSize,
+  type Placement,
   type ReportLayout,
   type TextSource
 } from "@/renderer/shared/api/bindings";
@@ -83,6 +84,9 @@ const MOCK_ERROR_CODE = {
   EMPTY_REPORT: "EMPTY_REPORT",
   WRITE_FAILED: "WRITE_FAILED"
 } as const satisfies Record<string, ErrorCode>;
+
+/** 변경 쪽에 글자 상자가 있음(`Placement.kind`). 앵커는 상자가 없다. */
+const MOCK_PLACEMENT_BOXES = "boxes" satisfies Placement["kind"];
 
 /** 비교 PDF 배치(`ReportLayout`) */
 const MOCK_REPORT_LAYOUT = {
@@ -248,9 +252,13 @@ function mockReportSheets({
   );
   const hasBox = (side: "before" | "after", page: number | null): boolean =>
     page !== null &&
-    visible.some((change) =>
-      change[side]?.boxes.some((bounds) => bounds.page === page)
-    );
+    visible.some((change) => {
+      const placement = change[side];
+      return (
+        placement.kind === MOCK_PLACEMENT_BOXES &&
+        placement.boxes.some((bounds) => bounds.page === page)
+      );
+    });
   return result.pagePairs
     .map(([before, after]): ReportRow => {
       if (options.layout === MOCK_REPORT_LAYOUT.A_ONLY) return [before, null];

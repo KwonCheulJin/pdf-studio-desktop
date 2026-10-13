@@ -66,23 +66,15 @@ export type Change = {
 	/**  같은 입력·옵션이면 다시 실행해도 같은 키(ADR 0001 §4) */
 	id: string,
 	kind: ChangeKind,
-	before: ChangeSide | null,
-	after: ChangeSide | null,
+	before: Placement,
+	after: Placement,
+	/**  각 쪽 첫 상자의 쪽. 앵커 쪽은 `null`이다(ADR 0001 §3). */
 	pagePair: [number | null, number | null],
 	/**  "확인 필요". 차이 개수와 따로 센다(ADR 0001 §5). */
 	needsReview: boolean,
 };
 
 export type ChangeKind = "insert" | "delete" | "replace";
-
-export type ChangeSide = {
-	/**  변경에 걸린 토큰을 공백 하나로 이은 원문 글자 */
-	text: string,
-	/**  텍스트 순서. 비어 있지 않다. */
-	boxes: TextBox[],
-	/**  걸린 OCR 토큰의 가장 낮은 신뢰도(0~1, NaN 없음). OCR 토큰이 없으면 `null` */
-	minConfidence: number | null,
-};
 
 /**  비교 옵션(ADR 0001 §13). 쪽 범위는 1부터 센 사용자 표기(`"1,3-5"`, 비우면 전체)다. */
 export type CompareOptions = {
@@ -297,6 +289,25 @@ export type PdfInfo = {
 	title: string | null,
 	pages: PageInfo[],
 };
+
+/**  변경의 한쪽이 그 문서에 놓이는 곳(ADR 0001 §4). `kind`로 가른다. */
+export type Placement = 
+/**  그 쪽에 변경 글자가 있다. */
+{ kind: "boxes"; 
+/**  변경에 걸린 토큰을 공백 하나로 이은 원문 글자 */
+text: string; 
+/**  텍스트 순서. 비어 있지 않다. */
+boxes: TextBox[]; 
+/**  걸린 OCR 토큰의 가장 낮은 신뢰도(0~1, NaN 없음). OCR 토큰이 없으면 `null` */
+minConfidence: number | null } | 
+/**
+ *  그 쪽에 글자가 없다(삽입의 A 쪽, 삭제의 B 쪽). 반대쪽 글자가 들어갈 자리로, (`x`, `y`)부터
+ *  (`x`, `y + h`)까지 사용자 공간 세로 막대다. `page`가 `page_sizes`에 없으면(쪽이 0개인 PDF)
+ *  놓을 곳이 없다.
+ */
+{ kind: "anchor"; 
+/**  0부터 센 쪽 번호 */
+page: number; x: number; y: number; h: number };
 
 export type PreviewCompareReportRequest = {
 	result: CompareResult,

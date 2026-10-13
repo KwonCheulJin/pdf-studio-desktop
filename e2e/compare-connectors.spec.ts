@@ -10,6 +10,7 @@ import type {
   CompareResult,
   PageInfo,
   PageSize,
+  Placement,
   TextBox,
   TextSource
 } from "../src/renderer/shared/api/bindings";
@@ -123,6 +124,11 @@ const AFTER_FILE = seedFile(
   AFTER_BYTES,
   GOLDEN.pageSizes.after
 );
+
+/** 변경 쪽의 글자 상자. 앵커(글자가 없는 쪽)는 상자가 없다(ADR 0001 §4). */
+function boxesOf(placement: Placement): TextBox[] {
+  return placement.kind === "boxes" ? placement.boxes : [];
+}
 
 function textLayer(count: number): TextSource[] {
   return Array.from({ length: count }, () => "textLayer");
@@ -462,8 +468,7 @@ test("연결선 체크박스·A만/B만·숨긴 종류는 연결선과 상태바
   await expect(
     pageArea(page).locator(`rect[data-change-id="${firstChange.id}"]`)
   ).toHaveCount(
-    (firstChange.before?.boxes.length ?? 0) +
-      (firstChange.after?.boxes.length ?? 0)
+    boxesOf(firstChange.before).length + boxesOf(firstChange.after).length
   );
   await connectorToggle(page).click();
   await expect(layers.first()).toBeAttached();
@@ -513,8 +518,18 @@ test("대응이 다른 행에 있는 변경과 자리표시자 행에는 연결�
   const crossRow: Change = {
     id: "cross-row",
     kind: "replace",
-    before: { text: "A 쪽", boxes: [box(1)], minConfidence: null },
-    after: { text: "B 쪽", boxes: [box(2)], minConfidence: null },
+    before: {
+      kind: "boxes",
+      text: "A 쪽",
+      boxes: [box(1)],
+      minConfidence: null
+    },
+    after: {
+      kind: "boxes",
+      text: "B 쪽",
+      boxes: [box(2)],
+      minConfidence: null
+    },
     pagePair: [1, 2],
     needsReview: false
   };
@@ -639,7 +654,7 @@ test("작은 배율에서는 겹치는 번호 태그를 빼고, 키우면 모든
     name: "A 1쪽"
   });
   const taggedOnPage = CHANGES.filter((change) =>
-    change.before?.boxes.some((box) => box.page === 0)
+    boxesOf(change.before).some((box) => box.page === 0)
   ).length;
   await zoomTo(page, 25);
   await expect(beforePage.locator("[data-number-tag]").first()).toBeAttached();

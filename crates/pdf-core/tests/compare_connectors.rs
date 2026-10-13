@@ -66,7 +66,7 @@ fn grouped_texts(
     let before_text: HashMap<&str, &str> = result
         .changes
         .iter()
-        .filter_map(|change| Some((change.id.as_str(), change.before.as_ref()?.text.as_str())))
+        .filter_map(|change| Some((change.id.as_str(), change.before.text()?)))
         .collect();
     rows.iter()
         .filter(|row| row.pages == pages)

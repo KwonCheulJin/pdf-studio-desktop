@@ -1,5 +1,6 @@
 import type {
   ChangeKind,
+  Placement,
   Side,
   TextSource
 } from "@/renderer/shared/api/bindings";
@@ -30,6 +31,15 @@ export const CHANGE_SIDE_LABEL: Record<ChangeKind, string> = {
   [CHANGE_KIND.DELETE]: "A만",
   [CHANGE_KIND.REPLACE]: "A↔B"
 };
+
+/**
+ * 변경의 한쪽이 놓이는 곳(`Placement.kind`, ADR 0001 §4): 그 쪽에 글자가 있으면 상자, 없으면(삽입의
+ * A 쪽, 삭제의 B 쪽) 반대쪽 글자가 들어갈 자리인 앵커
+ */
+export const PLACEMENT_KIND = {
+  BOXES: "boxes",
+  ANCHOR: "anchor"
+} as const satisfies Record<string, Placement["kind"]>;
 
 /** 비교하는 두 문서 쪽(`Side`) */
 export const COMPARE_SIDE = {

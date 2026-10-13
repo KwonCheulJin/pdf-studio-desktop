@@ -231,13 +231,14 @@ HTTP 200 응답만 여기로 온다(그 밖은 §7). 사용량은 모든 200 응
 | 504 | `timeout_error` | `API_RETRY_DELAYS` | `API_TIMEOUT` |
 | 그 밖 4xx(409 등) | 아무 값 | 없음 | `API_REQUEST_REJECTED` |
 | 요청 시간 제한 `API_REQUEST_TIMEOUT`(120초) 초과 | — | `API_RETRY_DELAYS` | `API_TIMEOUT` |
-| 연결 실패(DNS·TLS·연결 끊김·본문 읽다 끊김) | — | `API_RETRY_DELAYS` | `NETWORK_UNAVAILABLE` |
+| 연결 실패(DNS·TLS·연결 단계 시간 초과·연결 끊김·본문 읽다 끊김) | — | `API_RETRY_DELAYS` | `NETWORK_UNAVAILABLE` |
 
 - 오류 본문은 `{ "type": "error", "error": { "type", "message", "details"? }, "request_id" }`이다. 읽는 것은 `error.type`, `error.details.error_code`, 응답 헤더 `request-id`뿐이다. `error.message`는 읽지 않는다(문서 글이 섞일 수 있고 문구가 안정적이지 않다).
 - 짝짓기는 HTTP 상태가 먼저다. 공식 문서는 `type` 값이 늘 수 있다고 적으므로 모르는 `type`은 상태로만 판단한다.
 - 대기(재시도·`retry-after`) 중에도 취소 토큰을 본다(§9).
 - `API_` 오류는 작업을 멈춘다. 끝난 묶음은 기록에 이미 있고, 오류 코드로 끝난다. 화면의 "다시 시도(이어서)"가 이어하기다.
-- 클라이언트 설정: HTTPS만(`https_only`), 리디렉션을 따르지 않는다(`redirect::Policy::none()`), TCP keep-alive를 켠다(공식 문서: 긴 비스트리밍 요청은 유휴 연결이 끊길 수 있다), 요청마다 `API_REQUEST_TIMEOUT`. 기본 주소는 상수 `ANTHROPIC_API_BASE`(`https://api.anthropic.com`) 하나이고, 테스트만 전송 trait로 로컬 mock 서버를 꽂는다.
+- 시간 초과 분류: 연결 단계 실패(연결 시간 초과 `API_CONNECT_TIMEOUT` 10초 포함)는 `NETWORK_UNAVAILABLE`, 연결된 뒤 응답을 기다리다 `API_REQUEST_TIMEOUT`을 넘긴 것만 `API_TIMEOUT`이다. reqwest 오류는 `is_connect()`를 `is_timeout()`보다 먼저 본다(Windows는 닫힌 포트에서 RST를 바로 받지 않고 SYN을 약 2초 재시도해 연결 시간 초과가 `is_timeout()`이기도 하다).
+- 클라이언트 설정: HTTPS만(`https_only`), 리디렉션을 따르지 않는다(`redirect::Policy::none()`), TCP keep-alive를 켠다(공식 문서: 긴 비스트리밍 요청은 유휴 연결이 끊길 수 있다), 연결 단계 `API_CONNECT_TIMEOUT`, 요청마다 `API_REQUEST_TIMEOUT`. 기본 주소는 상수 `ANTHROPIC_API_BASE`(`https://api.anthropic.com`) 하나이고, 테스트만 전송 trait로 로컬 mock 서버를 꽂는다.
 - 묶음은 하나씩 차례로 보낸다(`TRANSLATE_CONCURRENCY` = 1).
 - **Step 39 구현에서 정한 것**(`retry.rs`): 200이 아닌 3xx·1xx·그 밖 2xx는 그 밖 4xx처럼 `API_REQUEST_REJECTED`(리디렉션을 따르지 않으므로)다. `retry-after`가 정수 초가 아니면 없는 것으로 보고 `API_RETRY_DELAYS`를 쓴다. 오류 `type`·거절 범주는 ASCII 소문자·숫자·`_` 64자 이하일 때만 오류·로그에 싣는다(문서 글이 섞인 값은 버린다). 시도마다 실패를 로그에 남긴다(코드·상태·type·`request-id`·시도 n/4).
 

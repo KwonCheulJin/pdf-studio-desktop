@@ -264,7 +264,7 @@ Phase 6  PDF 번역·설정 (가칭, Phase 3 뒤)
 4. 검증: Step 9에서 만든 실제 앱(`src-tauri`, `crates/pdf-core`) 안에서(pdfium은 `cargo add -p pdf-core pdfium-render --features thread_safe`) PDF 1장 렌더 → `pnpm tauri build` → **ad-hoc 서명된 `.app`에서 실행** → `codesign --verify --deep --strict`가 통과한다.
 - `thread_safe` 기능을 켠다. pdfium은 스레드 안전하지 않으므로 모든 호출을 **전용 작업 스레드 하나(큐)** 로 직렬화한다.
 - 정적 링크(`static` 기능)는 pdfium을 직접 빌드해야 하므로 이번 범위에서 제외한다.
-- **완료 기준:** Mac `.app`과 CI의 Windows 빌드에서 pdfium이 로드되고 렌더된다.
+- **완료 기준:** Mac `.app`과 CI의 Windows 빌드에서 pdfium이 로드되고 렌더된다. (확인됨(CI): Windows·Linux에서 pdfium 로드 `cargo test` 통과, Windows NSIS 설치 파일 생성. 설치한 앱 실행은 미확인)
 
 ### P1-1 스캐폴드 (S)
 - 키트로 만든다.
@@ -376,7 +376,7 @@ Phase 6  PDF 번역·설정 (가칭, Phase 3 뒤)
 - [ ] 회전(비파괴), 전체/선택 병합(진행률·UI 비차단·취소), 미리보기, 저장, 임시파일 정리
 - [x] 모든 실패가 토스트나 오버레이로 보인다(B12)
 - [ ] 테마(시스템 추종 + 수동), 버전 표시, 에러 스냅샷 전송
-- [ ] macOS, Windows, Linux에서 실행 (Windows/Linux는 CI 아티팩트로 확인)
+- [ ] macOS, Windows, Linux에서 실행 (Windows/Linux는 CI 아티팩트로 확인. 확인됨(CI): Windows NSIS 설치 파일 생성, Windows·Linux `cargo test`. 설치한 앱 실행은 미확인)
 
 ---
 
@@ -602,7 +602,7 @@ pdfium 스파이크(P1-0)처럼 연결 작업(P2-4a) 전에 끝까지 검증한�
 | 숫자 토큰 조용한 오인식 | 0건 | 0 / 0 | 0 / 0 | 0 / 0 | 통과 |
 | 쪽당 처리 시간 | ≤ 2초 | 평균 0.89초·최대 1.16초 | 최대 1.20초 | 최대 1.22초 | 통과 |
 | 번들 증가량 | ≤ 60MB | macOS 57.5MB, Windows 34.2MB, Linux 42.7MB(1차와 같다) | | | 통과 |
-| 플랫폼 간 결과 | Mac·Windows 같음 | 미측정 | | | Step 30 CI로 미룸 |
+| 플랫폼 간 결과 | Mac·Windows 같음 | 미측정 | | | 미확인(CI가 `fetch:ocr`를 하지 않는다) |
 | 서명된 `.app`에서 로드 | codesign 통과 후 추론 | 1차 측정의 확인(아래). 그 뒤 바뀐 것은 렌더 해상도 상수뿐이라 로드·서명 경로는 같다 | | | 통과 |
 
 - 참고(이전 정의로 센 값): 시드 3의 200dpi는 토큰 전체 기준으로 98.48%(65/66)·조용한 오인식 1건이다(끝 마침표 누락). 새 정의에서는 끝 `.`을 빼고 보며, 비교에서는 확인 필요로 분류된다.
@@ -645,7 +645,7 @@ pdfium 스파이크(P1-0)처럼 연결 작업(P2-4a) 전에 끝까지 검증한�
 | 숫자 토큰 조용한 오인식 | 0건 | 300dpi 0건, 200dpi 1건(`8,900원이다.`의 끝 마침표 누락, 최소 신뢰도 0.987) | **실패** |
 | 쪽당 처리 시간 | ≤ 2초 | 픽스처 평균 0.76초·최대 0.98초. 로컬 실제 스캔 96쪽 평균 1.10초·최대 1.47초(다른 빌드가 돌던 부하 상태) | 통과 |
 | 번들 증가량 | ≤ 60MB | macOS 57.5MB(서명 후 dylib 39.14MB + 모델 18.36MB, 실제 `.app` 86.05MiB), Windows 34.2MB(dll 15.83MB), Linux 42.7MB(so 24.30MB) | 통과(macOS 여유 2.5MB) |
-| 플랫폼 간 결과 | Mac·Windows 같은 글자열 | 미측정 | Step 30 CI로 미룸 |
+| 플랫폼 간 결과 | Mac·Windows 같은 글자열 | 미측정 | 미확인(CI가 `fetch:ocr`를 하지 않는다) |
 | 서명된 `.app`에서 로드 | codesign 통과 후 추론 | `codesign --verify --deep --strict` valid. 창 숨김 실행 로그: `ONNX Runtime loaded from …/Contents/Frameworks/libonnxruntime.dylib (models …/Contents/Resources/ocr-models)`, `45 lines in 997 ms` | 통과 |
 
 같은 문서를 노이즈 시드·기울기만 바꿔 다시 만든 픽스처(레포 밖) 3벌 × 렌더 해상도 2개로 흔들림을 쟀다. 「핵심」은 토큰 끝 `.`·`,`를 뺀 숫자 토큰 기준(참고값)이다.

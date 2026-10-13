@@ -109,7 +109,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 - 브랜치: `refactor/dnd-kit`
 - 읽을 곳: 계획서 §4 P0-5, §5 P1-4
 - 할 일: 내부 정렬은 dnd-kit, 외부 파일 드롭은 `platform.onFileDrop`(Tauri `onDragDropEvent`)으로 구현한다. `position`은 타입이 PhysicalPosition이지만 단위가 웹뷰마다 다르다(wry 0.57): WebView2(Windows)는 물리 픽셀이라 `/ window.devicePixelRatio`로 CSS 좌표로 바꾸고, WKWebView(macOS)·WebKitGTK는 이미 CSS 좌표라 그대로 쓴다. `document.elementFromPoint`로 드롭 대상을 판정한다. 드롭 경로는 Rust가 웹뷰보다 먼저 받아 허용 경로 목록에 기록한다(D13).
-- 완료 기준: HTML5 DnD 이벤트(`onDragStart` 등) 의존 0, 파일·페이지 재정렬과 외부 파일 드롭이 동작(드롭 위치에 정확히 삽입, 물리 픽셀 좌표의 `devicePixelRatio` 보정은 mock 드롭 E2E(dpr 2)로 확인, 실제 OS 드롭과 Windows 고DPI는 Step 30 CI·수동 확인), **키보드만으로 재정렬 가능**(Space 집기 → 방향키 → Space 놓기, Esc 취소), `.claude/quality-gate.json` test 명령의 `layout-calculator.test.ts` 제외 해제
+- 완료 기준: HTML5 DnD 이벤트(`onDragStart` 등) 의존 0, 파일·페이지 재정렬과 외부 파일 드롭이 동작(드롭 위치에 정확히 삽입, 물리 픽셀 좌표의 `devicePixelRatio` 보정은 mock 드롭 E2E(dpr 2)로 확인, 실제 OS 드롭과 Windows 고DPI는 CI로 확인할 수 없어 수동 확인으로 남는다), **키보드만으로 재정렬 가능**(Space 집기 → 방향키 → Space 놓기, Esc 취소), `.claude/quality-gate.json` test 명령의 `layout-calculator.test.ts` 제외 해제
 - [x] Step 5
 
 ### Step 6. 버그 수정과 정리 (M)
@@ -153,7 +153,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 - 읽을 곳: 계획서 §5 P1-0, §12 리스크 첫 줄
 - 할 일(키트): 버리는 빈 앱(`pnpm create tauri-app`)은 만들지 않는다. Step 9에서 만든 실제 `src-tauri`와 `crates/pdf-core` 안에서 스파이크하고, pdfium은 `cargo add -p pdf-core pdfium-render --features thread_safe`로 넣는다. 직접 작성하는 것은 `scripts/fetch-pdfium.mjs`와 렌더 확인 코드뿐이다.
 - **이 단계가 실패하면 Step 10 이후를 진행하지 않는다.** 실패하면 원인을 기록하고 계획서 §6.0의 엔진 선택을 다시 검토한다.
-- 완료 기준: ad-hoc 서명된 `.app`에서 PDF 1장 렌더, `codesign --verify --deep --strict` 통과, CI Windows 빌드에서 pdfium 로드 (Windows는 Step 30 CI에서 확인)
+- 완료 기준: ad-hoc 서명된 `.app`에서 PDF 1장 렌더, `codesign --verify --deep --strict` 통과, CI Windows 빌드에서 pdfium 로드 (Windows·Linux의 pdfium 로드·`cargo test`는 Step 30 CI에서 확인됨, 설치한 앱 실행은 미확인)
 - [x] Step 8
 
 ### Step 9. Tauri 스캐폴드 + Cargo workspace (S)
@@ -228,7 +228,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 |---|---|---|---|---|
 | 16 | P2-1 결과 모델 ADR | `docs/adr-compare-result` | `CompareResult` 타입과 좌표 규칙이 ADR로 고정. 페이지별 텍스트 출처(`page_sources`: 텍스트 레이어/OCR), OCR 신뢰도(`min_confidence`), "확인 필요"(`needs_review`) 필드 포함 → [ADR 0001](../adr/0001-compare-result-model.md) | [x] |
 | 17 | P2-2 추출 + 좌표 일치 | `feat/compare-extract` | pdfium 박스 Rust golden 테스트 통과 + pdf.js 화면 박스 위치 E2E 통과(CropBox 오프셋, 회전 페이지 포함) | [x] |
-| 17-a | ★ P2-2a OCR 스파이크 (게이트) | `spike/ocr` | 계획서 §6.4 합격 기준 표 전부 통과(한국어 CER, 숫자·금액·날짜 토큰 일치율, 숫자 조용한 오인식 0건, 쪽당 처리 시간, 번들 증가량), ad-hoc 서명 `.app`에서 ONNX Runtime 로드·추론, 확정한 모델 이름·버전·ONNX 출처·SHA-256과 측정값을 §6.4에 기록. Mac·Windows 결과 일치는 Step 30 CI에서 확인 | [x] |
+| 17-a | ★ P2-2a OCR 스파이크 (게이트) | `spike/ocr` | 계획서 §6.4 합격 기준 표 전부 통과(한국어 CER, 숫자·금액·날짜 토큰 일치율, 숫자 조용한 오인식 0건, 쪽당 처리 시간, 번들 증가량), ad-hoc 서명 `.app`에서 ONNX Runtime 로드·추론, 확정한 모델 이름·버전·ONNX 출처·SHA-256과 측정값을 §6.4에 기록. Mac·Windows 결과 일치는 미확인(Step 30 CI가 아직 `fetch:ocr`를 하지 않는다) | [x] |
 | 18 | P2-3 정규화·토큰화 | `feat/compare-tokenize` | 한글 픽스처 토큰화 golden 통과 | [x] |
 | 19 | P2-4 정렬과 diff | `feat/compare-diff` | 삽입·삭제·치환·문단 이동 golden 통과 | [x] |
 | 19-a | P2-4a OCR 연결 | `feat/compare-ocr` | Step 17-a 통과 후 시작. 텍스트본 ↔ 스캔본 차이 0, 금액·날짜·조항을 바꾼 짝에서 바꾼 곳만 변경 golden 통과, OCR 상자 → PDF pt 되돌리기가 원본 상자와 허용 오차 안(CropBox 오프셋, 회전 페이지 포함), 신뢰도 기준 미만 토큰이 걸린 변경과 OCR 쪽 띄어쓰기만·문장부호만 다른 치환이 `needs_review`로 분류, OCR 쪽이 있으면 NFKC 강제(ADR 0001 §5), 같은 파일 재비교에서 OCR 생략(캐시) → [ADR 0001 §11](../adr/0001-compare-result-model.md) | [x] |
@@ -270,7 +270,7 @@ pnpm i && pnpm start                                           # 현재 Electron
 
 | Step | 계획서 | 완료 기준 | |
 |---|---|---|---|
-| 30 | P4-1 CI 매트릭스 | PR에서 `pnpm validate` + `cargo fmt --check` + `cargo clippy -D warnings` + `cargo test`, Windows는 NSIS 설치 파일 | [ ] |
+| 30 | P4-1 CI 매트릭스 | PR에서 `pnpm validate` + `cargo fmt --check` + `cargo clippy -D warnings` + `cargo test`, Windows는 NSIS 설치 파일 | [x] |
 | 31 | P4-2 릴리스 흐름 | 태그 푸시로 Draft Release(기존 워크플로는 Step 1에서 제거됨) | [ ] |
 | 32 | P4-3 서명 | ad-hoc 서명 `.app`과 `libpdfium.dylib`·ONNX Runtime dylib가 같은 identity, `codesign --verify --deep --strict` 통과 | [ ] |
 | 33 | P4-4 자동 업데이트(선택) | `pnpm tauri add updater`, 키는 `pnpm tauri signer generate`로 생성(개인 키는 시크릿에만), `latest.json` 생성, 업데이트 동작 | [ ] |

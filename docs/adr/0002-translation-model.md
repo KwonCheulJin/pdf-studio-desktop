@@ -1,7 +1,7 @@
 # ADR 0002. 번역 결과 모델(`TranslationResult`)과 Messages API 요청 규칙
 
 - 상태: 채택 (2026-10-13, Step 35 / 계획서 P6-0, §9.1.9 Q1~Q17, §11 D18~D28). 응답 형식은 Step 35에서 공식 문서를 확인한 뒤 사용자가 Q13을 C(structured outputs, 두 모델 통일)로 다시 정했다(2026-10-13, §5). Sonnet 5.5가 도구 강제를 400으로 거부하기 때문이다.
-- 코드(쓸 곳): 문단 추출은 `crates/pdf-core/src/paragraphs.rs`, 번역 규칙은 새 크레이트 `crates/translate`(`models.rs` 모델 표, `chunk.rs` 묶음·예상치, `request.rs`·`response.rs` 요청·응답, `http.rs` 전송, `runner.rs` 실행기, `record.rs` 이어하기 기록), 어댑터는 `src-tauri/src/translate.rs`·`secrets.rs`, 계약 미러는 `src-tauri/src/contract.rs`
+- 코드(쓸 곳): 문단 추출은 `crates/pdf-core/src/paragraphs.rs`, 번역 규칙은 새 크레이트 `crates/translate`(`models.rs` 모델 표, `chunk.rs` 묶음·예상치, `request.rs`·`response.rs` 요청·응답, `client.rs` 묶음 보내기·나눠 다시, `retry.rs` 재시도·상태 짝, `http.rs` 전송 trait·reqwest 어댑터, `key.rs` `ApiKey`, `error.rs` API 오류 코드, `runner.rs` 실행기, `record.rs` 이어하기 기록), 어댑터는 `src-tauri/src/translate.rs`·`secrets.rs`, 계약 미러는 `src-tauri/src/contract.rs`
 - 관련: 계획서 §9.1(범위·아키텍처·계약·보안·테스트·화면), ADR 0001 §8(추출 글자)·§9(하이픈)·§15(진행 공식·pdfium 잠금)·§16(커맨드 관례)
 
 ## 맥락
@@ -149,7 +149,7 @@ pub struct ParagraphPage { pub page: u32, pub size: PageSize, pub content: PageP
 | 항목 | 규칙 |
 |---|---|
 | `model` | 모델 표(`models.rs`)의 API ID: `TranslateModel::Sonnet` → `claude-sonnet-5-5`, `Haiku` → `claude-haiku-5-5`. 모델 ID는 앱 업데이트로만 바꾼다. |
-| 모델 표 | 모델마다 API ID, 출력 상한(공식 개요 표 128K. 정수 값은 Step 39에서 모델 문서로 확인), 입력·출력 단가(1M 토큰당 micro-USD), 요금 기준일(`YYYY-MM-DD`), `thinking` 값을 둔다. 값은 Step 39에서 공식 요금표에서 옮긴다. 두 모델의 요청 차이는 `model`과 `thinking`뿐이다. |
+| 모델 표 | 모델마다 API ID, 출력 상한(128,000. 문서가 "128K"만 적어 작은 쪽, §15), 입력·출력 단가(1M 토큰당 micro-USD), 요금 기준일(`YYYY-MM-DD`), `thinking` 값을 둔다. 값은 Step 39에서 공식 요금표·모델 문서로 확인했다(§15). 두 모델의 요청 차이는 `model`과 `thinking`뿐이다. |
 | 응답 형식(Q13 C) | **structured outputs.** `output_config.format`에 `{ "type": "json_schema", "schema": … }`를 싣는다. 두 모델이 같은 모양이다. beta 헤더는 쓰지 않는다(예전 `output_format` + `structured-outputs-2025-11-13` 헤더는 쓰지 않는다). `tools`·`tool_choice`는 보내지 않는다. |
 | 스키마 | 텍스트 묶음은 위 `{ paragraphs: [{ id, text }] }`, 스캔 묶음은 항목이 `{ "source": string, "text": string }`이고 나머지는 같다. structured outputs 제약 안에서 쓴다: 객체마다 `additionalProperties: false`와 `required`, 배열 `minItems`는 0·1만, 문자열 길이·숫자 범위 제약·재귀·외부 `$ref` 없음. 어기면 API가 400을 준다(golden 테스트로 고정한다). |
 | `thinking` | Sonnet 5.5 = `{ "type": "between_tools" }`(앞선 생각을 끈다. Sonnet 5.5는 `disabled`를 400으로 거부한다. 도구가 없으면 응답은 글뿐이다), Haiku 5.5 = `{ "type": "disabled" }`. 두 모델 모두 생략하면 adaptive thinking이 켜지고 생각 토큰이 출력 요금·`max_tokens`에 들어간다. 번역에는 생각이 필요 없고 예상치(§4)가 생각을 세지 않으므로 끈다. `effort`는 보내지 않는다(기본값이 두 설정을 받는 `high` 이하다). |
@@ -181,6 +181,7 @@ HTTP 200 응답만 여기로 온다(그 밖은 §7). 사용량은 모든 200 응
 - **나눠 다시(검증 실패):** 항목이 둘 이상이면 앞 ⌈n/2⌉개와 나머지로 나눠 각각 **한 번** 보낸다. 나눈 요청이 또 검증 실패면 그 요청의 문단은 모두 `failed`(`TRANSLATION_MISMATCH`)다. 항목이 하나면 같은 요청을 한 번 더 보내고, 또 실패면 `failed`다. 스캔 묶음은 나눌 수 없어 같은 요청을 한 번 더 보내고, 또 실패면 그 쪽을 실패 쪽(§10 `TranslatedPage.failCode`)으로 둔다.
 - 검증 실패·잘림·거절은 작업을 멈추지 않는다. 문단(또는 쪽) 상태로만 남기고 다음 묶음으로 간다. 이런 문단은 기록에 쓰지 않으므로 "다시 시도(이어서)"나 "이 문단 다시 번역"이 다시 보낸다.
 - 응답 본문 전체는 로그·오류에 남기지 않는다(§12).
+- **Step 39 구현에서 정한 것**(`client.rs`): 나눈 요청은 항목 ID를 `"1"`부터 다시 매기고, 용어집은 그 항목에 나오는 용어만 싣고, `max_tokens`는 묶음 값을 그대로 쓴다(항목이 줄어 여유만 는다). 검증 실패로 나눈 요청이 잘리면 잘림 규칙대로 또 나누되 "다시 보낸 요청"이라는 표시를 물려받아 검증에 또 실패하면 `failed`다. 413으로 나눈 요청은 검증 실패 기회를 쓰지 않는다. 결과는 `Attempt { usage, result }`이고 `API_` 오류로 멈춰도 그때까지 받은 200 응답의 사용량을 돌려준다.
 
 ### 7. 재시도와 시간 제한 (Step 39)
 
@@ -211,6 +212,7 @@ HTTP 200 응답만 여기로 온다(그 밖은 §7). 사용량은 모든 200 응
 - `API_` 오류는 작업을 멈춘다. 끝난 묶음은 기록에 이미 있고, 오류 코드로 끝난다. 화면의 "다시 시도(이어서)"가 이어하기다.
 - 클라이언트 설정: HTTPS만(`https_only`), 리디렉션을 따르지 않는다(`redirect::Policy::none()`), TCP keep-alive를 켠다(공식 문서: 긴 비스트리밍 요청은 유휴 연결이 끊길 수 있다), 요청마다 `API_REQUEST_TIMEOUT`. 기본 주소는 상수 `ANTHROPIC_API_BASE`(`https://api.anthropic.com`) 하나이고, 테스트만 전송 trait로 로컬 mock 서버를 꽂는다.
 - 묶음은 하나씩 차례로 보낸다(`TRANSLATE_CONCURRENCY` = 1).
+- **Step 39 구현에서 정한 것**(`retry.rs`): 200이 아닌 3xx·1xx·그 밖 2xx는 그 밖 4xx처럼 `API_REQUEST_REJECTED`(리디렉션을 따르지 않으므로)다. `retry-after`가 정수 초가 아니면 없는 것으로 보고 `API_RETRY_DELAYS`를 쓴다. 오류 `type`·거절 범주는 ASCII 소문자·숫자·`_` 64자 이하일 때만 오류·로그에 싣는다(문서 글이 섞인 값은 버린다). 시도마다 실패를 로그에 남긴다(코드·상태·type·`request-id`·시도 n/4).
 
 ### 8. 이어하기 기록 (Step 40)
 
@@ -409,6 +411,7 @@ struct ApiKeyStatus { registered: bool, hint: Option<String> }  // hint = 끝 4�
 - **TLS(Q5):** 채택안은 `reqwest` + rustls(`ring` 공급자) + OS 인증서 저장소다. 레포의 `reqwest`는 0.13.5(tauri 하위, TLS 없음)다. reqwest 0.13의 rustls 기본 경로는 `aws-lc-rs`(라이선스 식에 OpenSSL)를 쓰고, Step 33(자동 업데이트, 브랜치 `feat/auto-update`)에서는 updater의 기본 `rustls-tls`가 reqwest를 거쳐 `webpki-root-certs`(CDLA-Permissive-2.0, §1.2 허용 목록 밖)를 끌어와 updater를 `native-tls`로 바꿨다. 그래서 Q5 A가 기능 플래그만으로 `aws-lc-*`·`webpki-root*` 없이 빌드되는지는 확실하지 않다. Step 36이 `cargo tree -i`와 `pnpm licenses:check`(예외 추가 없이)로 판정한다. 안 되면 Q5 B(`native-tls`, updater와 같은 TLS라 TLS 스택이 하나로 준다)로 바꾸는 것을 계획서 §9.1.9에 적고 보고한다. 정확한 기능 이름은 Step 36에서 확인한다.
   - **판정(Step 36, 2026-10-13): Q5 B로 바꿨다.** `reqwest` `default-features = false` + `rustls-no-provider`와 `rustls` `ring`으로 `aws-lc-*`는 빠졌지만, reqwest 0.13의 rustls 기능은 둘 다 `rustls-platform-verifier` 0.7.1을 끌어오고 그것이 wasm32 타깃 의존성으로 `webpki-root-certs`를 선언한다. 끄는 기능이 없어 `licenses:check`가 실패했다. 지금 값은 `src-tauri/Cargo.toml`의 `reqwest = { version = "0.13", default-features = false, features = ["native-tls"] }`(0.13.5)이고 예외 추가 없이 통과한다. 의존성에 `aws-lc-*`·`webpki-root*`·`rustls`·`ring`이 없다. Linux는 시스템 OpenSSL(`libssl-dev`)에 동적 링크한다. 키 없는 `GET https://api.anthropic.com/v1/models`가 TLS로 연결되고 401, 본문 `{ type: "error", error: { type: "authentication_error", … }, request_id }`, 헤더 `request-id`를 돌려줬다(macOS, `src-tauri/src/translate_deps_spike.rs`의 ignored 테스트). 릴리스 바이너리 증가는 요청·키체인 호출을 링크하면 약 +1.4 MiB(+1,503,872 B, 계획서 §9.1.9 Q5).
   - Step 36은 의존성을 Step 41 어댑터가 쓸 `src-tauri`에 넣었다. `crates/translate`가 reqwest를 쓰게 되면(Step 39) 같은 기능(`default-features = false`, `native-tls`)으로 넣는다. 기본 기능을 켜면 rustls·`aws-lc-rs`가 다시 들어온다.
+  - **Step 39:** reqwest 어댑터(`ReqwestTransport`)를 `crates/translate/src/http.rs`에 두고 reqwest를 `crates/translate`로 옮겼다(같은 기능). `src-tauri`의 reqwest 직접 의존과 스파이크의 HTTP ignored 테스트는 지웠다(키체인 ignored 테스트는 Step 41까지 남긴다). `licenses:check`가 예외 추가 없이 통과한다. 로컬 mock 서버 테스트(`src/http/tests.rs`)는 평문 HTTP라 `https_only`를 끈 테스트 전용 생성자로 보낸다(앱 생성자는 `ANTHROPIC_API_BASE`·`https_only` 고정).
 - **키체인(Q6):** `keyring`의 Linux 백엔드는 `libdbus`를 쓰지 않는 쪽(zbus 기반 Secret Service)이어야 한다. 정확한 기능 플래그와 macOS ad-hoc 서명 앱의 다시 빌드한 뒤 허락 창 동작은 Step 36에서 확인한다.
   - **판정(Step 36, 2026-10-13):** `keyring = "4"`(4.2.0) 기본 기능 `v1` = macOS `apple-native-keyring-store/keychain`, Windows `windows-native-keyring-store`, Linux `zbus-secret-service-keyring-store`(`crypto-rust`). `libdbus` 백엔드(`dbus-secret-service-keyring-store`)는 들어오지 않는다. API는 `keyring::Entry::new(서비스, 계정)` → `set_password`·`get_password`·`delete_credential`, 없으면 `keyring::Error::NoEntry`. macOS에서 쓰기·읽기·지우기·지운 뒤 `NoEntry`를 ignored 테스트로 확인했다(서명 없는 테스트 바이너리, 허락 창 없음). ad-hoc 서명 `.app`의 허락 창과 다시 빌드한 뒤 읽기는 앱을 띄워야 해서 사용자 확인이 남았다.
 - **비동기:** `crates/translate`는 tokio(시간·취소 대기)와 reqwest를 쓴다. 테스트는 `tokio::time::pause`로 재시도 지연을 결정적으로 본다(계획서 §9.1.5).
@@ -432,7 +435,11 @@ struct ApiKeyStatus { registered: bool, hint: Option<String> }  // hint = 끝 4�
 | 모델 목록 | `GET /v1/models`, `limit` 기본 20·최대 1000, `data[].id` | `api/models/list` |
 
 - **계획서와 달랐던 것(이 ADR이 고친다):** ① 그림 토큰 식 `가로 × 세로 / 750`(예전 식) → ⌈w/28⌉ × ⌈h/28⌉ ② `SCAN_IMAGE_MAX_EDGE_PX` 1568의 근거 "Anthropic 권장 상한"은 예전 표준 등급 값이다. 두 모델의 상한은 2576이다. 1568은 비용을 누르는 이 앱의 시작값으로 두고(A4 2,240토큰, 2576이면 약 3.5배), 작은 한자를 읽는지 Step 48에서 사용자 실측으로 다시 본다 ③ 응답 형식: 도구 강제(Q13 A)는 Sonnet 5.5에서 400이라 structured outputs(Q13 C)로 바꿨다(사용자 결정 2026-10-13, §5).
-- **확인하지 못한 것(Step 39에서 확인):** 모델 출력 상한의 정확한 정수(128K = 128,000인지), 두 모델의 요금(개요 표는 Sonnet 5.5 입력 $2·출력 $10/MTok, Haiku 5.5는 "From $0.10·$0.50"이라 등급 요금일 수 있다. 요금표 페이지에서 확정하고 기준일을 적는다), Haiku 5.5 `thinking: disabled`와 structured outputs를 함께 쓸 때의 응답 품질(Step 48 사용자 실측).
+- **Step 39에서 확인한 것(2026-10-13):**
+  - 요금(`about-claude/pricing`, `models/haiku-5-5/overview`): Sonnet 5.5 입력 $2·출력 $10/MTok(문맥 1M 전체가 같은 요금). Haiku 5.5는 **프롬프트(입력) 100,000토큰 이하** 요청이 입력 $0.10·출력 $0.50/MTok이고 넘으면 $0.50·$2.50이다(개요 표의 "From"이 이 뜻). 묶음 입력은 상한 2,500토큰, 스캔 묶음은 그림 + 용어집 전체라 늘 낮은 요금이 되게 용어집 상한(Step 41)이 지킨다. 모델 표 값은 그대로이고 기준일은 2026-10-13이다.
+  - thinking(`build-with-claude/thinking`, `models/sonnet-5-5/whats-new-sonnet-5-5`): Sonnet 5.5는 `{"type":"between_tools"}`가 가장 낮은 설정이고(`disabled`는 400, `high` 이하 effort에서 받는다, 다른 필드를 함께 보내면 400), 도구가 없으면 응답은 글뿐이다. Haiku 5.5는 `{"type":"disabled"}`를 `high` 이하 effort에서 받는다. 두 모델의 기본 effort(`high`·`medium`)가 그 범위라 `effort`를 보내지 않는다.
+  - 샘플링: 두 모델 모두 기본값이 아닌 `temperature`·`top_p`·`top_k`는 400(`top_p` 기본값이 0.99라 `1`도 400)이라 보내지 않는다.
+- **확인하지 못한 것:** 출력 상한의 정확한 정수. 모델 문서·`build-with-claude/context-windows`는 "128K"/"128k"만 적고, 정수는 키가 있어야 하는 Models API `max_tokens`에만 있다(에이전트는 키로 API를 부르지 않는다). 모델 표는 작은 쪽 128,000을 둔다(묶음 `max_tokens`는 1만 남짓이라 닿지 않는다). Step 48에서 사용자가 `GET /v1/models`의 `max_tokens`로 확인할 수 있다. Haiku 5.5 `thinking: disabled`와 structured outputs를 함께 쓸 때의 응답 품질도 Step 48 사용자 실측이다.
 
 ## 결과
 

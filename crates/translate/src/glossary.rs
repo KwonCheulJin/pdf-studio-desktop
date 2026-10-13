@@ -56,6 +56,13 @@ impl Glossary {
     }
 }
 
+/// `term`의 원어가 `text`(NFC)에 나오는가(`Glossary::indices_in`과 같은 규칙). 나눠 보내는 요청이
+/// 그 항목에 나오는 용어만 싣는 데 쓴다.
+pub(crate) fn term_appears_in(term: &GlossaryTerm, text: &str) -> bool {
+    text.to_ascii_lowercase()
+        .contains(&term.source.to_ascii_lowercase())
+}
+
 fn normalize(text: &str) -> String {
     text.trim().nfc().collect()
 }

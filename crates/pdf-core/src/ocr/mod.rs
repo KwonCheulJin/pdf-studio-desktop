@@ -225,9 +225,11 @@ pub(crate) fn render_page(page: &PdfPage, path: &Path) -> Result<RgbImage, OcrEr
         PdfRenderConfig::new().scale_page_by_factor(OCR_RENDER_DPI as f32 / POINTS_PER_INCH);
     let bitmap = page.render_with_config(&config).map_err(to_error)?;
     let (width, height) = (bitmap.width() as u32, bitmap.height() as u32);
-    let rgb: Vec<u8> = bitmap
-        .as_rgba_bytes()
-        .chunks_exact(4)
+    let rgba = bitmap.as_rgba_bytes();
+    let rgb: Vec<u8> = rgba
+        .as_chunks::<4>()
+        .0
+        .iter()
         .flat_map(|pixel| [pixel[0], pixel[1], pixel[2]])
         .collect();
     RgbImage::from_raw(width, height, rgb).ok_or_else(|| OcrError::UnexpectedOutput {

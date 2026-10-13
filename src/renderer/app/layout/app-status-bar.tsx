@@ -7,6 +7,7 @@ import {
   useMergeStatus
 } from "@/renderer/entities/merge-plan";
 import { APP_STATUS } from "@/renderer/shared/constants";
+import { CompareRunIndicator } from "./compare-run-indicator";
 
 export function AppStatusBar() {
   const files = useMergeFiles();
@@ -40,6 +41,7 @@ export function AppStatusBar() {
         )}
       </p>
       <div className="text-muted-foreground flex items-center gap-3 text-sm">
+        <CompareRunIndicator />
         <span>상태: {statusText}</span>
         <span className="text-muted-foreground/50">|</span>
         <span>v{__APP_VERSION__}</span>

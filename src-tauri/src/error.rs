@@ -5,7 +5,9 @@ use std::fmt;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use pdf_core::{DocumentError, MergeError, SaveError, TiffConversionError};
+use pdf_core::{
+    CompareError, CompareOptionsError, DocumentError, MergeError, SaveError, TiffConversionError,
+};
 use serde::Serialize;
 
 /// 화면 문구를 고르는 오류 코드. 직렬화 값(`PATH_NOT_ALLOWED` 등)이 바인딩의 문자열 union이 되고,
@@ -39,6 +41,8 @@ pub(crate) enum ErrorCode {
     EmptySource,
     InvalidPage,
     Cancelled,
+    // pdf-core 비교
+    InvalidRange,
     // pdf-core TIFF 변환
     InvalidTiff,
     UnsupportedTiffCompression,
@@ -93,6 +97,8 @@ pub(crate) enum CommandError {
     Merge(#[from] MergeError),
     #[error(transparent)]
     Tiff(#[from] TiffConversionError),
+    #[error(transparent)]
+    Compare(#[from] CompareError),
 }
 
 impl CommandError {
@@ -113,6 +119,7 @@ impl CommandError {
             Self::Save(error) => save_code(error),
             Self::Merge(error) => merge_code(error),
             Self::Tiff(error) => tiff_code(error),
+            Self::Compare(error) => compare_code(error),
         }
     }
 
@@ -123,6 +130,7 @@ impl CommandError {
             Self::Document(error) => Some(document_path(error)),
             Self::Merge(error) => merge_input_path(error),
             Self::Tiff(error) => tiff_input_path(error),
+            Self::Compare(error) => compare_input_path(error),
             Self::PathNotAllowed { .. }
             | Self::UnsupportedFileType { .. }
             | Self::OutputIsSource { .. }
@@ -190,6 +198,14 @@ fn tiff_code(error: &TiffConversionError) -> ErrorCode {
     }
 }
 
+fn compare_code(error: &CompareError) -> ErrorCode {
+    match error {
+        CompareError::Document(error) => document_code(error),
+        CompareError::Options(CompareOptionsError::InvalidRange { .. }) => ErrorCode::InvalidRange,
+        CompareError::Cancelled => ErrorCode::Cancelled,
+    }
+}
+
 fn document_path(error: &DocumentError) -> &Path {
     match error {
         DocumentError::NotFound { path }
@@ -220,6 +236,14 @@ fn tiff_input_path(error: &TiffConversionError) -> Option<&Path> {
         | TiffConversionError::ImageTooLarge { path, .. } => Some(path),
         TiffConversionError::Document(error) => Some(document_path(error)),
         TiffConversionError::Cancelled | TiffConversionError::Save(_) => None,
+    }
+}
+
+/// 쪽 범위 오류는 입력 파일이 아니라 사용자가 쓴 범위 문자열이 원인이라 경로를 싣지 않는다.
+fn compare_input_path(error: &CompareError) -> Option<&Path> {
+    match error {
+        CompareError::Document(error) => Some(document_path(error)),
+        CompareError::Options(_) | CompareError::Cancelled => None,
     }
 }
 

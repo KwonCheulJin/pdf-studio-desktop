@@ -1,4 +1,5 @@
 import { ThirdPartyNoticesButton } from "@/renderer/features/third-party-notices";
+import { CompareRunIndicator } from "./compare-run-indicator";
 
 const HOME_STATUS_TEXT = "준비됨";
 
@@ -8,6 +9,7 @@ export function AppHomeStatusBar() {
     <footer className="border-border text-muted-foreground flex h-7 shrink-0 items-center gap-4 border-t px-4 text-xs">
       <span>{HOME_STATUS_TEXT}</span>
       <span className="grow" />
+      <CompareRunIndicator />
       <span className="font-mono">v{__APP_VERSION__}</span>
       <ThirdPartyNoticesButton />
     </footer>

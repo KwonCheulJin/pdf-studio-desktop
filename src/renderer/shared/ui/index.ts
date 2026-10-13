@@ -14,5 +14,6 @@ export {
 } from "./dialog";
 export { DropZoneIndicator } from "./drop-zone-indicator";
 export { GridItemWrapper } from "./grid-item-wrapper";
+export { ProgressBar } from "./progress-bar";
 export { Slider } from "./slider";
 export { Tooltip } from "./tooltip";

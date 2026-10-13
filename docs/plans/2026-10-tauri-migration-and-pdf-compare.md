@@ -311,7 +311,8 @@ Phase 6  PDF 번역·설정 (가칭, Phase 3 뒤)
 | `copy_file` | `(source, destination)` | 소스는 이 실행의 세션 폴더(앱 임시 디렉터리) 하위만, 대상은 `pick_save_path`로 받은 경로만 허용. 대상이 사용자가 연 원본이면 거부. 임시 파일에 쓴 뒤 rename(pdf-core `copy_atomically`) |
 | `cleanup_temp` | `()` | 이 실행의 세션 폴더만 비운다. 앱 임시 디렉터리는 `<시스템 임시>/<식별자>/session-<pid>-<시작 시각>/`처럼 실행마다 세션 폴더로 나누고, 병합 미리보기 결과는 자기 세션 폴더에만 쓴다. 종료 시 자기 세션 폴더를 지우고, 시작 시 다른 세션 폴더 중 24시간 넘게 손대지 않은 것만 지운다(여러 실행이 서로의 결과를 지우지 않는다) |
 | `discard_temp` | `(path)` | 미리보기 결과 하나만 지운다. 이 실행의 세션 폴더 하위만 허용 |
-| `cancel_job` | `(job_id)` | Phase 2부터 사용 |
+| `compare_pdfs` | `(request, Channel<CompareProgress>) -> CompareResult` | 두 PDF 비교(P2-7 실행기 연결, Step 26). A·B는 허용 경로 목록 안의 PDF만, canonical 경로로 실행기에 넘긴다. 요청에 프론트가 만든 `job_id`와 옵션(`rangeA`·`rangeB`·줄 제외·`ignoreCase`) 포함. 쪽 범위 오류는 `INVALID_RANGE`. 계약·OCR 엔진 상태는 [ADR 0001](../adr/0001-compare-result-model.md) §16 |
+| `cancel_job` | `(job_id)` | 병합·비교 작업 취소 |
 - 모든 처리 커맨드는 `async` + **pdfium 전용 작업 스레드**로 위임한다. UI 스레드는 막히지 않는다.
 - 진행률은 `tauri::ipc::Channel`로 보내고, 취소는 작업별 `Arc<AtomicBool>` 토큰으로 처리한다.
 - **병합 진행률(시안 7):** 비교와 같은 `Progress` 모양을 쓴다. 단계 `readFiles`(파일, 가중치 20) → `mergePages`(쪽, 70) → `save`(10). 오버레이에 전체 %와 단계별 %·막대, "취소". 실패하면 같은 자리에 원인·멈춘 단계·오류 코드와 "다시 시도 / 이 파일 빼기 / 닫기"(시안 8).
@@ -472,6 +473,7 @@ pub struct CompareResult {
      | `normalize` | 글자 정리 | 쪽 | 5 |
      | `diff` | 차이 찾기 | 앵커 사이 구간 | 15 |
      | `align_pages` | 쪽 맞추기 | 페이지 쌍 행 | 10 |
+   - 경계 계약(`CompareProgress.stage`)의 직렬화 값은 병합 단계(`readFiles`)와 ADR 0001 §7처럼 camelCase다: `extractA`·`extractB`·`ocr`·`normalize`·`diff`·`alignPages`(위 표의 snake_case는 단계 이름일 뿐이다, Step 26).
    - `overall_percent = Σ(stage_percent × 가중치) / 100`. 가중치는 `pdf-core`의 상수이고, 실제 소요 시간을 측정해 조정한다. 추출 캐시가 맞으면 그 단계는 바로 100%로 보고한다. OCR 대상 쪽이 없거나 모든 쪽이 OCR 캐시에 맞으면 `ocr` 단계도 바로 100%로 보고한다.
    - 이벤트는 단계 안에서 최소 1% 단위로만 보낸다(쪽마다 보내면 큰 문서에서 IPC가 넘친다). `%`는 정수로 내림해 100%는 실제로 끝났을 때만 보인다.
    - **추출 결과 캐시:** (파일 경로, 크기, mtime) 또는 해시를 키로 메모리 LRU에 둔다. 옵션만 바꿔 다시 실행할 때 추출을 건너뛴다. OCR 결과는 파일 해시를 키로 앱 캐시 디렉터리에 따로 저장한다(§6.4).
@@ -680,6 +682,10 @@ pdfium 스파이크(P1-0)처럼 연결 작업(P2-4a) 전에 끝까지 검증한�
 4. 위험: 빨강 채널 전처리는 붉은 글자(빨간 수정 표시 등)도 지운다. 붉은 글자가 비교 대상이면 다른 도장 제거 방법이 필요하다. macOS x64(Intel·universal) 빌드에 쓸 ONNX Runtime 1.28 공식 바이너리가 없다.
 
 앱 번들 설정(스파이크에서 확인한 값. 확인 뒤 앱 코드·설정은 되돌렸고 P2-4a에서 넣는다): `bundle.macOS.frameworks`에 `onnxruntime/aarch64-apple-darwin/libonnxruntime.dylib`, `bundle.resources`에 `ocr-models/<파일>` → `ocr-models/<파일>` 세 개. 런타임 폴더는 pdfium과 같은 `Contents/Frameworks`, 모델 폴더는 `resource_dir()/ocr-models`. 기존 `com.apple.security.cs.disable-library-validation`으로 ad-hoc 서명 dylib가 로드된다.
+
+앱 번들 연결(Step 26, 2026-10-13): 위 값을 `src-tauri/tauri.conf.json`에 넣었다 — `bundle.macOS.frameworks`에 `onnxruntime/aarch64-apple-darwin/libonnxruntime.dylib`(pdfium과 같은 `Contents/Frameworks`), `bundle.resources`에 `ocr-models/` 세 파일. 앱은 OCR 엔진을 첫 비교에서 로드하고 실패하면 OCR 없이 비교한다([ADR 0001](../adr/0001-compare-result-model.md) §16).
+- 런타임·모델이 없는 환경: tauri-build가 `cargo build`·`clippy`·`test` 때도 리소스·프레임워크 파일을 복사하므로 파일이 없으면 빌드가 멈춘다(`pnpm tauri build`도 같다). 그래서 **CI의 모든 잡은 `pnpm fetch:pdfium` 옆에 `pnpm fetch:ocr`을 돌린다**(P4-1에 이미 적힌 대로, 캐시 키는 `scripts/fetch-ocr.mjs` 해시). OCR 없이 출시되는 일을 막는 장치로 둔다(파일이 없어도 빌드되게 하는 별도 설정 파일은 출시 빌드에서 빠뜨릴 수 있어 버렸다). Windows·Linux는 ONNX Runtime 라이브러리를 리소스 폴더 바로 아래(`onnxruntime.dll`/`libonnxruntime.so`)에 두어야 앱이 찾는다(`pdf_engine::bundled_library_dir`) — pdfium처럼 CI의 `--config`로 `bundle.resources`에 더한다(예: `"onnxruntime/x86_64-pc-windows-msvc/onnxruntime.dll": "onnxruntime.dll"`, `fetch:ocr --target`으로 받은 폴더).
+- 측정(`pnpm tauri build --bundles app`, aarch64-apple-darwin, ad-hoc 서명, `codesign --verify --deep --strict` 통과): `.app` 87.70 MiB 중 OCR 몫은 `libonnxruntime.dylib` 37.3 MiB + `ocr-models/` 17.5 MiB = 54.8 MiB(57.5 MB, 스파이크 측정과 같다). 실행 파일 23.2 MiB, `libpdfium.dylib` 7.4 MiB.
 
 **P2-4a OCR 연결 (M)**
 - 추출 단계에 OCR 경로를 잇는다: OCR 대상 판정, 렌더·검출·인식, 좌표 되돌리기, 신뢰도와 `needs_review`, `page_sources`, OCR 캐시.

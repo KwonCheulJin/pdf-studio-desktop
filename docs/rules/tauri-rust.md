@@ -33,6 +33,8 @@
 
 - `pnpm fetch:ocr`이 버전을 고정한 ONNX Runtime 동적 라이브러리를 `src-tauri/onnxruntime/<target-triple>/`에, PP-OCRv5 검출·한국어 인식 모델과 사전을 `src-tauri/ocr-models/`에 받고 SHA-256을 검증한다(`scripts/fetch-ocr.mjs`, 둘 다 gitignore). `--target <target-triple>`로 다른 플랫폼 것을 받는다.
 - 경로 결정은 `crates/pdf-core/src/ocr/runtime.rs` 한 곳에서 한다. `ONNXRUNTIME_LIB_PATH`는 **라이브러리 파일 경로**, `OCR_MODEL_DIR`은 모델 **폴더**이고, 비어 있으면 번들 폴더를 쓴다.
+- **앱 번들(Step 26):** `tauri.conf.json`이 macOS `bundle.macOS.frameworks`에 `onnxruntime/aarch64-apple-darwin/libonnxruntime.dylib`, `bundle.resources`에 `ocr-models/` 세 파일을 넣는다. tauri-build(`build.rs`)는 `cargo build`·`clippy`·`test` 때도 이 파일들을 복사하므로 **`src-tauri`를 빌드하려면 `pnpm fetch:pdfium`과 함께 `pnpm fetch:ocr`을 먼저 돌린다**(없으면 빌드가 `resource path ... doesn't exist`·`Library not found`로 멈춘다). OCR 없이 출시되는 일을 막는 장치이기도 하다. Windows·Linux 라이브러리는 리소스 폴더에 두며 CI가 `--config`로 더한다.
+- 앱은 OCR 엔진을 첫 비교에서 한 번 로드하고(`src-tauri/src/compare.rs`), 실패하면 OCR 없이 비교한다(ADR 0001 §16).
 - OCR 테스트(`crates/pdf-core/tests/ocr.rs`)는 두 환경변수가 없으면 건너뛴다. macOS arm64 예: `ONNXRUNTIME_LIB_PATH=$PWD/src-tauri/onnxruntime/aarch64-apple-darwin/libonnxruntime.dylib OCR_MODEL_DIR=$PWD/src-tauri/ocr-models PDFIUM_LIB_PATH=… cargo test -p pdf-core`
 - 측정 하네스: 같은 환경변수로 `cargo run --release -p pdf-core --example ocr_spike`. 픽스처는 `python3 crates/pdf-core/tests/fixtures/generate_ocr_fixtures.py`(fontTools·Pillow·`PDFIUM_LIB_PATH` 필요)로 다시 만든다.
 - `src-tauri/onnxruntime/`·`src-tauri/ocr-models/` 안의 파일은 읽지 않는다.

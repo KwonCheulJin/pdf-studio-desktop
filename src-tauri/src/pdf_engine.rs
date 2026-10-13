@@ -10,9 +10,10 @@ use tauri::{App, Manager};
 #[cfg(target_os = "macos")]
 const MACOS_FRAMEWORKS_DIR: &str = "Frameworks";
 
-/// 실행 파일(`Contents/MacOS/<exe>`) 기준 `Contents/Frameworks`
+/// 번들한 네이티브 라이브러리(pdfium, ONNX Runtime) 폴더.
+/// macOS는 실행 파일(`Contents/MacOS/<exe>`) 기준 `Contents/Frameworks`다.
 #[cfg(target_os = "macos")]
-fn bundled_library_dir(_app: &App) -> Result<PathBuf, Box<dyn Error>> {
+pub(crate) fn bundled_library_dir(_app: &App) -> Result<PathBuf, Box<dyn Error>> {
     let executable = std::env::current_exe()?;
     let contents_dir = executable
         .parent()
@@ -21,8 +22,9 @@ fn bundled_library_dir(_app: &App) -> Result<PathBuf, Box<dyn Error>> {
     Ok(contents_dir.join(MACOS_FRAMEWORKS_DIR))
 }
 
+/// Windows·Linux는 리소스 폴더(`bundle.resources`)다.
 #[cfg(not(target_os = "macos"))]
-fn bundled_library_dir(app: &App) -> Result<PathBuf, Box<dyn Error>> {
+pub(crate) fn bundled_library_dir(app: &App) -> Result<PathBuf, Box<dyn Error>> {
     Ok(app.path().resource_dir()?)
 }
 

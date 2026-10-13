@@ -8,7 +8,7 @@ import {
 } from "@/renderer/entities/merge-plan";
 import { getErrorMessage } from "@/renderer/shared/config/error-messages";
 import { cn } from "@/renderer/shared/lib/utils";
-import { Button } from "@/renderer/shared/ui";
+import { Button, ProgressBar } from "@/renderer/shared/ui";
 import { getMergeFailureResolution } from "../config/merge-failure-resolution";
 import {
   MERGE_STAGE_LABEL,
@@ -35,39 +35,6 @@ const PANEL_CLASS =
   "bg-card flex w-full max-w-130 flex-col rounded-xl px-7 py-6 shadow-xl";
 /** 대화상자 버튼(시안 7·8: 높이 36px, 모서리 8px) */
 const DIALOG_BUTTON_CLASS = "h-9 rounded-md px-3.5 font-normal";
-
-interface ProgressBarProps {
-  label: string;
-  percent: number;
-  className: string;
-  fillClassName: string;
-}
-
-function ProgressBar({
-  label,
-  percent,
-  className,
-  fillClassName
-}: ProgressBarProps) {
-  return (
-    <div
-      role="progressbar"
-      aria-label={label}
-      aria-valuemin={PERCENT_MIN}
-      aria-valuemax={PERCENT_MAX}
-      aria-valuenow={percent}
-      className={cn(
-        "bg-secondary w-full overflow-hidden rounded-full",
-        className
-      )}
-    >
-      <div
-        className={cn("h-full rounded-full transition-all", fillClassName)}
-        style={{ width: `${percent}%` }}
-      />
-    </div>
-  );
-}
 
 /** 시안 7: 전체 %, 단계별 이름·세부·%·막대, 취소 */
 function MergeProgressPanel() {

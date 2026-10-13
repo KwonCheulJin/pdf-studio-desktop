@@ -3,6 +3,8 @@ export {
   LOG_LEVEL,
   MERGE_OUTPUT_KIND,
   type ClientPoint,
+  type ComparePdfsParams,
+  type CompareProgressHandler,
   type CopyFileParams,
   type DesktopPlatform,
   type FileDropDropEvent,

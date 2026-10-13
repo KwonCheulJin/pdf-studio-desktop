@@ -1,13 +1,16 @@
-import { useEffect, useRef } from "react";
-import { PARAGRAPH_STATUS } from "@/renderer/entities/translation";
+import { useEffect, useRef, useState } from "react";
+import {
+  ParagraphActions,
+  ParagraphEditor
+} from "@/renderer/features/pdf-translate";
+import {
+  isUntranslatedParagraph,
+  PARAGRAPH_STATUS
+} from "@/renderer/entities/translation";
 import type { TranslatedParagraph } from "@/renderer/shared/api/bindings";
 import { getErrorMessage } from "@/renderer/shared/config/error-messages";
 import { cn } from "@/renderer/shared/lib/utils";
 import { PANEL_SIDE, VIEWER_TEXT, type PanelSide } from "../config/viewer";
-
-/** 번역 자리에 글 대신 이유를 보이는 상태(계획서 P6-11 "문단 상태") */
-const UNTRANSLATED_STATUSES: ReadonlySet<TranslatedParagraph["status"]> =
-  new Set([PARAGRAPH_STATUS.FAILED, PARAGRAPH_STATUS.REFUSED]);
 
 interface ParagraphTextProps {
   paragraph: TranslatedParagraph;
@@ -20,7 +23,7 @@ function ParagraphText({ paragraph, side }: ParagraphTextProps) {
   if (side === PANEL_SIDE.SOURCE) {
     return <span className={weightClass}>{paragraph.source}</span>;
   }
-  if (UNTRANSLATED_STATUSES.has(paragraph.status)) {
+  if (isUntranslatedParagraph(paragraph)) {
     return (
       <span className="text-destructive">
         {paragraph.failCode === null
@@ -41,6 +44,37 @@ function ParagraphText({ paragraph, side }: ParagraphTextProps) {
   );
 }
 
+interface TargetContentProps {
+  paragraph: TranslatedParagraph;
+  isActive: boolean;
+}
+
+/**
+ * 번역 쪽 행 내용: 글 + 동작 줄(고른 문단, 실패·거절 문단은 다시 번역만, 계획서 P6-12). "직접 고치기"를 누르면
+ * 글 자리가 입력 칸이 된다. 행 높이가 바뀌어도 두 패널이 서브그리드 행을 함께 써서 같은 번호 행이 맞는다.
+ */
+function TargetContent({ paragraph, isActive }: TargetContentProps) {
+  const [isEditing, setIsEditing] = useState(false);
+  if (isEditing) {
+    return (
+      <ParagraphEditor
+        paragraph={paragraph}
+        onClose={() => setIsEditing(false)}
+      />
+    );
+  }
+  return (
+    <>
+      <ParagraphText paragraph={paragraph} side={PANEL_SIDE.TARGET} />
+      <ParagraphActions
+        paragraph={paragraph}
+        isActive={isActive}
+        onEdit={() => setIsEditing(true)}
+      />
+    </>
+  );
+}
+
 interface ParagraphRowProps {
   paragraph: TranslatedParagraph;
   side: PanelSide;
@@ -49,7 +83,7 @@ interface ParagraphRowProps {
 }
 
 /**
- * 문단 한 행(시안 13): 번호(쪽 안 순번) + 글. 누르면 고르고, 고른 행은 양쪽 `accent` 바탕에 번역 쪽만 왼쪽 3px
+ * 문단 한 행(시안 13): 번호(쪽 안 순번) + 글(번역 쪽은 동작 줄과 함께). 누르면 고르고, 고른 행은 양쪽 `accent` 바탕에 번역 쪽만 왼쪽 3px
  * `primary` 막대다. 키보드로 고르면 화면 밖 행으로 스크롤이 따라간다.
  */
 export function ParagraphRow({
@@ -85,7 +119,11 @@ export function ParagraphRow({
       <span className="text-muted-foreground absolute top-2 left-1.5 font-mono text-[10px]/3.5">
         {paragraph.number}
       </span>
-      <ParagraphText paragraph={paragraph} side={side} />
+      {side === PANEL_SIDE.TARGET ? (
+        <TargetContent paragraph={paragraph} isActive={isActive} />
+      ) : (
+        <ParagraphText paragraph={paragraph} side={side} />
+      )}
     </li>
   );
 }

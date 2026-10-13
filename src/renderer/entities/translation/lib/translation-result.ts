@@ -1,5 +1,8 @@
-import type { TranslationResult } from "@/renderer/shared/api/bindings";
-import { PAGE_KIND } from "../config/translation-result";
+import type {
+  TranslatedParagraph,
+  TranslationResult
+} from "@/renderer/shared/api/bindings";
+import { PAGE_KIND, PARAGRAPH_STATUS } from "../config/translation-result";
 
 /** 문서 첫 쪽(쪽 번호는 0부터, ADR 0001 §3) */
 const FIRST_PAGE = 0;
@@ -24,4 +27,15 @@ export function firstRangePageOf(result: TranslationResult): number {
     (page) => page.kind !== PAGE_KIND.OUT_OF_RANGE
   );
   return first?.page ?? FIRST_PAGE;
+}
+
+/** 번역 글 대신 이유를 보이는 상태(실패·거절, 계획서 P6-11 "문단 상태") */
+const UNTRANSLATED_STATUSES: ReadonlySet<TranslatedParagraph["status"]> =
+  new Set([PARAGRAPH_STATUS.FAILED, PARAGRAPH_STATUS.REFUSED]);
+
+/** 번역하지 못한(실패·거절) 문단인지 */
+export function isUntranslatedParagraph(
+  paragraph: TranslatedParagraph
+): boolean {
+  return UNTRANSLATED_STATUSES.has(paragraph.status);
 }

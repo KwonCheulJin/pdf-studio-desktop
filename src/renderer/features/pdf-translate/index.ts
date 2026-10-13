@@ -24,6 +24,8 @@ export {
   translateResultText,
   type ResultViewMode
 } from "./config/translate-result";
+export { ParagraphActions } from "./ui/paragraph-actions";
+export { ParagraphEditor } from "./ui/paragraph-editor";
 export { TranslateFailureCard } from "./ui/translate-failure-card";
 export { TranslateFileCard } from "./ui/translate-file-card";
 export { TranslateOptionsCard } from "./ui/translate-options-card";

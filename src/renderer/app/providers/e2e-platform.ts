@@ -11,6 +11,8 @@ import type {
   MergeRequest,
   OpenedFile,
   PreviewCompareReportRequest,
+  RetranslateRequest,
+  RetranslateResult,
   SourceLanguage,
   TranslateModel,
   TranslateProgress,
@@ -96,6 +98,17 @@ export interface E2eTranslateScript {
   result?: TranslationResult;
 }
 
+/**
+ * `retranslateParagraph` 한 번의 흉내. `__E2E_HOLD_RETRANSLATE__`를 기다린 뒤 `failCode`가 있으면 그 코드로
+ * 실패하고, 아니면 mock 검사(경로·기록·문단·키)를 거쳐 `result`(없으면 기억한 문단 그대로·사용량 0)를 돌려준다.
+ * `result`는 계약 JSON과 모양이 같아 실패·거절 문단(`target: null`)도 넣을 수 있다.
+ */
+export interface E2eRetranslateScript {
+  /** IPC로 온 값처럼 넘기므로 바인딩에 없는 코드도 넣을 수 있다. */
+  failCode?: string;
+  result?: RetranslateResult;
+}
+
 /** 계획 시드를 고를 조건. 적은 값만 요청과 맞춰 본다(용어집은 정규화한 용어 수로). */
 export interface E2ePlanMatch {
   path?: string;
@@ -145,6 +158,8 @@ export interface E2eMockSeed {
   translateScripts?: E2eTranslateScript[];
   /** 옵션별 계획(`prepareTranslation`). 쓰고 나도 남는다(같은 옵션이면 같은 계획). */
   translationPlans?: E2eTranslationPlan[];
+  /** `retranslateParagraph`를 부를 때마다 앞에서부터 하나씩 쓴다. 다 쓰면 mock 그대로다. */
+  retranslateScripts?: E2eRetranslateScript[];
 }
 
 /** 시드 키 확인 실패의 로그용 설명 */
@@ -306,6 +321,15 @@ declare global {
     __E2E_RELEASE_TRANSLATE__?: () => void;
     /** 앱이 보낸 번역 요청(`translatePdf`, 옵션 포함)을 부른 순서대로 기록하는 곳 */
     __E2E_MOCK_TRANSLATES__?: TranslateRequest[];
+    /**
+     * 테스트가 넣으면 다시 번역 요청을 이 Promise가 풀릴 때까지 붙잡는다(진행 표시·한 번에 하나 확인용).
+     * 붙잡힌 동안 같은 작업 ID로 `cancelJob`이 오면 바로 `CANCELLED`로 실패한다.
+     */
+    __E2E_HOLD_RETRANSLATE__?: Promise<void>;
+    /** `__E2E_HOLD_RETRANSLATE__`를 푸는 함수. 테스트가 함께 넣는다. */
+    __E2E_RELEASE_RETRANSLATE__?: () => void;
+    /** 앱이 보낸 다시 번역 요청(`retranslateParagraph`, 옵션 포함)을 부른 순서대로 기록하는 곳 */
+    __E2E_MOCK_RETRANSLATES__?: RetranslateRequest[];
     /** 앱이 보낸 계획 요청(`prepareTranslation`, 옵션 포함)을 부른 순서대로 기록하는 곳 */
     __E2E_MOCK_PLANS__?: PrepareTranslationParams[];
     /** 응답(성공·실패)을 돌려준 계획 요청 수. 늦게 온 응답을 앱이 받은 뒤를 기다릴 때 쓴다. */
@@ -421,6 +445,7 @@ interface InjectFailuresParams {
   mergeScripts: E2eMergeScript[];
   compareScripts: E2eCompareScript[];
   translateScripts: E2eTranslateScript[];
+  retranslateScripts: E2eRetranslateScript[];
   apiKeyChecks: (ErrorCode | null)[];
   /** 시드 번역 결과를 mock에 알린다(다시 번역·직접 고치기가 그 문단을 찾는다). */
   rememberTranslation: MockPlatform["rememberTranslation"];
@@ -428,8 +453,8 @@ interface InjectFailuresParams {
 
 /**
  * 시드대로 실패·진행률을 흉내 낸다. `mergePdfs`·`comparePdfs`·`translatePdf`는 스크립트의 진행률을 보낸 뒤
- * `__E2E_HOLD_MERGE__`·`__E2E_HOLD_COMPARE__`·`__E2E_HOLD_TRANSLATE__`를 기다리고, 그동안 같은 작업의
- * `cancelJob`이 오면 Rust처럼 `CANCELLED`로 실패한다.
+ * `__E2E_HOLD_MERGE__`·`__E2E_HOLD_COMPARE__`·`__E2E_HOLD_TRANSLATE__`를, `retranslateParagraph`는
+ * `__E2E_HOLD_RETRANSLATE__`를 기다리고, 그동안 같은 작업의 `cancelJob`이 오면 Rust처럼 `CANCELLED`로 실패한다.
  */
 function injectFailures({
   platform,
@@ -437,6 +462,7 @@ function injectFailures({
   mergeScripts,
   compareScripts,
   translateScripts,
+  retranslateScripts,
   apiKeyChecks,
   rememberTranslation
 }: InjectFailuresParams): DesktopPlatform {
@@ -551,6 +577,16 @@ function injectFailures({
       rememberTranslation(script.result);
       return script.result;
     },
+    retranslateParagraph: async (request) => {
+      const { jobId } = request;
+      const script = retranslateScripts.shift();
+      await waitForRelease({ jobId, hold: window.__E2E_HOLD_RETRANSLATE__ });
+      if (script?.failCode !== undefined) {
+        throw seededError({ code: script.failCode, detail: jobId });
+      }
+      const result = await platform.retranslateParagraph(request);
+      return script?.result ?? result;
+    },
     cancelJob: async (jobId) => {
       cancelledJobs.add(jobId);
       cancelWaiters.get(jobId)?.();
@@ -650,18 +686,24 @@ function recordSaveDialogs({
 interface RecordTranslatesParams {
   platform: DesktopPlatform;
   translates: TranslateRequest[];
+  retranslates: RetranslateRequest[];
 }
 
-/** 번역 요청(옵션 포함)을 위임 전에 기록한다. 거부된 요청도 남는다. */
+/** 번역·다시 번역 요청(옵션 포함)을 위임 전에 기록한다. 거부된 요청도 남는다. */
 function recordTranslates({
   platform,
-  translates
+  translates,
+  retranslates
 }: RecordTranslatesParams): DesktopPlatform {
   return {
     ...platform,
     translatePdf: (params) => {
       translates.push(params.request);
       return platform.translatePdf(params);
+    },
+    retranslateParagraph: (request) => {
+      retranslates.push(request);
+      return platform.retranslateParagraph(request);
     }
   };
 }
@@ -839,6 +881,7 @@ export function createE2ePlatform(): DesktopPlatform {
   const compares: CompareRequest[] = [];
   const previews: PreviewCompareReportRequest[] = [];
   const translates: TranslateRequest[] = [];
+  const retranslates: RetranslateRequest[] = [];
   const planRequests: PrepareTranslationParams[] = [];
   const clipboard: string[] = [];
   const updateCalls: E2eUpdateCall[] = [];
@@ -849,6 +892,7 @@ export function createE2ePlatform(): DesktopPlatform {
   window.__E2E_MOCK_READS__ = reads;
   window.__E2E_MOCK_SAVE_DIALOGS__ = saveDialogs;
   window.__E2E_MOCK_TRANSLATES__ = translates;
+  window.__E2E_MOCK_RETRANSLATES__ = retranslates;
   window.__E2E_MOCK_PLANS__ = planRequests;
   window.__E2E_MOCK_PLANS_SETTLED__ = 0;
   window.__E2E_MOCK_CLIPBOARD__ = clipboard;
@@ -870,6 +914,7 @@ export function createE2ePlatform(): DesktopPlatform {
     mergeScripts: [...(seed.mergeScripts ?? [])],
     compareScripts: [...(seed.compareScripts ?? [])],
     translateScripts: [...(seed.translateScripts ?? [])],
+    retranslateScripts: [...(seed.retranslateScripts ?? [])],
     apiKeyChecks: [...(seed.apiKeyChecks ?? [])],
     rememberTranslation: mockPlatform.rememberTranslation
   });
@@ -891,7 +936,8 @@ export function createE2ePlatform(): DesktopPlatform {
               }),
               saveDialogs
             }),
-            translates
+            translates,
+            retranslates
           }),
           plans: [...(seed.translationPlans ?? [])],
           requests: planRequests

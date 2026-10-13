@@ -1,9 +1,10 @@
 //! 문단 하나 다시 번역·직접 고치기(ADR 0002 §5 "다시 번역", §8, §10). 기록은 테스트마다 새 폴더에 손으로 쓰고,
-//! 다시 번역은 가짜 전송(`common`)이 손으로 쓴 응답을 돌려준다. 실제 API를 부르지 않는다.
+//! 다시 번역·이어하기는 가짜 전송(`common`)이 손으로 쓴 응답을 돌려준다. 실제 API를 부르지 않는다.
 
 mod common;
 
 use std::fs;
+use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
@@ -11,9 +12,10 @@ use common::{FakeTransport, key, translated};
 use serde_json::{Value, json};
 use translate::{
     FailReason, Glossary, GlossaryTerm, Language, ParagraphNotFound, ParagraphStatus,
-    ParagraphTarget, SourcePage, SourcePageContent, SourceParagraph, TokenUsage, TranslateModel,
-    TranslatedParagraph, TranslationOptions, edit_translated_paragraph, locate_paragraph,
-    paragraph_key, retranslate_paragraph,
+    ParagraphTarget, ProgressReporter, ScanRenderer, SourcePage, SourcePageContent,
+    SourceParagraph, TokenUsage, TranslateModel, TranslatedParagraph, TranslationJob,
+    TranslationOptions, edit_translated_paragraph, locate_paragraph, paragraph_key,
+    retranslate_paragraph, run_translation,
 };
 
 const S_A: &str = "甲方应当交付设备。";
@@ -298,4 +300,100 @@ fn a_different_record_key_or_an_unknown_paragraph_is_not_found() {
 
     assert_eq!(other_record.err(), Some(ParagraphNotFound));
     assert_eq!(unknown_paragraph.err(), Some(ParagraphNotFound));
+}
+
+/// 스캔 쪽이 없는 문서라 그림을 만들 일이 없다.
+struct NoScanPages;
+
+impl ScanRenderer for NoScanPages {
+    type Error = ();
+
+    fn render(&mut self, _page: u32) -> impl Future<Output = Result<Vec<u8>, ()>> + Send {
+        std::future::ready(Err(()))
+    }
+}
+
+/// 직접 고친 글은 이어하기 뒤에도 남는다. 고친 문단(번역이 있던 문단·실패해 기록에 없던 문단)은 다시 보내지 않고
+/// 고친 글과 `edited` 상태로 보이며, 기록의 `edited`도 그대로다. 기록에 없던 문단만 보낸다.
+#[tokio::test]
+async fn edited_text_survives_a_resumed_translation() {
+    let glossary = Glossary::default();
+    let pages = pages();
+    let dir = TempDir::new("edit-resume");
+    let record_key = options(&glossary).record_key();
+    let key_a = paragraph_key(0, 1, S_A);
+    let key_b = paragraph_key(0, 2, S_B);
+    let key_c = paragraph_key(1, 1, S_C);
+    dir.write_record(
+        &record_key,
+        json!({ key_b.clone(): { "target": B_TARGET, "edited": null } }),
+    );
+    for (key, text) in [
+        (&key_a, "갑이 설비를 인도한다(고침)."),
+        (&key_b, "을이 검수한다(고침)."),
+    ] {
+        let located = locate_paragraph(target(&pages, &glossary, dir.path(), &record_key, key))
+            .expect("paragraph");
+        edit_translated_paragraph(located, text).expect("saved");
+    }
+    let transport = FakeTransport::new([translated(&["이 계약은 서명한 날부터 효력이 생긴다."])]);
+    let mut reporter = ProgressReporter::new("job-1", |_| {});
+
+    let output = run_translation(
+        TranslationJob {
+            pages: &pages,
+            options: options(&glossary),
+            resume: true,
+            record_dir: dir.path(),
+        },
+        &transport,
+        key(),
+        &mut NoScanPages,
+        &mut reporter,
+        &AtomicBool::new(false),
+    )
+    .await
+    .expect("translated");
+
+    assert_eq!(transport.sent_texts(), [vec![S_C.to_owned()]]);
+    let shown: Vec<TranslatedParagraph> = output
+        .pages
+        .into_iter()
+        .flat_map(|page| page.paragraphs)
+        .collect();
+    assert_eq!(
+        shown,
+        [
+            paragraph(
+                &key_a,
+                1,
+                S_A,
+                Some("갑이 설비를 인도한다(고침)."),
+                ParagraphStatus::Edited
+            ),
+            paragraph(
+                &key_b,
+                2,
+                S_B,
+                Some("을이 검수한다(고침)."),
+                ParagraphStatus::Edited
+            ),
+            paragraph(
+                &key_c,
+                1,
+                S_C,
+                Some("이 계약은 서명한 날부터 효력이 생긴다."),
+                ParagraphStatus::Translated
+            ),
+        ]
+    );
+    let record = dir.record(&record_key);
+    assert_eq!(
+        record["paragraphs"][&key_a],
+        json!({ "target": null, "edited": "갑이 설비를 인도한다(고침)." })
+    );
+    assert_eq!(
+        record["paragraphs"][&key_b],
+        json!({ "target": B_TARGET, "edited": "을이 검수한다(고침)." })
+    );
 }

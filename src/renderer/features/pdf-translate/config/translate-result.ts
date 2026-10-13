@@ -25,6 +25,24 @@ export const TRANSLATE_RESULT_TEXT = {
   BACK_TO_OPTIONS: "옵션으로 돌아가기"
 } as const;
 
+/** 문단 동작(시안 13 고른 문단 아래 동작 줄, 계획서 P6-12) */
+export const PARAGRAPH_ACTION_TEXT = {
+  ACTIONS: "문단 동작",
+  RETRANSLATE: "이 문단 다시 번역",
+  /** 결과 화면에서 이미 동의한 전송이라 묻지 않고 설명만 둔다(ADR 0002 §13) */
+  RETRANSLATE_DESCRIPTION: "Anthropic API로 다시 보내요",
+  RETRANSLATING: "다시 번역하는 중",
+  RETRANSLATE_FAILED: "이 문단을 다시 번역하지 못했어요",
+  EDIT: "직접 고치기",
+  EDITOR: "번역 고치기",
+  SAVE: "저장",
+  CANCEL: "취소",
+  EDIT_FAILED: "고친 글을 저장하지 못했어요",
+  COPY: "복사",
+  COPIED: "복사했어요",
+  COPY_FAILED: "복사하지 못했어요"
+} as const;
+
 const DETAIL_SEPARATOR = " · ";
 
 interface ResultTitleParams {

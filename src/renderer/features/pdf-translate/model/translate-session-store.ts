@@ -6,7 +6,10 @@ import {
   SOURCE_LANGUAGE
 } from "@/renderer/entities/translation";
 import type {
+  RetranslateResult,
   SourceLanguage,
+  TokenUsage,
+  TranslatedParagraph,
   TranslateModel,
   TranslateProgress,
   TranslateRequest,
@@ -105,6 +108,13 @@ export interface TranslateResultView {
   activeParagraphKey: string | null;
 }
 
+/** 진행 중인 문단 다시 번역(한 번에 하나, Rust도 `JOB_ALREADY_RUNNING`으로 막는다) */
+export interface TranslateRetranslation {
+  jobId: string;
+  /** 다시 번역하는 문단 키 */
+  key: string;
+}
+
 interface StartRunParams {
   request: TranslateRequest;
   info: TranslateRunInfo;
@@ -114,6 +124,70 @@ interface StartRunParams {
 interface UpdateProgressParams {
   jobId: string;
   progress: TranslateProgress;
+}
+
+interface FinishRetranslationParams {
+  jobId: string;
+  /** 다시 번역을 보낸 결과의 기록 키. 그사이 결과가 바뀌었으면 받은 것을 버린다. */
+  recordId: string;
+  retranslated: RetranslateResult;
+}
+
+interface ReplaceResultParagraphParams {
+  /** 고친 결과의 기록 키. 그사이 결과가 바뀌었으면 버린다. */
+  recordId: string;
+  paragraph: TranslatedParagraph;
+}
+
+interface ReplaceParagraphParams {
+  result: TranslationResult;
+  paragraph: TranslatedParagraph;
+}
+
+/** 결과에서 키가 같은 문단을 바꾼 새 결과(문단 키는 문서 안에서 하나다, ADR 0002 §3) */
+function withParagraph({
+  result,
+  paragraph
+}: ReplaceParagraphParams): TranslationResult {
+  return {
+    ...result,
+    pages: result.pages.map((page) =>
+      page.paragraphs.some((item) => item.key === paragraph.key)
+        ? {
+            ...page,
+            paragraphs: page.paragraphs.map((item) =>
+              item.key === paragraph.key ? paragraph : item
+            )
+          }
+        : page
+    )
+  };
+}
+
+interface FindParagraphParams {
+  result: TranslationResult;
+  key: string;
+}
+
+function findParagraph({
+  result,
+  key
+}: FindParagraphParams): TranslatedParagraph | undefined {
+  return result.pages
+    .flatMap((page) => page.paragraphs)
+    .find((paragraph) => paragraph.key === key);
+}
+
+interface AddUsageParams {
+  total: TokenUsage;
+  added: TokenUsage;
+}
+
+function addUsage({ total, added }: AddUsageParams): TokenUsage {
+  return {
+    inputTokens: total.inputTokens + added.inputTokens,
+    outputTokens: total.outputTokens + added.outputTokens
+  };
 }
 
 /** 결과 첫 쪽(쪽 번호는 0부터) */
@@ -158,6 +232,9 @@ interface TranslateSessionState {
   run: TranslateRun | null;
   failure: TranslateFailure | null;
   result: TranslationResult | null;
+  /** 결과를 만든 요청(경로·옵션). 다시 번역·직접 고치기가 그대로 보낸다(ADR 0002 §10). */
+  resultRequest: TranslateRequest | null;
+  retranslation: TranslateRetranslation | null;
   view: TranslateView;
   resultView: TranslateResultView;
 }
@@ -196,6 +273,17 @@ interface TranslateSessionActions {
   /** 글자 크기 배율(50~200%로 자른다) */
   setResultZoomPercent: (zoomPercent: number) => void;
   selectParagraph: (key: string | null) => void;
+  /** 다시 번역을 시작한다. 이미 하나가 돌고 있으면 그대로 둔다. */
+  startRetranslation: (retranslation: TranslateRetranslation) => void;
+  /**
+   * 다시 번역을 끝낸다. 같은 결과면 사용량을 더하고 문단을 바꾼다. 실패·거절로 오면 원래 글이 있는 문단은
+   * 그대로 둔다(Rust도 기록의 글을 그대로 둔다, ADR 0002 §10).
+   */
+  finishRetranslation: (params: FinishRetranslationParams) => void;
+  /** 다시 번역이 오류로 멈췄다(결과는 그대로) */
+  abortRetranslation: (jobId: string) => void;
+  /** 직접 고친 문단으로 바꾼다 */
+  replaceResultParagraph: (params: ReplaceResultParagraphParams) => void;
 }
 
 interface OptionChange<K extends keyof TranslateSessionOptions> {
@@ -221,6 +309,8 @@ export const useTranslateSessionStore = create<
     run: null,
     failure: null,
     result: null,
+    resultRequest: null,
+    retranslation: null,
     view: TRANSLATE_VIEW.OPTIONS,
     resultView: INITIAL_RESULT_VIEW,
     setFile: (file) =>
@@ -231,6 +321,7 @@ export const useTranslateSessionStore = create<
         plan: null,
         failure: null,
         result: null,
+        resultRequest: null,
         view: TRANSLATE_VIEW.OPTIONS
       }),
     setSourceLanguage: (value) => setOption({ key: "sourceLanguage", value }),
@@ -279,6 +370,7 @@ export const useTranslateSessionStore = create<
       set((state) => ({
         run: null,
         result,
+        resultRequest: state.run?.request ?? null,
         view: TRANSLATE_VIEW.RESULT,
         planRevision: state.planRevision + 1,
         resultView: {
@@ -314,6 +406,7 @@ export const useTranslateSessionStore = create<
         plan: null,
         failure: null,
         result: null,
+        resultRequest: null,
         view: TRANSLATE_VIEW.OPTIONS
       }),
     setResultViewMode: (viewMode) =>
@@ -349,7 +442,43 @@ export const useTranslateSessionStore = create<
     selectParagraph: (activeParagraphKey) =>
       set((state) => ({
         resultView: { ...state.resultView, activeParagraphKey }
-      }))
+      })),
+    startRetranslation: (retranslation) =>
+      set((state) =>
+        state.retranslation === null ? { retranslation } : state
+      ),
+    finishRetranslation: ({ jobId, recordId, retranslated }) =>
+      set((state) => {
+        if (state.retranslation?.jobId !== jobId) return state;
+        if (state.result?.recordId !== recordId) return { retranslation: null };
+        const { paragraph, usage } = retranslated;
+        const current = findParagraph({
+          result: state.result,
+          key: paragraph.key
+        });
+        const isReplaced =
+          paragraph.target !== null || current?.target === null;
+        const result = isReplaced
+          ? withParagraph({ result: state.result, paragraph })
+          : state.result;
+        return {
+          retranslation: null,
+          result: {
+            ...result,
+            usage: addUsage({ total: result.usage, added: usage })
+          }
+        };
+      }),
+    abortRetranslation: (jobId) =>
+      set((state) =>
+        state.retranslation?.jobId === jobId ? { retranslation: null } : state
+      ),
+    replaceResultParagraph: ({ recordId, paragraph }) =>
+      set((state) =>
+        state.result?.recordId === recordId
+          ? { result: withParagraph({ result: state.result, paragraph }) }
+          : state
+      )
   };
 });
 
@@ -365,6 +494,10 @@ export const useTranslateRun = () =>
 /** 끝난 번역 결과(결과 화면). 없으면 `null` */
 export const useTranslateResult = () =>
   useTranslateSessionStore((state) => state.result);
+
+/** 다시 번역하는 문단 키(없으면 `null`) */
+export const useRetranslatingParagraphKey = () =>
+  useTranslateSessionStore((state) => state.retranslation?.key ?? null);
 
 export const useTranslateResultView = () =>
   useTranslateSessionStore((state) => state.resultView);

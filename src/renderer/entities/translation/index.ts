@@ -13,3 +13,4 @@ export {
   TRANSLATE_MODEL_ORDER,
   type TranslateModelInfo
 } from "./config/translate-model";
+export { paragraphCountOf } from "./lib/translation-result";

@@ -113,6 +113,8 @@ export interface E2ePlanMatch {
 export interface E2eTranslationPlan {
   match?: E2ePlanMatch;
   plan: TranslationPlan;
+  /** 한 번 쓰면 지운다. 같은 옵션이어도 번역 뒤(기록이 바뀐 뒤) 다른 계획을 주려고 앞에 둔다. */
+  once?: boolean;
 }
 
 export interface E2eMockSeed {
@@ -707,12 +709,15 @@ function seedPlans({
       try {
         await hold;
         const mockPlan = await platform.prepareTranslation(params);
-        const seeded = plans.find(
+        const index = plans.findIndex(
           (seed) =>
             seed.match === undefined ||
             matchesPlan({ match: seed.match, ...request })
         );
-        return seeded?.plan ?? mockPlan;
+        const seeded = plans[index];
+        if (seeded === undefined) return mockPlan;
+        if (seeded.once === true) plans.splice(index, 1);
+        return seeded.plan;
       } finally {
         window.__E2E_MOCK_PLANS_SETTLED__ =
           (window.__E2E_MOCK_PLANS_SETTLED__ ?? 0) + 1;
@@ -888,7 +893,7 @@ export function createE2ePlatform(): DesktopPlatform {
             }),
             translates
           }),
-          plans: seed.translationPlans ?? [],
+          plans: [...(seed.translationPlans ?? [])],
           requests: planRequests
         }),
         clipboard

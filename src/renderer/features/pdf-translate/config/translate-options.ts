@@ -25,7 +25,8 @@ const MICRO_USD_PER_USD = 1_000_000;
 const COST_FRACTION_DIGITS = 2;
 const MIN_SHOWN_COST_MICRO_USD = 10_000;
 
-const NUMBER_FORMAT = new Intl.NumberFormat("ko-KR");
+/** 개수·토큰 수 표기(천 단위 쉼표) */
+export const NUMBER_FORMAT = new Intl.NumberFormat("ko-KR");
 
 export const TRANSLATE_OPTIONS_TEXT = {
   OPTIONS_TITLE: "번역 옵션",
@@ -57,7 +58,6 @@ export const TRANSLATE_OPTIONS_TEXT = {
   /** 머리 톱니("설정")와 구분하는 접근 가능한 이름(보이는 글자 "설정"을 담는다) */
   OPEN_SETTINGS_LABEL: "번역 설정 열기",
   START: "번역 시작",
-  RUNNING: "번역하는 중…",
   VIEW_RESULT: "결과 보기",
   ALREADY_TRANSLATED: "이미 번역한 문서예요 · 추가 요금 없음",
   REASON_NO_FILE: "번역할 PDF를 넣어 주세요.",
@@ -67,8 +67,7 @@ export const TRANSLATE_OPTIONS_TEXT = {
   REASON_SCAN_ONLY: "스캔 페이지 옵션을 켜면 번역할 수 있어요.",
   REASON_NO_CONSENT: "전송을 확인하면 시작할 수 있어요.",
   UNKNOWN_LANGUAGE_BADGE: "언어를 알 수 없어요",
-  PLAN_FAILED_TITLE: "번역 계획을 세우지 못했어요.",
-  RUN_FAILED_TITLE: "번역하지 못했어요."
+  PLAN_FAILED_TITLE: "번역 계획을 세우지 못했어요."
 } as const;
 
 /** 쪽 범위 오류 문구(비교 옵션과 같은 문구, 계획서 P6-9). 쪽 수를 넘을 때만 쪽 수를 넣는다. */

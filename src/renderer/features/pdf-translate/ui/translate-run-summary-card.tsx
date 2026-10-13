@@ -24,7 +24,6 @@ import {
 } from "../model/transfer-consent-store";
 import {
   useTranslateFile,
-  useTranslateRun,
   useTranslateSessionStore
 } from "../model/translate-session-store";
 import { useTranslateExecution } from "../model/use-translate-execution";
@@ -151,7 +150,6 @@ export function TranslateRunSummaryCard({
   const titleId = useId();
   const reasonId = useId();
   const file = useTranslateFile();
-  const run = useTranslateRun();
   const isConsentChecked = useTranslateSessionStore(
     (state) => state.isTransferConsentChecked
   );
@@ -199,20 +197,26 @@ export function TranslateRunSummaryCard({
   ];
 
   const handleStart = () => {
+    if (readiness.action === TRANSLATE_ACTION.OPEN_API_KEY) {
+      onRequestApiKey();
+      return;
+    }
+    // 시작·결과 보기는 지금 옵션으로 받은 계획이 있을 때만 된다(`translateReadinessOf`).
+    if (plan === null) return;
     switch (readiness.action) {
-      case TRANSLATE_ACTION.OPEN_API_KEY:
-        onRequestApiKey();
-        return;
       case TRANSLATE_ACTION.VIEW_RESULT:
-        void startTranslation({ options, isConsentGiven: false });
+        void startTranslation({ options, plan, isConsentGiven: false });
         return;
       case TRANSLATE_ACTION.START:
-        void startTranslation({ options, isConsentGiven: isConsentRequired });
+        void startTranslation({
+          options,
+          plan,
+          isConsentGiven: isConsentRequired
+        });
     }
   };
 
   const renderButtonLabel = () => {
-    if (run !== null) return TRANSLATE_OPTIONS_TEXT.RUNNING;
     if (isViewingResult) return TRANSLATE_OPTIONS_TEXT.VIEW_RESULT;
     return (
       <>
@@ -271,9 +275,7 @@ export function TranslateRunSummaryCard({
       )}
       <div className="flex flex-col gap-2">
         <Button
-          disabled={
-            run !== null || readiness.action === TRANSLATE_ACTION.BLOCKED
-          }
+          disabled={readiness.action === TRANSLATE_ACTION.BLOCKED}
           aria-describedby={readiness.reason === null ? undefined : reasonId}
           onClick={handleStart}
           className="h-11 gap-2 rounded-md text-[15px] font-semibold"

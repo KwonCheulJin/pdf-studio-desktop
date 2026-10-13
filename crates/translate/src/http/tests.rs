@@ -157,6 +157,36 @@ async fn refused_connection_is_connection_error() {
     assert_eq!(result, Err(TransportError::Connection));
 }
 
+/// 이름 풀이가 끝나지 않는 해석기: 연결 단계에서 멈춰 `connect_timeout`이 걸린다. OS의 TCP 동작(Windows의 SYN
+/// 재시도 등)에 기대지 않고 연결 단계 시간 초과를 만든다.
+struct NeverResolves;
+
+impl reqwest::dns::Resolve for NeverResolves {
+    fn resolve(&self, _name: reqwest::dns::Name) -> reqwest::dns::Resolving {
+        Box::pin(std::future::pending())
+    }
+}
+
+/// 연결 단계 시간 초과는 응답 지연이 아니라 연결 실패다(reqwest 오류가 `is_timeout()`이어도). 요청 시간 제한은
+/// 연결 시간 제한보다 훨씬 길게 두어 연결 단계 시간 초과만 일어나게 한다.
+#[tokio::test]
+async fn connect_stage_timeout_is_connection_error() {
+    let client = reqwest::Client::builder()
+        .dns_resolver(NeverResolves)
+        .connect_timeout(Duration::from_millis(100))
+        .timeout(Duration::from_secs(30))
+        .build()
+        .expect("client");
+    let transport = ReqwestTransport {
+        client,
+        base_url: "http://never-resolves.invalid".to_owned(),
+    };
+
+    let result = transport.post_messages(&key(), b"{}").await;
+
+    assert_eq!(result, Err(TransportError::Connection));
+}
+
 #[tokio::test]
 async fn redirect_is_returned_not_followed() {
     let (base_url, server) = serve_once(Some(http_reply(

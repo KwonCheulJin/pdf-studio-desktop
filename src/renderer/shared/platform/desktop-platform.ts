@@ -244,6 +244,8 @@ export interface DesktopPlatform {
   editTranslatedParagraph(
     request: EditParagraphRequest
   ): Promise<TranslatedParagraph>;
+  /** 저장된 번역(이어하기 기록) 수 */
+  countTranslationRecords(): Promise<number>;
   /** 저장된 번역(이어하기 기록)을 모두 지운다. */
   deleteTranslationRecords(): Promise<void>;
   /** 글을 클립보드에 복사한다. */

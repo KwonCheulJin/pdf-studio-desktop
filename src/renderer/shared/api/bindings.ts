@@ -57,6 +57,8 @@ export const commands = {
 	retranslateParagraph: (request: RetranslateRequest) => typedError<RetranslateResult, AppError>(__TAURI_INVOKE("retranslate_paragraph", { request })),
 	/**  직접 고친 글을 이어하기 기록에 쓴다. 네트워크를 쓰지 않는다. */
 	editTranslatedParagraph: (request: EditParagraphRequest) => typedError<TranslatedParagraph, AppError>(__TAURI_INVOKE("edit_translated_paragraph", { request })),
+	/**  저장된 이어하기 기록 수. */
+	countTranslationRecords: () => typedError<number, AppError>(__TAURI_INVOKE("count_translation_records")),
 	/**  이어하기 기록을 모두 지운다. */
 	deleteTranslationRecords: () => typedError<null, AppError>(__TAURI_INVOKE("delete_translation_records")),
 };

@@ -149,6 +149,8 @@ export interface E2eMockSeed {
   update?: MockUpdate;
   /** 시작할 때의 API 키 상태. 없으면 등록되지 않았다. */
   apiKey?: ApiKeyStatus;
+  /** 시작할 때 저장돼 있는 번역 기록의 ID들(설정 '일반'의 저장된 번역 수). 없으면 0개다. */
+  savedRecordIds?: string[];
   /**
    * `verifyApiKey`가 형식 검사를 통과할 때마다 앞에서부터 하나씩 쓰는 확인 결과(`null`은 성공, 코드는 그 코드로
    * 실패). 다 쓰면 성공한다.
@@ -905,7 +907,8 @@ export function createE2ePlatform(): DesktopPlatform {
     thirdPartyNotices: seed.thirdPartyNotices,
     directoryPicks: seed.directoryPicks,
     update: seed.update,
-    apiKey: seed.apiKey
+    apiKey: seed.apiKey,
+    savedRecordIds: seed.savedRecordIds
   });
   window.__E2E_FILE_DROP__ = mockPlatform.simulateFileDrop;
   const seededPlatform = injectFailures({

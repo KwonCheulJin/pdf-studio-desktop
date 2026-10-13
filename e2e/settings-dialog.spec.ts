@@ -269,14 +269,15 @@ test.describe("탭", () => {
     await expect(settingsDialog(page)).toBeVisible();
   });
 
-  test("일반 탭의 저장된 번역 모두 지우기는 행 안에서 한 번 더 묻는다", async ({
+  test("일반 탭의 저장된 번역 수를 보이고 모두 지우기는 행 안에서 한 번 더 묻는다", async ({
     page
   }) => {
     page.on("dialog", () => {
       throw new Error("브라우저 확인 창을 쓰지 않는다");
     });
-    await openApp(page);
+    await openApp(page, { seed: { savedRecordIds: ["record-a", "record-b"] } });
     const panel = await openSettingsTab(page, "일반");
+    await expect(panel).toContainText("2개");
 
     await panel.getByRole("button", { name: "모두 지우기" }).click();
     await expect(panel).toContainText("저장된 번역을 모두 지울까요?");
@@ -288,6 +289,11 @@ test.describe("탭", () => {
     await panel.getByRole("button", { name: "모두 지우기" }).click();
     await panel.getByRole("button", { name: "지우기", exact: true }).click();
     await expect(toast(page, "저장된 번역을 모두 지웠어요.")).toBeVisible();
+    await expect(panel).toContainText("0개");
+    // 지울 것이 없으면 다시 지울 수 없다.
+    await expect(
+      panel.getByRole("button", { name: "모두 지우기" })
+    ).toBeDisabled();
     // 취소한 첫 번째는 지우지 않았다.
     expect(
       (await readWrites(page)).filter(

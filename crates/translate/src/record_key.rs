@@ -1,6 +1,10 @@
 //! 문단 키(ADR 0002 §3)와 이어하기 기록 키(§8). 두 키 모두 SHA-256에 ASCII 판 이름을 먼저 넣고, 필드마다
 //! `u32` 리틀엔디언 바이트 길이 + 바이트를 잇는다(ADR 0001 §4 `Change.id`와 같은 방식).
 
+use std::fs::File;
+use std::io::{self, Read};
+use std::path::Path;
+
 use sha2::{Digest, Sha256};
 
 use crate::glossary::{Glossary, GlossaryTerm};
@@ -79,6 +83,23 @@ impl TranslationOptions<'_> {
         hex(&hasher.finalize()[..RECORD_KEY_HASH_BYTES])
     }
 }
+
+/// 파일 내용 SHA-256(기록 키 ①). 큰 파일도 메모리에 다 올리지 않고 조각으로 읽는다.
+pub fn file_sha256(path: &Path) -> io::Result<[u8; 32]> {
+    let mut file = File::open(path)?;
+    let mut hasher = Sha256::new();
+    let mut buffer = vec![0_u8; FILE_HASH_BUFFER_BYTES];
+    loop {
+        let read = file.read(&mut buffer)?;
+        if read == 0 {
+            return Ok(hasher.finalize().into());
+        }
+        hasher.update(&buffer[..read]);
+    }
+}
+
+/// 파일 해시를 읽는 조각 크기
+const FILE_HASH_BUFFER_BYTES: usize = 64 * 1024;
 
 /// 기록 키 ④: 용어를 (원어, 번역어) 코드 포인트 순으로 정렬해 `u32` 개수 + 용어마다 [길이 + 원어]
 /// [길이 + 번역어]. 같은 용어집이면 프론트가 넘긴 순서와 상관없이 같은 바이트다.

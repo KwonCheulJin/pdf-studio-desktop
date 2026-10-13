@@ -1,7 +1,9 @@
-//! Tauri 커맨드. 입력을 받아 처리 함수(`files`, `merge`, `compare`, `report`)에 넘기기만 한다.
-//! pdfium·파일 작업은 `spawn_blocking` 스레드에서 돌려 UI 스레드와 async 런타임을 막지 않는다.
+//! Tauri 커맨드. 입력을 받아 처리 함수(`files`, `merge`, `compare`, `report`, `translate`, `secrets`)에 넘기기만
+//! 한다. pdfium·파일·키체인 작업은 `spawn_blocking` 스레드에서 돌려 UI 스레드와 async 런타임을 막지 않는다.
+//! 번역 전송(Anthropic API)은 async로 기다린다.
 
 use std::path::PathBuf;
+use std::time::Instant;
 
 use pdf_core::{MAX_INPUT_FILE_BYTES, MAX_MERGE_FILES, PdfEngine};
 use specta::Types;
@@ -10,18 +12,26 @@ use tauri::ipc::{Channel, InvokeResponseBody, IpcResponse, Response};
 use tauri::{AppHandle, Manager, Runtime, State};
 use tauri_plugin_dialog::{DialogExt, FilePath};
 use tauri_specta::collect_commands;
+use translate::{
+    API_KEY_MAX_LEN, API_KEY_PREFIX, MAX_GLOSSARY_TERM_CHARS, MAX_GLOSSARY_TERMS, ProgressReporter,
+    ReqwestTransport,
+};
 
 use crate::access::{OPENABLE_EXTENSIONS, PDF_EXTENSION, PathAccess};
 use crate::compare::CompareState;
 use crate::contract::{
-    CompareProgress, CompareRequest, CompareResult, ExportAnnotatedPdfRequest,
-    ExportComparePdfRequest, ExportedFile, MergeProgress, MergeRequest, MergeResult, OpenedFile,
-    PreviewCompareReportRequest, ReportPreview, SaveDialogOptions, SaveDirectoryDialogOptions,
+    ApiKeyStatus, CompareProgress, CompareRequest, CompareResult, EditParagraphRequest,
+    ExportAnnotatedPdfRequest, ExportComparePdfRequest, ExportedFile, MergeProgress, MergeRequest,
+    MergeResult, OpenedFile, PreviewCompareReportRequest, ReportPreview, RetranslateRequest,
+    RetranslateResult, SaveDialogOptions, SaveDirectoryDialogOptions, TranslateOptions,
+    TranslateProgress, TranslateRequest, TranslatedParagraph, TranslationPlan, TranslationResult,
 };
 use crate::error::{AppError, CommandError};
 use crate::jobs::JobRegistry;
 use crate::notices::THIRD_PARTY_NOTICES_FILE;
-use crate::{compare, files, merge, notices, report};
+use crate::secrets::{AppSettings, Keychain};
+use crate::translate::{AppTranslateState, BlockingRenderer, Deps, ParagraphRequest};
+use crate::{compare, files, merge, notices, report, secrets, translate as translation};
 
 /// 열기 다이얼로그의 형식 필터 이름. 언어와 무관한 형식 이름만 쓴다.
 const OPENABLE_FILTER_NAME: &str = "PDF, TIFF";
@@ -31,6 +41,10 @@ const PDF_FILTER_NAME: &str = "PDF";
 const OPENABLE_EXTENSIONS_CONSTANT: &str = "OPENABLE_EXTENSIONS";
 const MAX_INPUT_FILE_BYTES_CONSTANT: &str = "MAX_INPUT_FILE_BYTES";
 const MAX_MERGE_FILES_CONSTANT: &str = "MAX_MERGE_FILES";
+const MAX_GLOSSARY_TERMS_CONSTANT: &str = "MAX_GLOSSARY_TERMS";
+const MAX_GLOSSARY_TERM_CHARS_CONSTANT: &str = "MAX_GLOSSARY_TERM_CHARS";
+const API_KEY_PREFIX_CONSTANT: &str = "API_KEY_PREFIX";
+const API_KEY_MAX_LEN_CONSTANT: &str = "API_KEY_MAX_LEN";
 
 /// JS 숫자로 보내려면 `u32`여야 한다. 상한을 바꿔 넘치면 컴파일이 멈춘다.
 const MAX_INPUT_FILE_BYTES_FOR_TS: u32 = {
@@ -40,6 +54,18 @@ const MAX_INPUT_FILE_BYTES_FOR_TS: u32 = {
 const MAX_MERGE_FILES_FOR_TS: u32 = {
     assert!(MAX_MERGE_FILES <= u32::MAX as usize);
     MAX_MERGE_FILES as u32
+};
+const MAX_GLOSSARY_TERMS_FOR_TS: u32 = {
+    assert!(MAX_GLOSSARY_TERMS <= u32::MAX as usize);
+    MAX_GLOSSARY_TERMS as u32
+};
+const MAX_GLOSSARY_TERM_CHARS_FOR_TS: u32 = {
+    assert!(MAX_GLOSSARY_TERM_CHARS <= u32::MAX as usize);
+    MAX_GLOSSARY_TERM_CHARS as u32
+};
+const API_KEY_MAX_LEN_FOR_TS: u32 = {
+    assert!(API_KEY_MAX_LEN <= u32::MAX as usize);
+    API_KEY_MAX_LEN as u32
 };
 
 /// 커맨드·상수를 등록한 tauri-specta 빌더. 앱 실행과 바인딩 생성이 같은 목록을 쓴다.
@@ -61,10 +87,26 @@ pub(crate) fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             discard_temp,
             cleanup_temp,
             read_third_party_notices,
+            get_api_key_status,
+            verify_api_key,
+            save_api_key,
+            delete_api_key,
+            prepare_translation,
+            translate_pdf,
+            retranslate_paragraph,
+            edit_translated_paragraph,
+            delete_translation_records,
         ])
         .constant(OPENABLE_EXTENSIONS_CONSTANT, OPENABLE_EXTENSIONS)
         .constant(MAX_INPUT_FILE_BYTES_CONSTANT, MAX_INPUT_FILE_BYTES_FOR_TS)
         .constant(MAX_MERGE_FILES_CONSTANT, MAX_MERGE_FILES_FOR_TS)
+        .constant(MAX_GLOSSARY_TERMS_CONSTANT, MAX_GLOSSARY_TERMS_FOR_TS)
+        .constant(
+            MAX_GLOSSARY_TERM_CHARS_CONSTANT,
+            MAX_GLOSSARY_TERM_CHARS_FOR_TS,
+        )
+        .constant(API_KEY_PREFIX_CONSTANT, API_KEY_PREFIX)
+        .constant(API_KEY_MAX_LEN_CONSTANT, API_KEY_MAX_LEN_FOR_TS)
 }
 
 /// 열기 다이얼로그를 열고, 고른 파일을 허용 경로 목록에 기록한 뒤 canonical 경로를 돌려준다.
@@ -330,6 +372,157 @@ pub(crate) async fn read_third_party_notices(app: AppHandle) -> Result<String, A
     .await
 }
 
+/// API 키 등록 상태. 설정 저장소의 힌트만 보고 키체인을 읽지 않는다.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn get_api_key_status(app: AppHandle) -> Result<ApiKeyStatus, AppError> {
+    run_blocking(app, |app| {
+        Ok(secrets::api_key_status(&AppSettings::new(app)))
+    })
+    .await
+}
+
+/// 키 형식 검사 뒤 모델 목록을 한 번 받아 키를 확인한다. 저장하지 않고 문서를 보내지 않는다.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn verify_api_key(app: AppHandle, key: String) -> Result<(), AppError> {
+    let state = translate_state(&app)?;
+    secrets::verify_api_key(state.transport()?, &key)
+        .await
+        .map_err(AppError::from)
+}
+
+/// 키를 키체인에 저장하고 끝 4자리 힌트를 남긴다. 외부 전송 확인을 다시 받게 한다. 네트워크를 쓰지 않는다.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn save_api_key(app: AppHandle, key: String) -> Result<ApiKeyStatus, AppError> {
+    run_blocking(app, move |app| {
+        secrets::save_api_key(&keychain(app), &AppSettings::new(app), &key)
+    })
+    .await
+}
+
+/// 키체인 항목과 힌트를 지운다. 항목이 없어도 성공이다.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn delete_api_key(app: AppHandle) -> Result<ApiKeyStatus, AppError> {
+    run_blocking(app, |app| {
+        secrets::delete_api_key(&keychain(app), &AppSettings::new(app))
+    })
+    .await
+}
+
+/// 실행 전 확인(쪽·문단·묶음·예상 토큰·요금·이어하기). 네트워크를 쓰지 않고 키를 읽지 않는다.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn prepare_translation(
+    app: AppHandle,
+    path: PathBuf,
+    options: TranslateOptions,
+) -> Result<TranslationPlan, AppError> {
+    run_blocking(app, move |app| {
+        translation::prepare(&translate_deps(app)?, &path, &options)
+    })
+    .await
+}
+
+/// PDF 번역. 진행률은 `on_progress`로, 취소는 `cancel_job(request.jobId)`로 한다. 번역은 한 번에 하나다.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn translate_pdf(
+    app: AppHandle,
+    jobs: State<'_, JobRegistry>,
+    request: TranslateRequest,
+    on_progress: Channel<TranslateProgress>,
+) -> Result<TranslationResult, AppError> {
+    let job = jobs.start(&request.job_id)?;
+    let cancel = job.token();
+    let state = translate_state(&app)?;
+    let _running = state.start(&request.job_id)?;
+    let started = Instant::now();
+    let checked = run_blocking(app.clone(), move |app| {
+        translation::check_translation(
+            &translate_deps(app)?,
+            &keychain(app),
+            &AppSettings::new(app),
+            request,
+        )
+    })
+    .await?;
+    let mut reporter = ProgressReporter::new(checked.job_id(), |progress| {
+        // 받는 창이 닫혔으면 보낼 곳이 없다. 번역은 계속한다.
+        let _ = on_progress.send(progress.into());
+    });
+    reporter.read_document_started(checked.range_pages());
+    let path = checked.path().to_path_buf();
+    let file_sha256 = run_blocking(app.clone(), {
+        let path = path.clone();
+        move |app| translation::hash_file(translate_state(app)?.inner(), &path)
+    })
+    .await?;
+    let render_app = app.clone();
+    let mut renderer = BlockingRenderer::new(move |page| {
+        pdf_core::render_scan_page(engine(&render_app)?.inner(), &path, page)
+            .map_err(CommandError::from)
+    });
+    translation::run(
+        state.inner(),
+        checked,
+        file_sha256,
+        &mut renderer,
+        &mut reporter,
+        &cancel,
+        started,
+    )
+    .await
+    .map_err(AppError::from)
+}
+
+/// 문단 하나를 앞뒤 문단 문맥과 함께 다시 번역한다. 취소는 `cancel_job(request.jobId)`로 한다.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn retranslate_paragraph(
+    app: AppHandle,
+    jobs: State<'_, JobRegistry>,
+    request: RetranslateRequest,
+) -> Result<RetranslateResult, AppError> {
+    let job = jobs.start(&request.job_id)?;
+    let cancel = job.token();
+    let state = translate_state(&app)?;
+    let _running = state.start(&request.job_id)?;
+    let (located, key) = run_blocking(app.clone(), move |app| {
+        let located = translation::locate(&translate_deps(app)?, ParagraphRequest::from(&request))?;
+        let key = secrets::read_api_key(&keychain(app), &AppSettings::new(app))?;
+        Ok((located, key))
+    })
+    .await?;
+    translation::retranslate(state.inner(), located, key, &cancel)
+        .await
+        .map_err(AppError::from)
+}
+
+/// 직접 고친 글을 이어하기 기록에 쓴다. 네트워크를 쓰지 않는다.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn edit_translated_paragraph(
+    app: AppHandle,
+    request: EditParagraphRequest,
+) -> Result<TranslatedParagraph, AppError> {
+    run_blocking(app, move |app| {
+        let deps = translate_deps(app)?;
+        let located = translation::locate(&deps, ParagraphRequest::from(&request))?;
+        translation::edit(deps.state, located, &request.text)
+    })
+    .await
+}
+
+/// 이어하기 기록을 모두 지운다.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn delete_translation_records(app: AppHandle) -> Result<(), AppError> {
+    run_blocking(app, |app| translate_state(app)?.delete_records()).await
+}
+
 /// pdf.js에 넘길 PDF 바이트. JSON 숫자 배열이 아니라 그대로 보내 JS에서 `ArrayBuffer`로 받는다.
 pub(crate) struct PdfBytes(Response);
 
@@ -376,6 +569,32 @@ fn compare_state<R: Runtime>(app: &AppHandle<R>) -> Result<State<'_, CompareStat
         .ok_or(CommandError::NotReady {
             component: "compare",
         })
+}
+
+fn translate_state<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Result<State<'_, AppTranslateState>, CommandError> {
+    app.try_state::<AppTranslateState>()
+        .ok_or(CommandError::NotReady {
+            component: "translate",
+        })
+}
+
+/// 번역 커맨드가 쓰는 앱 상태(추출 캐시는 비교와 함께 쓴다)
+fn translate_deps<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Result<Deps<'_, ReqwestTransport>, CommandError> {
+    Ok(Deps {
+        engine: engine(app)?.inner(),
+        access: path_access(app)?.inner(),
+        extraction: compare_state(app)?.inner().extraction_cache(),
+        state: translate_state(app)?.inner(),
+    })
+}
+
+/// OS 키체인. 서비스 이름은 앱 식별자(번들 ID)다.
+fn keychain<R: Runtime>(app: &AppHandle<R>) -> Keychain {
+    Keychain::new(&app.config().identifier)
 }
 
 fn local_path(file: FilePath) -> Result<PathBuf, CommandError> {

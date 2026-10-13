@@ -160,7 +160,10 @@ async function readWrites(page: Page): Promise<E2eWriteCall[]> {
   return page.evaluate(() => window.__E2E_MOCK_WRITES__ ?? []);
 }
 
-/** 호출이 실제로 쓰거나 지우는 경로. 임시 출력 경로는 플랫폼이 고르므로 없다. */
+/**
+ * 호출이 실제로 쓰거나 지우는 경로. 임시 출력 경로는 플랫폼이 고르므로 없다. 키·번역 기록은 사용자 파일이
+ * 아니라 키체인·앱 데이터 폴더에 쓴다.
+ */
 function writeTarget(call: E2eWriteCall): string | null {
   switch (call.method) {
     case "mergePdfs":
@@ -175,6 +178,10 @@ function writeTarget(call: E2eWriteCall): string | null {
     case "exportAnnotatedPdf":
       return `${call.request.output.directory}/${call.request.output.fileName}`;
     case "cancelJob":
+    case "saveApiKey":
+    case "deleteApiKey":
+    case "editTranslatedParagraph":
+    case "deleteTranslationRecords":
       return null;
   }
 }

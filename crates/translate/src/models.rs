@@ -85,6 +85,9 @@ const HAIKU: ModelSpec = ModelSpec {
 };
 
 impl TranslateModel {
+    /// 앱이 쓰는 모든 모델. 키 확인(ADR 0002 §10 `verify_api_key`)이 이 모델들이 목록에 있는지 본다.
+    pub(crate) const ALL: [Self; 2] = [Self::Sonnet, Self::Haiku];
+
     pub fn spec(self) -> &'static ModelSpec {
         match self {
             Self::Sonnet => &SONNET,

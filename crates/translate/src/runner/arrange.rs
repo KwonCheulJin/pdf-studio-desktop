@@ -65,8 +65,9 @@ pub enum ParagraphStatus {
     Refused,
 }
 
-/// 끝난 작업에서 기록에도 이번 실패에도 없는 문단·스캔 쪽. 모든 묶음을 보낸 뒤라 생기지 않는다.
-const MISSING_RESULT: FailReason = FailReason::Mismatch;
+/// 기록에도 이번 실패에도 없는 문단·스캔 쪽. 끝난 작업에서는 모든 묶음을 보낸 뒤라 생기지 않고, 직접 고친 글을
+/// 지운 실패 문단(번역이 없다)이 이 상태로 돌아간다.
+pub(crate) const MISSING_RESULT: FailReason = FailReason::Mismatch;
 
 /// 범위 쪽마다 결과를 만들고 쓴 용어를 고른다. 쪽마다 `arrange`를 알리고, 100%는 모두 만든 뒤 낸다.
 pub(super) fn arrange<F: FnMut(TranslateProgress)>(
@@ -108,8 +109,10 @@ fn arrange_page(page: &SourcePage, run: &Run) -> TranslatedPage {
                     paragraphs: recorded
                         .iter()
                         .map(|paragraph| {
-                            let (target, status) =
-                                shown(paragraph.target.as_ref(), paragraph.edited.as_ref());
+                            let (target, status) = recorded_status(
+                                paragraph.target.as_ref(),
+                                paragraph.edited.as_ref(),
+                            );
                             TranslatedParagraph {
                                 key: paragraph.key.clone(),
                                 number: paragraph.number,
@@ -151,7 +154,9 @@ fn text_paragraph(page: u32, paragraph: &SourceParagraph, run: &Run) -> Translat
         .cloned()
         .unwrap_or_default();
     let (target, status) = match run.record.paragraphs.get(&key) {
-        Some(RecordedParagraph { target, edited }) => shown(target.as_ref(), edited.as_ref()),
+        Some(RecordedParagraph { target, edited }) => {
+            recorded_status(target.as_ref(), edited.as_ref())
+        }
         None => (
             None,
             run.unsettled
@@ -170,11 +175,16 @@ fn text_paragraph(page: u32, paragraph: &SourceParagraph, run: &Run) -> Translat
     }
 }
 
-/// 기록된 문단의 화면 글과 상태: 직접 고친 글이 있으면 `Edited`다.
-fn shown(target: Option<&String>, edited: Option<&String>) -> (Option<String>, ParagraphStatus) {
-    match edited {
-        Some(edited) => (Some(edited.clone()), ParagraphStatus::Edited),
-        None => (target.cloned(), ParagraphStatus::Translated),
+/// 기록된 문단의 화면 글과 상태: 직접 고친 글이 있으면 `Edited`, 번역만 있으면 `Translated`다. 둘 다 없으면
+/// 기록되지 않은 문단처럼 번역하지 못한 문단이다.
+pub(crate) fn recorded_status(
+    target: Option<&String>,
+    edited: Option<&String>,
+) -> (Option<String>, ParagraphStatus) {
+    match (edited, target) {
+        (Some(edited), _) => (Some(edited.clone()), ParagraphStatus::Edited),
+        (None, Some(target)) => (Some(target.clone()), ParagraphStatus::Translated),
+        (None, None) => (None, ParagraphStatus::Failed(MISSING_RESULT)),
     }
 }
 

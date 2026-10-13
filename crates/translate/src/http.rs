@@ -13,6 +13,11 @@ use crate::key::ApiKey;
 /// 전송 대상(상수 하나, 계획서 §9.1.4)
 pub const ANTHROPIC_API_BASE: &str = "https://api.anthropic.com";
 const MESSAGES_PATH: &str = "/v1/messages";
+const MODELS_PATH: &str = "/v1/models";
+
+/// 키 확인에서 모델 목록 한 쪽에 받을 수(공식 상한). 기본 20개라 앱 모델이 다음 쪽에 있으면 키 확인이
+/// `MODEL_UNAVAILABLE`로 틀린다(ADR 0002 §10 `verify_api_key`).
+const MODELS_LIST_LIMIT: u32 = 1_000;
 
 /// 공식 문서 `api/versioning`의 현행 값
 pub const ANTHROPIC_VERSION: &str = "2023-06-01";
@@ -52,13 +57,38 @@ pub enum TransportError {
     Connection,
 }
 
-/// `POST /v1/messages` 한 번. 재시도하지 않는다.
+/// Messages API·Models API 요청 한 번. 재시도하지 않는다.
 pub trait Transport: Sync {
+    /// `POST /v1/messages`
     fn post_messages(
         &self,
         key: &ApiKey,
         body: &[u8],
     ) -> impl Future<Output = Result<HttpResponse, TransportError>> + Send;
+
+    /// `GET /v1/models?limit=1000`(키 확인. 문서를 보내지 않고 요금이 들지 않는다)
+    fn get_models(
+        &self,
+        key: &ApiKey,
+    ) -> impl Future<Output = Result<HttpResponse, TransportError>> + Send;
+}
+
+/// 앱 상태가 전송 하나(연결 풀)를 들고 작업마다 빌려 준다.
+impl<T: Transport> Transport for &T {
+    fn post_messages(
+        &self,
+        key: &ApiKey,
+        body: &[u8],
+    ) -> impl Future<Output = Result<HttpResponse, TransportError>> + Send {
+        (**self).post_messages(key, body)
+    }
+
+    fn get_models(
+        &self,
+        key: &ApiKey,
+    ) -> impl Future<Output = Result<HttpResponse, TransportError>> + Send {
+        (**self).get_models(key)
+    }
 }
 
 /// reqwest(`native-tls`) 전송. HTTPS만, 리디렉션을 따르지 않는다(ADR 0002 §7 "클라이언트 설정").
@@ -108,20 +138,38 @@ impl Transport for ReqwestTransport {
             .header(ANTHROPIC_VERSION_HEADER, ANTHROPIC_VERSION)
             .header(CONTENT_TYPE, JSON_CONTENT_TYPE)
             .body(body.to_vec());
-        async move {
-            let response = request.send().await.map_err(transport_error)?;
-            let status = response.status().as_u16();
-            let retry_after = header_text(response.headers(), RETRY_AFTER.as_str());
-            let request_id = header_text(response.headers(), REQUEST_ID_HEADER);
-            let body = response.bytes().await.map_err(transport_error)?;
-            Ok(HttpResponse {
-                status,
-                retry_after,
-                request_id,
-                body: body.to_vec(),
-            })
-        }
+        send(request)
     }
+
+    fn get_models(
+        &self,
+        key: &ApiKey,
+    ) -> impl Future<Output = Result<HttpResponse, TransportError>> + Send {
+        let request = self
+            .client
+            .get(format!(
+                "{}{MODELS_PATH}?limit={MODELS_LIST_LIMIT}",
+                self.base_url
+            ))
+            .header(API_KEY_HEADER, key.header_value().clone())
+            .header(ANTHROPIC_VERSION_HEADER, ANTHROPIC_VERSION);
+        send(request)
+    }
+}
+
+/// 요청을 보내고 상태·해석에 쓰는 헤더·본문을 읽는다.
+async fn send(request: reqwest::RequestBuilder) -> Result<HttpResponse, TransportError> {
+    let response = request.send().await.map_err(transport_error)?;
+    let status = response.status().as_u16();
+    let retry_after = header_text(response.headers(), RETRY_AFTER.as_str());
+    let request_id = header_text(response.headers(), REQUEST_ID_HEADER);
+    let body = response.bytes().await.map_err(transport_error)?;
+    Ok(HttpResponse {
+        status,
+        retry_after,
+        request_id,
+        body: body.to_vec(),
+    })
 }
 
 /// 연결 단계 실패를 먼저 가른다. 연결 시간 초과는 `is_connect()`와 `is_timeout()`이 둘 다 참이고(Windows는

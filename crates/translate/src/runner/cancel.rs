@@ -11,7 +11,7 @@ const CANCEL_POLL_INTERVAL: Duration = Duration::from_millis(50);
 
 /// `work`가 끝나면 그 결과, 먼저 취소되면 `None`이다. 취소면 `work`를 버린다: 보내던 요청(연결)과 재시도
 /// 대기가 함께 멈추고, 그 요청의 사용량은 알 수 없다. 둘이 함께 준비되면 끝난 일을 받는다(돈을 낸 결과다).
-pub(super) async fn until_cancelled<F: Future>(cancel: &AtomicBool, work: F) -> Option<F::Output> {
+pub(crate) async fn until_cancelled<F: Future>(cancel: &AtomicBool, work: F) -> Option<F::Output> {
     let mut work = pin!(work);
     let mut cancelled = pin!(wait_cancelled(cancel));
     poll_fn(|cx| {

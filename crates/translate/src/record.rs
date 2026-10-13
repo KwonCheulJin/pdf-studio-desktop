@@ -7,6 +7,7 @@
 //!   `target`·`edited`가 둘 다 없는 문단은 버리고, 그런 문단이 든 스캔 쪽은 쪽째 버린다(다시 보낸다).
 //! - 쓰기: 같은 폴더의 임시 파일에 쓰고 디스크에 내린 뒤 rename한다. 쓴 뒤 `.json`이
 //!   `MAX_TRANSLATION_RECORDS`개를 넘으면 수정 시각이 오래된 것부터 지운다(방금 쓴 기록은 남긴다).
+//! - 지우기([`delete_translation_records`]): 폴더의 `.json`과 남은 임시 파일을 모두 지운다(설정 '일반').
 
 use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
@@ -17,6 +18,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
+use crate::record_key::TranslationOptions;
 use crate::usage::TokenUsage;
 
 /// 기록 형식 판. 바꾸면 예전 기록은 없는 것으로 본다.
@@ -32,6 +34,73 @@ const TEMP_FILE_EXTENSION: &str = "tmp";
 
 /// 같은 프로세스·같은 나노초에 만든 임시 파일 이름이 겹치지 않게 하는 순번
 static TEMP_FILE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+
+/// 이어하기 기록 하나(읽기 전용). 계획이 이어하기 가능 여부와 보낼 것을 센다([`crate::plan_translation`]).
+pub struct TranslationRecord(pub(crate) Record);
+
+/// 같은 옵션(기록 키)의 기록. 없거나 쓸 수 없으면 `None`이다.
+pub fn load_translation_record(
+    record_dir: &Path,
+    options: &TranslationOptions<'_>,
+) -> Option<TranslationRecord> {
+    RecordStore::new(record_dir)
+        .load(&options.record_key())
+        .map(TranslationRecord)
+}
+
+/// 기록 폴더에 기록(`.json`)이 하나라도 있는가. 없으면 계획이 파일 해시를 세지 않는다(ADR 0002 §8 "파일 해시").
+pub fn has_translation_records(record_dir: &Path) -> bool {
+    fs::read_dir(record_dir).is_ok_and(|entries| {
+        entries
+            .filter_map(Result::ok)
+            .any(|entry| is_record_file(&entry.path()))
+    })
+}
+
+/// 기록 폴더의 기록(`.json`)과 남은 임시 파일(`.record-*.tmp`)을 모두 지운다. 다른 파일은 두고, 폴더가 없으면
+/// 지울 것이 없다. 항목 하나가 실패해도 나머지는 지우고 첫 실패를 돌려준다.
+pub fn delete_translation_records(record_dir: &Path) -> io::Result<()> {
+    let entries = match fs::read_dir(record_dir) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error),
+    };
+    let mut first_error = None;
+    for entry in entries {
+        let removed = entry.and_then(|entry| {
+            let path = entry.path();
+            if is_record_file(&path) || is_temp_file(&path) {
+                fs::remove_file(&path)
+            } else {
+                Ok(())
+            }
+        });
+        if let Err(error) = removed
+            && error.kind() != io::ErrorKind::NotFound
+            && first_error.is_none()
+        {
+            first_error = Some(error);
+        }
+    }
+    first_error.map_or(Ok(()), Err)
+}
+
+fn is_record_file(path: &Path) -> bool {
+    path.is_file()
+        && path
+            .extension()
+            .is_some_and(|extension| extension == RECORD_FILE_EXTENSION)
+}
+
+fn is_temp_file(path: &Path) -> bool {
+    path.is_file()
+        && path
+            .extension()
+            .is_some_and(|extension| extension == TEMP_FILE_EXTENSION)
+        && path
+            .file_name()
+            .is_some_and(|name| name.to_string_lossy().starts_with(TEMP_FILE_PREFIX))
+}
 
 /// 기록에 담은 글자층 문단. `target`·`edited` 가운데 적어도 하나는 있다. `edited`가 있으면 직접 고친 문단이다.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -184,12 +253,7 @@ impl RecordStore {
         let mut records: Vec<(SystemTime, PathBuf)> = entries
             .filter_map(Result::ok)
             .map(|entry| entry.path())
-            .filter(|path| {
-                path.is_file()
-                    && path
-                        .extension()
-                        .is_some_and(|extension| extension == RECORD_FILE_EXTENSION)
-            })
+            .filter(|path| is_record_file(path))
             .filter_map(|path| {
                 let modified = fs::metadata(&path).and_then(|meta| meta.modified()).ok()?;
                 Some((modified, path))

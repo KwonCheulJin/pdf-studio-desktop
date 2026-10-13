@@ -6,10 +6,11 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use pdf_core::{
-    CompareError, CompareOptionsError, DocumentError, MergeError, ReportError, SaveError,
-    TiffConversionError,
+    CompareError, CompareOptionsError, DocumentError, MergeError, ParagraphError, ReportError,
+    SaveError, TiffConversionError,
 };
 use serde::Serialize;
+use translate::{ApiError, ApiErrorCode, FailReason};
 
 /// 화면 문구를 고르는 오류 코드. 직렬화 값(`PATH_NOT_ALLOWED` 등)이 바인딩의 문자열 union이 되고,
 /// 변형의 이름이 바뀌어도 값은 유지한다.
@@ -52,6 +53,26 @@ pub(crate) enum ErrorCode {
     UnsupportedTiffCompression,
     UnsupportedTiffFormat,
     ImageTooLarge,
+    // 번역(ADR 0002 §11). API·네트워크 오류는 crates/translate `ApiErrorCode`와 짝이다.
+    ApiKeyMissing,
+    ApiKeyInvalid,
+    ApiPermissionDenied,
+    ApiBilling,
+    ModelUnavailable,
+    ApiRequestRejected,
+    ApiRateLimited,
+    ApiUnavailable,
+    ApiTimeout,
+    NetworkUnavailable,
+    /// 문단·쪽 상태로만 쓴다(`TranslatedParagraph.failCode`·`TranslatedPage.failCode`).
+    TranslationMismatch,
+    TranslationTruncated,
+    TranslationRefused,
+    KeychainUnavailable,
+    NoTranslatableText,
+    SourceLanguageUnknown,
+    TranslationRecordNotFound,
+    GlossaryTooLarge,
 }
 
 impl fmt::Display for ErrorCode {
@@ -105,6 +126,30 @@ pub(crate) enum CommandError {
     Compare(#[from] CompareError),
     #[error(transparent)]
     Report(#[from] ReportError),
+    #[error(transparent)]
+    Paragraph(#[from] ParagraphError),
+    /// 작업을 멈춘 API·네트워크 오류. 글은 코드·상태·오류 `type`·`request-id`뿐이다(ADR 0002 §12).
+    #[error(transparent)]
+    Api(#[from] ApiError),
+    #[error("job was cancelled")]
+    Cancelled,
+    #[error("API key is not in the keychain")]
+    ApiKeyMissing,
+    /// 받은 키 글은 담지 않는다.
+    #[error("API key format is invalid")]
+    ApiKeyInvalid,
+    #[error("keychain is unavailable: {kind}")]
+    KeychainUnavailable { kind: &'static str },
+    #[error("settings could not be saved: {detail}")]
+    SettingsUnavailable { detail: String },
+    #[error("nothing to translate in the page range")]
+    NoTranslatableText,
+    #[error("source language could not be detected")]
+    SourceLanguageUnknown,
+    #[error("translation record or paragraph was not found")]
+    TranslationRecordNotFound,
+    #[error("glossary exceeds the limits")]
+    GlossaryTooLarge,
 }
 
 impl CommandError {
@@ -127,6 +172,17 @@ impl CommandError {
             Self::Tiff(error) => tiff_code(error),
             Self::Compare(error) => compare_code(error),
             Self::Report(error) => report_code(error),
+            Self::Paragraph(error) => paragraph_code(error),
+            Self::Api(error) => api_code(error.code),
+            Self::Cancelled => ErrorCode::Cancelled,
+            Self::ApiKeyMissing => ErrorCode::ApiKeyMissing,
+            Self::ApiKeyInvalid => ErrorCode::ApiKeyInvalid,
+            Self::KeychainUnavailable { .. } => ErrorCode::KeychainUnavailable,
+            Self::SettingsUnavailable { .. } => ErrorCode::WriteFailed,
+            Self::NoTranslatableText => ErrorCode::NoTranslatableText,
+            Self::SourceLanguageUnknown => ErrorCode::SourceLanguageUnknown,
+            Self::TranslationRecordNotFound => ErrorCode::TranslationRecordNotFound,
+            Self::GlossaryTooLarge => ErrorCode::GlossaryTooLarge,
         }
     }
 
@@ -139,6 +195,7 @@ impl CommandError {
             Self::Tiff(error) => tiff_input_path(error),
             Self::Compare(error) => compare_input_path(error),
             Self::Report(error) => report_input_path(error),
+            Self::Paragraph(error) => paragraph_input_path(error),
             Self::PathNotAllowed { .. }
             | Self::UnsupportedFileType { .. }
             | Self::OutputIsSource { .. }
@@ -148,7 +205,17 @@ impl CommandError {
             | Self::NotReady { .. }
             | Self::TaskFailed { .. }
             | Self::ResourceUnavailable { .. }
-            | Self::Save(_) => None,
+            | Self::Save(_)
+            | Self::Api(_)
+            | Self::Cancelled
+            | Self::ApiKeyMissing
+            | Self::ApiKeyInvalid
+            | Self::KeychainUnavailable { .. }
+            | Self::SettingsUnavailable { .. }
+            | Self::NoTranslatableText
+            | Self::SourceLanguageUnknown
+            | Self::TranslationRecordNotFound
+            | Self::GlossaryTooLarge => None,
         }
     }
 }
@@ -227,6 +294,38 @@ fn report_code(error: &ReportError) -> ErrorCode {
     }
 }
 
+fn paragraph_code(error: &ParagraphError) -> ErrorCode {
+    match error {
+        ParagraphError::Document(error) => document_code(error),
+        ParagraphError::InvalidRange { .. } => ErrorCode::InvalidRange,
+        ParagraphError::InvalidPage { .. } => ErrorCode::InvalidPage,
+        ParagraphError::Encode { .. } => ErrorCode::ImageEncodeFailed,
+    }
+}
+
+/// crates/translate의 API 오류 코드 → 계약 코드. translate에 코드가 늘면 여기서 컴파일이 멈춘다.
+fn api_code(code: ApiErrorCode) -> ErrorCode {
+    match code {
+        ApiErrorCode::KeyInvalid => ErrorCode::ApiKeyInvalid,
+        ApiErrorCode::PermissionDenied => ErrorCode::ApiPermissionDenied,
+        ApiErrorCode::Billing => ErrorCode::ApiBilling,
+        ApiErrorCode::ModelUnavailable => ErrorCode::ModelUnavailable,
+        ApiErrorCode::RequestRejected => ErrorCode::ApiRequestRejected,
+        ApiErrorCode::RateLimited => ErrorCode::ApiRateLimited,
+        ApiErrorCode::Unavailable => ErrorCode::ApiUnavailable,
+        ApiErrorCode::Timeout => ErrorCode::ApiTimeout,
+        ApiErrorCode::NetworkUnavailable => ErrorCode::NetworkUnavailable,
+    }
+}
+
+/// 문단·스캔 쪽 실패 사유 → 계약 코드(`failCode`)
+pub(crate) fn fail_code(reason: FailReason) -> ErrorCode {
+    match reason {
+        FailReason::Mismatch => ErrorCode::TranslationMismatch,
+        FailReason::Truncated => ErrorCode::TranslationTruncated,
+    }
+}
+
 fn document_path(error: &DocumentError) -> &Path {
     match error {
         DocumentError::NotFound { path }
@@ -265,6 +364,16 @@ fn compare_input_path(error: &CompareError) -> Option<&Path> {
     match error {
         CompareError::Document(error) => Some(document_path(error)),
         CompareError::Options(_) | CompareError::Cancelled => None,
+    }
+}
+
+/// 문서를 열다 실패했을 때만 그 문서다. 쪽 범위(사용자가 쓴 글)·없는 쪽·그림 인코딩은 입력 파일 탓이 아니다.
+fn paragraph_input_path(error: &ParagraphError) -> Option<&Path> {
+    match error {
+        ParagraphError::Document(error) => Some(document_path(error)),
+        ParagraphError::InvalidRange { .. }
+        | ParagraphError::InvalidPage { .. }
+        | ParagraphError::Encode { .. } => None,
     }
 }
 

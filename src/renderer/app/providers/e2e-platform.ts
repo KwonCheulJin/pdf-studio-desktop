@@ -1,14 +1,19 @@
 import type {
+  ApiKeyStatus,
   CompareProgress,
   CompareRequest,
   CompareResult,
+  EditParagraphRequest,
   ErrorCode,
   ExportAnnotatedPdfRequest,
   ExportComparePdfRequest,
   MergeProgress,
   MergeRequest,
   OpenedFile,
-  PreviewCompareReportRequest
+  PreviewCompareReportRequest,
+  TranslateProgress,
+  TranslateRequest,
+  TranslationResult
 } from "@/renderer/shared/api/bindings";
 import {
   getPdfCacheStats,
@@ -20,6 +25,7 @@ import {
   type CopyFileParams,
   type DesktopPlatform,
   type MockMergeOutput,
+  type MockPlatform,
   type MockPdfFile,
   type MockUpdate,
   type NativeFileDropEvent,
@@ -75,6 +81,17 @@ export interface E2eCompareScript {
   result?: CompareResult;
 }
 
+/**
+ * `translatePdf` 한 번의 흉내. 진행률을 차례로 보낸 뒤 `failCode`가 있으면 그 코드로 실패하고, 아니면 mock 번역
+ * (경로·쪽 범위·키 검사)을 거쳐 `result`(없으면 문단 없는 결과)를 돌려준다. `result`는 계약 JSON과 모양이 같다.
+ */
+export interface E2eTranslateScript {
+  progress: TranslateProgress[];
+  /** IPC로 온 값처럼 넘기므로 바인딩에 없는 코드도 넣을 수 있다. */
+  failCode?: string;
+  result?: TranslationResult;
+}
+
 export interface E2eMockSeed {
   files: E2eMockFile[];
   /** 열기 다이얼로그를 열 때마다 앞에서부터 하나씩 고를 경로 목록. 다 쓰면 `files`를 모두 고른다. */
@@ -92,7 +109,19 @@ export interface E2eMockSeed {
   directoryPicks?: (string | null)[];
   /** 있으면 `checkForUpdate`가 이 새 버전을 알린다. 없으면 최신 버전일 때처럼 알리지 않는다. */
   update?: MockUpdate;
+  /** 시작할 때의 API 키 상태. 없으면 등록되지 않았다. */
+  apiKey?: ApiKeyStatus;
+  /**
+   * `verifyApiKey`가 형식 검사를 통과할 때마다 앞에서부터 하나씩 쓰는 확인 결과(`null`은 성공, 코드는 그 코드로
+   * 실패). 다 쓰면 성공한다.
+   */
+  apiKeyChecks?: (ErrorCode | null)[];
+  /** `translatePdf`를 부를 때마다 앞에서부터 하나씩 쓴다. 다 쓰면 mock 그대로 문단 없는 결과다. */
+  translateScripts?: E2eTranslateScript[];
 }
+
+/** 시드 키 확인 실패의 로그용 설명 */
+const VERIFY_API_KEY_DETAIL = "verifyApiKey";
 
 /** 작업 취소를 Rust처럼 알리는 코드 */
 const CANCELLED_CODE = "CANCELLED" satisfies ErrorCode;
@@ -104,7 +133,11 @@ export const E2E_WRITE_METHOD = {
   COPY_FILE: "copyFile",
   DISCARD_TEMP: "discardTemp",
   EXPORT_COMPARE_PDF: "exportComparePdf",
-  EXPORT_ANNOTATED_PDF: "exportAnnotatedPdf"
+  EXPORT_ANNOTATED_PDF: "exportAnnotatedPdf",
+  SAVE_API_KEY: "saveApiKey",
+  DELETE_API_KEY: "deleteApiKey",
+  EDIT_TRANSLATED_PARAGRAPH: "editTranslatedParagraph",
+  DELETE_TRANSLATION_RECORDS: "deleteTranslationRecords"
 } as const;
 
 interface MergePdfsCall {
@@ -136,6 +169,24 @@ interface ExportAnnotatedPdfCall {
   request: ExportAnnotatedPdfRequest;
 }
 
+interface SaveApiKeyCall {
+  method: typeof E2E_WRITE_METHOD.SAVE_API_KEY;
+  key: string;
+}
+
+interface DeleteApiKeyCall {
+  method: typeof E2E_WRITE_METHOD.DELETE_API_KEY;
+}
+
+interface EditTranslatedParagraphCall {
+  method: typeof E2E_WRITE_METHOD.EDIT_TRANSLATED_PARAGRAPH;
+  request: EditParagraphRequest;
+}
+
+interface DeleteTranslationRecordsCall {
+  method: typeof E2E_WRITE_METHOD.DELETE_TRANSLATION_RECORDS;
+}
+
 /** 업데이트 호출(확인·받기·설치와 재시작) */
 export const E2E_UPDATE_METHOD = {
   CHECK: "checkForUpdate",
@@ -151,7 +202,11 @@ export type E2eWriteCall =
   | CopyFileCall
   | DiscardTempCall
   | ExportComparePdfCall
-  | ExportAnnotatedPdfCall;
+  | ExportAnnotatedPdfCall
+  | SaveApiKeyCall
+  | DeleteApiKeyCall
+  | EditTranslatedParagraphCall
+  | DeleteTranslationRecordsCall;
 
 declare global {
   interface Window {
@@ -215,6 +270,17 @@ declare global {
     __E2E_HOLD_UPDATE_DOWNLOAD__?: Promise<void>;
     /** `__E2E_HOLD_UPDATE_DOWNLOAD__`를 푸는 함수. 테스트가 함께 넣는다. */
     __E2E_RELEASE_UPDATE_DOWNLOAD__?: () => void;
+    /**
+     * 테스트가 넣으면 번역 요청을 스크립트 진행률을 보낸 뒤 이 Promise가 풀릴 때까지 붙잡는다(진행 화면 확인용).
+     * 붙잡힌 동안 같은 작업 ID로 `cancelJob`이 오면 바로 `CANCELLED`로 실패한다.
+     */
+    __E2E_HOLD_TRANSLATE__?: Promise<void>;
+    /** `__E2E_HOLD_TRANSLATE__`를 푸는 함수. 테스트가 함께 넣는다. */
+    __E2E_RELEASE_TRANSLATE__?: () => void;
+    /** 앱이 보낸 번역 요청(`translatePdf`, 옵션 포함)을 부른 순서대로 기록하는 곳 */
+    __E2E_MOCK_TRANSLATES__?: TranslateRequest[];
+    /** 앱이 클립보드에 복사한 글(`copyText`)을 차례로 기록하는 곳 */
+    __E2E_MOCK_CLIPBOARD__?: string[];
   }
 }
 
@@ -274,6 +340,25 @@ function recordWrites(
     exportAnnotatedPdf: (request) => {
       writes.push({ method: E2E_WRITE_METHOD.EXPORT_ANNOTATED_PDF, request });
       return platform.exportAnnotatedPdf(request);
+    },
+    saveApiKey: (key) => {
+      writes.push({ method: E2E_WRITE_METHOD.SAVE_API_KEY, key });
+      return platform.saveApiKey(key);
+    },
+    deleteApiKey: () => {
+      writes.push({ method: E2E_WRITE_METHOD.DELETE_API_KEY });
+      return platform.deleteApiKey();
+    },
+    editTranslatedParagraph: (request) => {
+      writes.push({
+        method: E2E_WRITE_METHOD.EDIT_TRANSLATED_PARAGRAPH,
+        request
+      });
+      return platform.editTranslatedParagraph(request);
+    },
+    deleteTranslationRecords: () => {
+      writes.push({ method: E2E_WRITE_METHOD.DELETE_TRANSLATION_RECORDS });
+      return platform.deleteTranslationRecords();
     }
   };
 }
@@ -288,18 +373,25 @@ interface InjectFailuresParams {
   failures: E2eMockFailures;
   mergeScripts: E2eMergeScript[];
   compareScripts: E2eCompareScript[];
+  translateScripts: E2eTranslateScript[];
+  apiKeyChecks: (ErrorCode | null)[];
+  /** 시드 번역 결과를 mock에 알린다(다시 번역·직접 고치기가 그 문단을 찾는다). */
+  rememberTranslation: MockPlatform["rememberTranslation"];
 }
 
 /**
- * 시드대로 실패·진행률을 흉내 낸다. `mergePdfs`·`comparePdfs`는 스크립트의 진행률을 보낸 뒤
- * `__E2E_HOLD_MERGE__`·`__E2E_HOLD_COMPARE__`를 기다리고, 그동안 같은 작업의 `cancelJob`이 오면
- * Rust처럼 `CANCELLED`로 실패한다.
+ * 시드대로 실패·진행률을 흉내 낸다. `mergePdfs`·`comparePdfs`·`translatePdf`는 스크립트의 진행률을 보낸 뒤
+ * `__E2E_HOLD_MERGE__`·`__E2E_HOLD_COMPARE__`·`__E2E_HOLD_TRANSLATE__`를 기다리고, 그동안 같은 작업의
+ * `cancelJob`이 오면 Rust처럼 `CANCELLED`로 실패한다.
  */
 function injectFailures({
   platform,
   failures,
   mergeScripts,
-  compareScripts
+  compareScripts,
+  translateScripts,
+  apiKeyChecks,
+  rememberTranslation
 }: InjectFailuresParams): DesktopPlatform {
   const openFailures = failures.openFiles ?? {};
   const cancelledJobs = new Set<string>();
@@ -385,6 +477,29 @@ function injectFailures({
         hold: window.__E2E_HOLD_EXPORT__
       });
       return platform.exportAnnotatedPdf(request);
+    },
+    // Rust처럼 형식 검사를 먼저 하고(네트워크 전), 통과하면 시드 확인 결과를 쓴다.
+    verifyApiKey: async (key) => {
+      await platform.verifyApiKey(key);
+      const code = apiKeyChecks.shift();
+      if (code !== undefined && code !== null) {
+        throw seededError({ code, detail: VERIFY_API_KEY_DETAIL });
+      }
+    },
+    translatePdf: async (params) => {
+      const { jobId } = params.request;
+      const script = translateScripts.shift();
+      for (const progress of script?.progress ?? []) {
+        params.onProgress?.(progress);
+      }
+      await waitForRelease({ jobId, hold: window.__E2E_HOLD_TRANSLATE__ });
+      if (script?.failCode !== undefined) {
+        throw seededError({ code: script.failCode, detail: jobId });
+      }
+      const result = await platform.translatePdf(params);
+      if (script?.result === undefined) return result;
+      rememberTranslation(script.result);
+      return script.result;
     },
     cancelJob: async (jobId) => {
       cancelledJobs.add(jobId);
@@ -482,6 +597,44 @@ function recordSaveDialogs({
   };
 }
 
+interface RecordTranslatesParams {
+  platform: DesktopPlatform;
+  translates: TranslateRequest[];
+}
+
+/** 번역 요청(옵션 포함)을 위임 전에 기록한다. 거부된 요청도 남는다. */
+function recordTranslates({
+  platform,
+  translates
+}: RecordTranslatesParams): DesktopPlatform {
+  return {
+    ...platform,
+    translatePdf: (params) => {
+      translates.push(params.request);
+      return platform.translatePdf(params);
+    }
+  };
+}
+
+interface RecordClipboardParams {
+  platform: DesktopPlatform;
+  clipboard: string[];
+}
+
+/** 복사한 글을 기록한다(실제 클립보드 대신). */
+function recordClipboard({
+  platform,
+  clipboard
+}: RecordClipboardParams): DesktopPlatform {
+  return {
+    ...platform,
+    copyText: async (text) => {
+      clipboard.push(text);
+      await platform.copyText(text);
+    }
+  };
+}
+
 interface SeedUpdatesParams {
   platform: DesktopPlatform;
   failures: E2eMockFailures;
@@ -534,22 +687,32 @@ function seedUpdates({
 /** 설정을 페이지 저장소에 두는 키 앞부분. 새로고침해도 남아 재시작처럼 확인할 수 있다. */
 const SETTING_STORAGE_PREFIX = "e2e-setting:";
 
+/** 키를 저장하면 Rust가 `false`로 되돌리는 설정(ADR 0002 §13) */
+const TRANSFER_CONFIRMED_ONCE_SETTING = "translate.transferConfirmedOnce";
+
 /**
  * 설정 읽기·쓰기를 `localStorage`에 둔다(Tauri `plugin-store` 파일 대신).
  * Playwright는 테스트마다 새 브라우저 컨텍스트라 테스트끼리 섞이지 않는다.
  */
 function persistSettings(platform: DesktopPlatform): DesktopPlatform {
+  const setSetting: DesktopPlatform["setSetting"] = async ({ key, value }) => {
+    localStorage.setItem(
+      `${SETTING_STORAGE_PREFIX}${key}`,
+      JSON.stringify(value)
+    );
+  };
   return {
     ...platform,
     getSetting: async (key) => {
       const stored = localStorage.getItem(`${SETTING_STORAGE_PREFIX}${key}`);
       return stored === null ? undefined : JSON.parse(stored);
     },
-    setSetting: async ({ key, value }) => {
-      localStorage.setItem(
-        `${SETTING_STORAGE_PREFIX}${key}`,
-        JSON.stringify(value)
-      );
+    setSetting,
+    // Rust `save_api_key`처럼 새 키는 외부 전송 확인을 다시 받게 한다(설정은 이 저장소에 있다).
+    saveApiKey: async (key) => {
+      const status = await platform.saveApiKey(key);
+      await setSetting({ key: TRANSFER_CONFIRMED_ONCE_SETTING, value: false });
+      return status;
     }
   };
 }
@@ -565,6 +728,8 @@ export function createE2ePlatform(): DesktopPlatform {
   const saveDialogs: PickSavePathOptions[] = [];
   const compares: CompareRequest[] = [];
   const previews: PreviewCompareReportRequest[] = [];
+  const translates: TranslateRequest[] = [];
+  const clipboard: string[] = [];
   const updateCalls: E2eUpdateCall[] = [];
   window.__E2E_MOCK_WRITES__ = writes;
   window.__E2E_MOCK_UPDATES__ = updateCalls;
@@ -572,6 +737,8 @@ export function createE2ePlatform(): DesktopPlatform {
   window.__E2E_MOCK_COMPARES__ = compares;
   window.__E2E_MOCK_READS__ = reads;
   window.__E2E_MOCK_SAVE_DIALOGS__ = saveDialogs;
+  window.__E2E_MOCK_TRANSLATES__ = translates;
+  window.__E2E_MOCK_CLIPBOARD__ = clipboard;
   window.__E2E_PDF_CACHE_STATS__ = getPdfCacheStats;
   const mockPlatform = createMockPlatform({
     files: seed.files.map(toMockFile),
@@ -579,29 +746,39 @@ export function createE2ePlatform(): DesktopPlatform {
     mergeOutput: seed.mergeOutput,
     thirdPartyNotices: seed.thirdPartyNotices,
     directoryPicks: seed.directoryPicks,
-    update: seed.update
+    update: seed.update,
+    apiKey: seed.apiKey
   });
   window.__E2E_FILE_DROP__ = mockPlatform.simulateFileDrop;
   const seededPlatform = injectFailures({
     platform: mockPlatform,
     failures: seed.failures ?? {},
     mergeScripts: [...(seed.mergeScripts ?? [])],
-    compareScripts: [...(seed.compareScripts ?? [])]
+    compareScripts: [...(seed.compareScripts ?? [])],
+    translateScripts: [...(seed.translateScripts ?? [])],
+    apiKeyChecks: [...(seed.apiKeyChecks ?? [])],
+    rememberTranslation: mockPlatform.rememberTranslation
   });
   return persistSettings(
     seedUpdates({
-      platform: recordSaveDialogs({
-        platform: recordPreviews({
-          platform: recordCompares({
-            platform: recordReads({
-              platform: recordWrites(seededPlatform, writes),
-              reads
+      platform: recordClipboard({
+        platform: recordTranslates({
+          platform: recordSaveDialogs({
+            platform: recordPreviews({
+              platform: recordCompares({
+                platform: recordReads({
+                  platform: recordWrites(seededPlatform, writes),
+                  reads
+                }),
+                compares
+              }),
+              previews
             }),
-            compares
+            saveDialogs
           }),
-          previews
+          translates
         }),
-        saveDialogs
+        clipboard
       }),
       failures: seed.failures ?? {},
       calls: updateCalls

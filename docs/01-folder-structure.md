@@ -63,10 +63,13 @@ project-root/
 │  │  ├─ http.rs, http/tests.rs # 전송 trait와 reqwest(native-tls) 어댑터, 로컬 mock 서버 테스트
 │  │  ├─ key.rs, error.rs, usage.rs # ApiKey(Debug 가림·형식 검사), API 오류 코드, 사용 토큰
 │  │  ├─ runner.rs, runner/    # 실행기(run_translation): 이어하기로 남은 묶음만 보내기·취소(cancel.rs)·쪽별 결과(arrange.rs)
+│  │  ├─ plan.rs               # 실행 전 계획(묶음 수·보낼 것만 예상·이어하기 가능 여부)
+│  │  ├─ paragraph.rs          # 문단 하나 다시 번역(앞뒤 문맥)·직접 고치기(기록 키 확인)
+│  │  ├─ verify.rs             # 키 확인(모델 목록 GET /v1/models)
 │  │  ├─ progress.rs           # 진행 이벤트(3단계 가중치·1% 단위·정수 내림)
-│  │  ├─ record.rs, record_key.rs # 이어하기 기록 파일(임시 파일 + rename·20개 상한)과 문단 키·기록 키
+│  │  ├─ record.rs, record_key.rs # 이어하기 기록 파일(임시 파일 + rename·20개 상한·지우기)과 문단 키·기록 키·파일 해시
 │  │  └─ script.rs, per_mille.rs # 글자 갈래(한자·라틴) 판정, 천분율 비율 상수
-│  └─ tests/                   # 묶음·예상치·언어 감지·용어집, 요청 golden(golden/)·응답 검증·재시도(가짜 전송)·키 보호, 문단 키·기록 키·실행기(진행·취소·이어하기·기록)(cargo test -p translate, pdfium·네트워크 없이)
+│  └─ tests/                   # 묶음·예상치·언어 감지·용어집(상한), 요청 golden(golden/)·응답 검증·재시도(가짜 전송)·키 보호, 문단 키·기록 키·실행기(진행·취소·이어하기·기록)·계획·다시 번역·고치기·기록 지우기(cargo test -p translate, pdfium·네트워크 없이)
 │
 ├─ src-tauri/                  # 어댑터: Tauri 셸
 │  ├─ src/
@@ -77,6 +80,8 @@ project-root/
 │  │  ├─ files.rs, merge.rs    # 파일 열기, 병합 처리(경로 검증 후 pdf-core 위임)
 │  │  ├─ compare.rs            # 비교 처리(경로 검증 후 실행기 위임), 추출·OCR 캐시와 OCR 엔진 상태(ADR 0001 §16)
 │  │  ├─ report.rs             # 리포트 내보내기·미리보기(경로 검증·내보내기 폴더 새 이름 후 pdf-core 위임, ADR 0001 §17)
+│  │  ├─ translate.rs          # 번역 커맨드 검증(경로·용어집·범위·언어·키 순서)·pdf-core 문단 → translate 입력·계획·실행·다시 번역·고치기, 파일 해시 캐시, 한 번에 하나(ADR 0002 §10)
+│  │  ├─ secrets.rs            # API 키: OS 키체인(keyring)·설정 저장소 힌트·전송 확인 되돌리기·키 확인(ADR 0002 §12·§13)
 │  │  ├─ jobs.rs               # 작업 ID·취소 토큰
 │  │  ├─ pdf_engine.rs         # 번들 pdfium 바인딩, 엔진을 앱 상태로
 │  │  ├─ notices.rs            # 번들한 제3자 고지 읽기(리소스 폴더 고정 파일)

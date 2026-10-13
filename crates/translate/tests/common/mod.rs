@@ -54,7 +54,7 @@ impl FakeTransport {
     }
 }
 
-impl Transport for &FakeTransport {
+impl Transport for FakeTransport {
     fn post_messages(
         &self,
         _key: &ApiKey,
@@ -71,6 +71,10 @@ impl Transport for &FakeTransport {
             .pop_front()
             .expect("준비한 응답보다 요청이 많다");
         std::future::ready(reply)
+    }
+
+    async fn get_models(&self, _key: &ApiKey) -> Result<HttpResponse, TransportError> {
+        panic!("번역 요청 테스트는 모델 목록을 받지 않는다")
     }
 }
 

@@ -14,7 +14,7 @@ use image::ImageFormat;
 use pdf_core::{
     CompareOptions, CompareRequest, CompareStage, ExtractionCache, PageParagraphs, ParagraphPage,
     ProgressDetail, SCAN_IMAGE_MAX_EDGE_PX, compare_pdfs, extract_paragraphs, extract_text_layer,
-    render_scan_page,
+    render_scan_page, scan_image_size, scan_page_flags,
 };
 use sha2::{Digest, Sha256};
 
@@ -120,7 +120,7 @@ fn english_paragraphs_match_golden() {
 }
 
 /// 스캔 쪽 판정은 비교 추출의 `needs_ocr`와 같다(글자층 글자가 조금 있는 쪽, 그림만 있는 스캔 쪽, 쪽
-/// 번호만 있는 쪽 포함).
+/// 번호만 있는 쪽 포함). 문서 전체 쪽의 스캔 쪽 표시(번역 계획·기록 키)도 같다.
 #[test]
 fn scan_pages_are_the_compare_ocr_targets() {
     for name in [
@@ -133,7 +133,10 @@ fn scan_pages_are_the_compare_ocr_targets() {
         let path = fixture_path(name);
         let extracted = extract_text_layer(engine(), &path).expect("extract text layer");
         let pages = paragraphs(name, "");
+        let flags = scan_page_flags(engine(), &path, &ExtractionCache::new()).expect("scan flags");
 
+        let needs_ocr: Vec<bool> = extracted.iter().map(|page| page.needs_ocr).collect();
+        assert_eq!(flags, needs_ocr, "{name}");
         assert_eq!(pages.len(), extracted.len(), "{name}");
         for (page, text_layer) in pages.iter().zip(&extracted) {
             assert_eq!(
@@ -186,7 +189,8 @@ fn page_range_selects_pages_and_rejects_invalid_ranges() {
 }
 
 /// 스캔 쪽 그림은 PNG이고 긴 변이 `SCAN_IMAGE_MAX_EDGE_PX`다. 방향은 `/Rotate`를 적용한 화면 방향이고,
-/// 렌더는 파일을 쓰지 않는다. 없는 쪽은 `INVALID_PAGE`다.
+/// 렌더는 파일을 쓰지 않는다. 없는 쪽은 `INVALID_PAGE`다. 렌더하지 않고 센 그림 크기(번역 예상치의 그림
+/// 토큰)는 렌더한 그림 크기와 같다.
 #[test]
 fn scan_page_image_is_an_in_memory_png_within_the_max_edge() {
     let folder = TestDir::new("scan-page-image");
@@ -207,6 +211,15 @@ fn scan_page_image_is_an_in_memory_png_within_the_max_edge() {
         "/Rotate 90 shows landscape: {rotated:?}"
     );
     assert_eq!(folder.entries(), [PathBuf::from(HANS)]);
+    let pages = paragraphs(HANS, "");
+    assert_eq!(
+        scan_image_size(&pages[HANS_SCAN_PAGE as usize].size),
+        portrait
+    );
+    assert_eq!(
+        scan_image_size(&pages[HANS_ROTATED_PAGE as usize].size),
+        rotated
+    );
 
     let error = render_scan_page(engine(), &path, 3).expect_err("page 3 does not exist");
     assert_eq!(error.code(), "INVALID_PAGE");

@@ -13,7 +13,8 @@ import {
   commands,
   type AppError,
   type CompareProgress,
-  type MergeProgress
+  type MergeProgress,
+  type TranslateProgress
 } from "@/renderer/shared/api/bindings";
 import {
   LOG_LEVEL,
@@ -217,6 +218,29 @@ export function createTauriPlatform(): DesktopPlatform {
     checkForUpdate: async () => {
       const update = await settle(check());
       return update === null ? null : toAppUpdate(update);
-    }
+    },
+    getApiKeyStatus: () => unwrap(commands.getApiKeyStatus()),
+    verifyApiKey: async (key) => {
+      await unwrap(commands.verifyApiKey(key));
+    },
+    saveApiKey: (key) => unwrap(commands.saveApiKey(key)),
+    deleteApiKey: () => unwrap(commands.deleteApiKey()),
+    prepareTranslation: ({ path, options }) =>
+      unwrap(commands.prepareTranslation(path, options)),
+    translatePdf: ({ request, onProgress }) => {
+      const channel = new Channel<TranslateProgress>();
+      if (onProgress) {
+        channel.onmessage = onProgress;
+      }
+      return unwrap(commands.translatePdf(request, channel));
+    },
+    retranslateParagraph: (request) =>
+      unwrap(commands.retranslateParagraph(request)),
+    editTranslatedParagraph: (request) =>
+      unwrap(commands.editTranslatedParagraph(request)),
+    deleteTranslationRecords: async () => {
+      await unwrap(commands.deleteTranslationRecords());
+    },
+    copyText: (text) => settle(navigator.clipboard.writeText(text))
   };
 }

@@ -41,9 +41,35 @@ export const commands = {
 	cleanupTemp: () => typedError<null, AppError>(__TAURI_INVOKE("cleanup_temp")),
 	/**  앱과 함께 번들한 제3자 고지(마크다운 원문). 경로를 받지 않고 리소스 폴더의 고정 파일만 읽는다. */
 	readThirdPartyNotices: () => typedError<string, AppError>(__TAURI_INVOKE("read_third_party_notices")),
+	/**  API 키 등록 상태. 설정 저장소의 힌트만 보고 키체인을 읽지 않는다. */
+	getApiKeyStatus: () => typedError<ApiKeyStatus, AppError>(__TAURI_INVOKE("get_api_key_status")),
+	/**  키 형식 검사 뒤 모델 목록을 한 번 받아 키를 확인한다. 저장하지 않고 문서를 보내지 않는다. */
+	verifyApiKey: (key: string) => typedError<null, AppError>(__TAURI_INVOKE("verify_api_key", { key })),
+	/**  키를 키체인에 저장하고 끝 4자리 힌트를 남긴다. 외부 전송 확인을 다시 받게 한다. 네트워크를 쓰지 않는다. */
+	saveApiKey: (key: string) => typedError<ApiKeyStatus, AppError>(__TAURI_INVOKE("save_api_key", { key })),
+	/**  키체인 항목과 힌트를 지운다. 항목이 없어도 성공이다. */
+	deleteApiKey: () => typedError<ApiKeyStatus, AppError>(__TAURI_INVOKE("delete_api_key")),
+	/**  실행 전 확인(쪽·문단·묶음·예상 토큰·요금·이어하기). 네트워크를 쓰지 않고 키를 읽지 않는다. */
+	prepareTranslation: (path: string, options: TranslateOptions) => typedError<TranslationPlan, AppError>(__TAURI_INVOKE("prepare_translation", { path, options })),
+	/**  PDF 번역. 진행률은 `on_progress`로, 취소는 `cancel_job(request.jobId)`로 한다. 번역은 한 번에 하나다. */
+	translatePdf: (request: TranslateRequest, onProgress: Channel<TranslateProgress>) => typedError<TranslationResult, AppError>(__TAURI_INVOKE("translate_pdf", { request, onProgress })),
+	/**  문단 하나를 앞뒤 문단 문맥과 함께 다시 번역한다. 취소는 `cancel_job(request.jobId)`로 한다. */
+	retranslateParagraph: (request: RetranslateRequest) => typedError<RetranslateResult, AppError>(__TAURI_INVOKE("retranslate_paragraph", { request })),
+	/**  직접 고친 글을 이어하기 기록에 쓴다. 네트워크를 쓰지 않는다. */
+	editTranslatedParagraph: (request: EditParagraphRequest) => typedError<TranslatedParagraph, AppError>(__TAURI_INVOKE("edit_translated_paragraph", { request })),
+	/**  이어하기 기록을 모두 지운다. */
+	deleteTranslationRecords: () => typedError<null, AppError>(__TAURI_INVOKE("delete_translation_records")),
 };
 
 /* Constants */
+export const API_KEY_MAX_LEN = 256 as const;
+
+export const API_KEY_PREFIX = "sk-ant-" as const;
+
+export const MAX_GLOSSARY_TERMS = 500 as const;
+
+export const MAX_GLOSSARY_TERM_CHARS = 40 as const;
+
 export const MAX_INPUT_FILE_BYTES = 536870912 as const;
 
 export const MAX_MERGE_FILES = 200 as const;
@@ -51,6 +77,13 @@ export const MAX_MERGE_FILES = 200 as const;
 export const OPENABLE_EXTENSIONS = ["pdf","tif","tiff"] as const;
 
 /* Types */
+/**  키 등록 상태. 키 원문은 웹뷰로 다시 보내지 않는다. */
+export type ApiKeyStatus = {
+	registered: boolean,
+	/**  키 끝 4자리 */
+	hint: string | null,
+};
+
 /**  커맨드가 프론트에 돌려주는 에러 */
 export type AppError = {
 	code: ErrorCode,
@@ -131,11 +164,26 @@ export type CompareResult = {
 /**  비교 단계. 이 순서대로 진행한다(ADR 0001 §15). */
 export type CompareStage = "extractA" | "extractB" | "ocr" | "normalize" | "diff" | "alignPages";
 
+/**  감지·정한 원문 언어. 간체·번체는 표시용이고 요청은 "중국어"다. */
+export type DetectedLanguage = "zhHans" | "zhHant" | "zh" | "en" | "unknown";
+
+/**  직접 고치기. 다시 번역처럼 `path`·`options`로 기록 키를 다시 세어 결과의 `recordId`와 같을 때만 쓴다. */
+export type EditParagraphRequest = {
+	recordId: string,
+	path: string,
+	key: string,
+	/**  앞뒤 공백을 지운다. 비면 고친 글을 지워 원래 번역으로 돌린다. */
+	text: string,
+	options: TranslateOptions,
+};
+
 /**
  *  화면 문구를 고르는 오류 코드. 직렬화 값(`PATH_NOT_ALLOWED` 등)이 바인딩의 문자열 union이 되고,
  *  변형의 이름이 바뀌어도 값은 유지한다.
  */
-export type ErrorCode = "PATH_NOT_ALLOWED" | "UNSUPPORTED_FILE_TYPE" | "OUTPUT_IS_SOURCE" | "JOB_ALREADY_RUNNING" | "INVALID_DIALOG_PATH" | "ENGINE_UNAVAILABLE" | "NOT_READY" | "TASK_FAILED" | "RESOURCE_UNAVAILABLE" | "NOT_FOUND" | "FILE_UNREADABLE" | "INPUT_TOO_LARGE" | "INVALID_PDF" | "PASSWORD_PROTECTED" | "PDFIUM_FAILURE" | "OUTPUT_DIRECTORY_NOT_FOUND" | "WRITE_FAILED" | "EMPTY_REQUEST" | "TOO_MANY_FILES" | "EMPTY_SOURCE" | "INVALID_PAGE" | "CANCELLED" | "INVALID_RANGE" | "EMPTY_REPORT" | "IMAGE_ENCODE_FAILED" | "INVALID_TIFF" | "UNSUPPORTED_TIFF_COMPRESSION" | "UNSUPPORTED_TIFF_FORMAT" | "IMAGE_TOO_LARGE";
+export type ErrorCode = "PATH_NOT_ALLOWED" | "UNSUPPORTED_FILE_TYPE" | "OUTPUT_IS_SOURCE" | "JOB_ALREADY_RUNNING" | "INVALID_DIALOG_PATH" | "ENGINE_UNAVAILABLE" | "NOT_READY" | "TASK_FAILED" | "RESOURCE_UNAVAILABLE" | "NOT_FOUND" | "FILE_UNREADABLE" | "INPUT_TOO_LARGE" | "INVALID_PDF" | "PASSWORD_PROTECTED" | "PDFIUM_FAILURE" | "OUTPUT_DIRECTORY_NOT_FOUND" | "WRITE_FAILED" | "EMPTY_REQUEST" | "TOO_MANY_FILES" | "EMPTY_SOURCE" | "INVALID_PAGE" | "CANCELLED" | "INVALID_RANGE" | "EMPTY_REPORT" | "IMAGE_ENCODE_FAILED" | "INVALID_TIFF" | "UNSUPPORTED_TIFF_COMPRESSION" | "UNSUPPORTED_TIFF_FORMAT" | "IMAGE_TOO_LARGE" | "API_KEY_MISSING" | "API_KEY_INVALID" | "API_PERMISSION_DENIED" | "API_BILLING" | "MODEL_UNAVAILABLE" | "API_REQUEST_REJECTED" | "API_RATE_LIMITED" | "API_UNAVAILABLE" | "API_TIMEOUT" | "NETWORK_UNAVAILABLE" | 
+/**  문단·쪽 상태로만 쓴다(`TranslatedParagraph.failCode`·`TranslatedPage.failCode`). */
+"TRANSLATION_MISMATCH" | "TRANSLATION_TRUNCATED" | "TRANSLATION_REFUSED" | "KEYCHAIN_UNAVAILABLE" | "NO_TRANSLATABLE_TEXT" | "SOURCE_LANGUAGE_UNKNOWN" | "TRANSLATION_RECORD_NOT_FOUND" | "GLOSSARY_TOO_LARGE";
 
 /**  B 문서 사본에 차이를 주석으로 단 PDF */
 export type ExportAnnotatedPdfRequest = {
@@ -177,6 +225,11 @@ export type ExportedFile = {
 	outputPath: string,
 	/**  실제로 만든 이름(같은 이름이 있었으면 번호가 붙는다). 프론트가 경로 문자열을 나누지 않게 한다. */
 	fileName: string,
+};
+
+export type GlossaryTerm = {
+	source: string,
+	target: string,
 };
 
 /**  병합 결과를 쓸 곳 */
@@ -265,6 +318,14 @@ export type PageInfo = {
 	cropBox: PageBox,
 };
 
+export type PageKind = "textLayer" | 
+/**  스캔 쪽 + 스캔 옵션 켬(받아 적은 문단) */
+"image" | 
+/**  스캔 쪽 + 스캔 옵션 끔(문단 없음) */
+"scanSkipped" | 
+/**  범위 밖(문단 없음) */
+"outOfRange";
+
 /**  한 쪽의 보이는 영역(CropBox ∩ MediaBox, 회전 전)과 회전 */
 export type PageSize = {
 	viewBox: PageBox,
@@ -282,6 +343,8 @@ export type PageSources = {
 	before: (TextSource | null)[],
 	after: (TextSource | null)[],
 };
+
+export type ParagraphStatus = "translated" | "edited" | "failed" | "refused";
 
 export type PdfInfo = {
 	pageCount: number,
@@ -334,6 +397,30 @@ export type ReportPreview = {
 	images: string[],
 };
 
+export type ResumeState = {
+	translatedParagraphs: number,
+	paragraphCount: number,
+};
+
+export type RetranslateRequest = {
+	/**  프론트가 만든 작업 ID. `cancel_job`에 같은 값을 넘긴다. */
+	jobId: string,
+	/**  결과의 `recordId` */
+	recordId: string,
+	path: string,
+	/**  문단 키 */
+	key: string,
+	/**  결과를 만든 옵션 그대로 */
+	options: TranslateOptions,
+};
+
+export type RetranslateResult = {
+	/**  번역이면 새 글, 실패·거절이면 그 상태(기록의 글은 그대로다) */
+	paragraph: TranslatedParagraph,
+	/**  이 요청의 사용량 */
+	usage: TokenUsage,
+};
+
 /**  페이지 회전(도). 0·90·180·270만 받는다. */
 export type Rotation = number;
 
@@ -351,6 +438,9 @@ export type SaveDirectoryDialogOptions = {
 /**  비교하는 두 문서 중 한쪽. `before`가 A(왼쪽), `after`가 B(오른쪽)다. */
 export type Side = "before" | "after";
 
+/**  원문 언어 고르기(옵션 화면 `자동 감지 | 중국어 | 영어`) */
+export type SourceLanguage = "auto" | "zh" | "en";
+
 /**  변경 글자를 덮는 상자(PDF 사용자 공간, ADR 0001 §2). 좌표는 유한한 값이라 JSON `null`이 되지 않는다. */
 export type TextBox = {
 	/**  0부터 센 쪽 번호 */
@@ -363,6 +453,119 @@ export type TextBox = {
 
 /**  한 쪽의 글자를 어디서 얻었나 */
 export type TextSource = "textLayer" | "ocr";
+
+export type TokenUsage = {
+	inputTokens: number,
+	outputTokens: number,
+};
+
+/**  번역 모델. API ID·요금은 crates/translate 모델 표에만 있다. */
+export type TranslateModel = "sonnet" | "haiku";
+
+export type TranslateOptions = {
+	sourceLanguage: SourceLanguage,
+	/**  1부터 센 쪽 범위(`"1,3-5"`, 비우면 전체. 비교와 같은 문법·검사) */
+	range: string,
+	/**  범위 안 스캔 쪽 그림을 보낸다. */
+	includeScanPages: boolean,
+	model: TranslateModel,
+	/**  문서별 + 공용(문서별을 앞에), 프론트가 합친다. 정규화(앞뒤 공백·NFC·같은 원어)는 Rust도 한다. */
+	glossary: GlossaryTerm[],
+};
+
+/**  번역 진행률. 화면에 보이는 %(단계·전체)가 바뀔 때만 온다. */
+export type TranslateProgress = {
+	jobId: string,
+	stage: TranslateStage,
+	done: number,
+	total: number,
+	stagePercent: number,
+	overallPercent: number,
+	paragraphsDone: number,
+	paragraphCount: number,
+	/**  이번 실행에서 받은 응답의 사용량 */
+	usage: TokenUsage,
+};
+
+export type TranslateRequest = {
+	/**  프론트가 만든 작업 ID. `cancel_job`에 같은 값을 넘긴다. */
+	jobId: string,
+	path: string,
+	options: TranslateOptions,
+	/**  `false`면 같은 옵션의 기록을 읽지 않고 처음부터 번역해 새 기록으로 덮는다. */
+	resume: boolean,
+};
+
+/**  번역 단계. 이 순서대로 진행한다(ADR 0002 §9). */
+export type TranslateStage = "readDocument" | "translate" | "arrange";
+
+export type TranslatedPage = {
+	/**  0부터 */
+	page: number,
+	kind: PageKind,
+	paragraphs: TranslatedParagraph[],
+	/**  스캔 쪽 자체가 실패했다(`image`일 때만, 문단 없음) */
+	failCode: ErrorCode | null,
+};
+
+export type TranslatedParagraph = {
+	/**  문단 키(ADR 0002 §3). 다시 번역·직접 고치기가 이 키로 찾는다. */
+	key: string,
+	/**  쪽 안 순번, 1부터 */
+	number: number,
+	source: string,
+	/**  화면에 보일 글(직접 고친 글 우선). 실패·거절이면 `null` */
+	target: string | null,
+	/**  제목 문단(굵게). 스캔 쪽은 `false` */
+	heading: boolean,
+	status: ParagraphStatus,
+	/**  `failed` → `TRANSLATION_MISMATCH`·`TRANSLATION_TRUNCATED`, `refused` → `TRANSLATION_REFUSED`, 그 밖 `null` */
+	failCode: ErrorCode | null,
+};
+
+/**  실행 전 확인(네트워크 없음) */
+export type TranslationPlan = {
+	/**  문서 전체 쪽 수 */
+	pageCount: number,
+	/**  문서 전체의 글자층 쪽 수 */
+	textPages: number,
+	/**  문서 전체의 스캔 쪽 수(`text_pages + scan_pages = page_count`) */
+	scanPages: number,
+	/**  범위 안 쪽 수 */
+	rangePages: number,
+	/**  범위 안 글자층 문단으로 감지한 언어 */
+	detectedLanguage: DetectedLanguage,
+	/**  범위 안 글자층 문단 수 + 이어하기 기록에 있는 스캔 쪽의 받아 적은 문단 수 */
+	paragraphCount: number,
+	/**  범위 전체 묶음 수 */
+	chunkCount: number,
+	/**  보낼 것만(이어하기면 남은 것만). 원문 언어를 정하지 못하면 0 */
+	estimatedInputTokens: number,
+	estimatedOutputTokens: number,
+	/**  0.000001 USD 단위 */
+	estimatedCostMicroUsd: number,
+	/**  모델 표 요금 기준일 `YYYY-MM-DD` */
+	pricingDate: string,
+	/**  같은 옵션의 기록에 끝난 문단이 있으면 그 수 */
+	resumable: ResumeState | null,
+};
+
+export type TranslationResult = {
+	/**  기록 키. 다시 번역·직접 고치기에 그대로 보낸다. */
+	recordId: string,
+	/**  canonical 경로 */
+	path: string,
+	language: DetectedLanguage,
+	model: TranslateModel,
+	/**  문서 전체 쪽(색인 = 쪽 번호, 0부터) */
+	pages: TranslatedPage[],
+	/**  이 기록의 누적 사용량(모든 실행과 다시 번역) */
+	usage: TokenUsage,
+	/**  이번 실행 */
+	elapsedMs: number,
+	/**  범위 안 원문(스캔 쪽은 받아 적은 원문)에 원어가 나오는 용어 */
+	glossaryUsed: GlossaryTerm[],
+};
 
 /* Tauri Specta runtime */
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {

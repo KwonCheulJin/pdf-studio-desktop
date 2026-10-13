@@ -1,6 +1,10 @@
 import {
+  API_KEY_MAX_LEN,
+  API_KEY_PREFIX,
   OPENABLE_EXTENSIONS,
+  type ApiKeyStatus,
   type AppError,
+  type DetectedLanguage,
   type CompareProgress,
   type CompareReportOptions,
   type CompareResult,
@@ -13,7 +17,15 @@ import {
   type PageSize,
   type Placement,
   type ReportLayout,
-  type TextSource
+  type PageKind,
+  type ParagraphStatus,
+  type SourceLanguage,
+  type TextSource,
+  type TranslatedPage,
+  type TranslatedParagraph,
+  type TranslateOptions,
+  type TranslationPlan,
+  type TranslationResult
 } from "@/renderer/shared/api/bindings";
 import { parsePageRange } from "@/renderer/shared/lib/page-range-parse";
 import {
@@ -75,6 +87,8 @@ export interface MockPlatformOptions {
   directoryPicks?: (string | null)[];
   /** 있으면 `checkForUpdate`가 이 새 버전을 알린다. 없으면 최신 버전일 때처럼 `null` */
   update?: MockUpdate;
+  /** 시작할 때의 API 키 상태. 없으면 등록되지 않았다. 등록됐으면 키체인에 키가 있는 것으로 본다. */
+  apiKey?: ApiKeyStatus;
 }
 
 export interface MockPlatform extends DesktopPlatform {
@@ -84,6 +98,11 @@ export interface MockPlatform extends DesktopPlatform {
    * 허용 목록에 기록한다(Rust가 드롭 이벤트에서 기록하는 것과 같은 순서).
    */
   simulateFileDrop(event: NativeFileDropEvent): void;
+  /**
+   * 번역 결과를 기억한다(Rust 이어하기 기록 대신). 다시 번역·직접 고치기는 기억한 결과의 문단만 찾는다.
+   * `translatePdf`가 만든 결과는 저절로 기억하고, 시드 결과는 E2E 플랫폼이 이것으로 알린다.
+   */
+  rememberTranslation(result: TranslationResult): void;
 }
 
 /** Rust 커맨드가 같은 상황에서 돌려주는 코드 */
@@ -94,7 +113,11 @@ const MOCK_ERROR_CODE = {
   RESOURCE_UNAVAILABLE: "RESOURCE_UNAVAILABLE",
   INVALID_RANGE: "INVALID_RANGE",
   EMPTY_REPORT: "EMPTY_REPORT",
-  WRITE_FAILED: "WRITE_FAILED"
+  WRITE_FAILED: "WRITE_FAILED",
+  API_KEY_INVALID: "API_KEY_INVALID",
+  API_KEY_MISSING: "API_KEY_MISSING",
+  TRANSLATION_MISMATCH: "TRANSLATION_MISMATCH",
+  TRANSLATION_RECORD_NOT_FOUND: "TRANSLATION_RECORD_NOT_FOUND"
 } as const satisfies Record<string, ErrorCode>;
 
 /** 변경 쪽에 글자 상자가 있음(`Placement.kind`). 앵커는 상자가 없다. */
@@ -140,6 +163,116 @@ const MOCK_DIRECTORY = {
 } as const;
 
 const PERCENT_COMPLETE = 100;
+
+/**
+ * mock 번역. 글을 모르므로 범위 쪽은 문단 없는 글자층 쪽이고(언어·번역할 것 검사는 하지 않는다, 결과는 시드가
+ * 준다) 언어는 고른 언어(자동 감지면 중국어)다. 키 힌트 길이는 Rust `ApiKey::hint`와 같다.
+ */
+const MOCK_TRANSLATION = {
+  KEY_HINT_LENGTH: 4,
+  RECORD_ID_PREFIX: "mock-record-",
+  PRICING_DATE: "2026-10-13",
+  TRANSFER_CONFIRMED_ONCE_SETTING: "translate.transferConfirmedOnce"
+} as const;
+
+/** mock 번역 결과의 쪽 종류·문단 상태·언어(Rust 계약 값) */
+const MOCK_PAGE_KIND = {
+  TEXT_LAYER: "textLayer",
+  OUT_OF_RANGE: "outOfRange"
+} as const satisfies Record<string, PageKind>;
+
+const MOCK_PARAGRAPH_STATUS = {
+  TRANSLATED: "translated",
+  EDITED: "edited",
+  FAILED: "failed"
+} as const satisfies Record<string, ParagraphStatus>;
+
+const MOCK_LANGUAGE = {
+  ZH: "zh",
+  EN: "en",
+  UNKNOWN: "unknown"
+} as const satisfies Record<string, DetectedLanguage>;
+
+const SOURCE_LANGUAGE_EN = "en" satisfies SourceLanguage;
+
+/** 키에 쓸 수 있는 글자: ASCII 그래픽 글자(공백·제어 문자 없음, Rust `ApiKey::parse`) */
+const API_KEY_CHARACTERS = /^[\x21-\x7E]+$/;
+
+const NO_TOKENS = { inputTokens: 0, outputTokens: 0 } as const;
+
+/** Rust `ApiKey::parse`처럼 앞뒤 공백을 지운 키가 형식에 맞는지 */
+function isWellFormedKey(key: string): boolean {
+  const trimmed = key.trim();
+  return (
+    trimmed.startsWith(API_KEY_PREFIX) &&
+    trimmed.length <= API_KEY_MAX_LEN &&
+    API_KEY_CHARACTERS.test(trimmed)
+  );
+}
+
+function invalidKey(): PlatformError {
+  return new PlatformError({
+    code: MOCK_ERROR_CODE.API_KEY_INVALID,
+    message: "API key format is invalid",
+    path: null
+  });
+}
+
+function recordNotFound(): PlatformError {
+  return new PlatformError({
+    code: MOCK_ERROR_CODE.TRANSLATION_RECORD_NOT_FOUND,
+    message: "translation record or paragraph was not found",
+    path: null
+  });
+}
+
+interface MockTranslationParams {
+  jobId: string;
+  path: string;
+  options: TranslateOptions;
+  file: MockPdfFile;
+  /** 범위(0부터) */
+  range: number[];
+}
+
+/** 시드가 없을 때의 결과: 범위 쪽은 문단 없는 글자층 쪽, 범위 밖은 `outOfRange`(Rust와 같은 쪽 배열) */
+function emptyTranslationResult({
+  jobId,
+  path,
+  options,
+  file,
+  range
+}: MockTranslationParams): TranslationResult {
+  const pages = file.pages.map(
+    (_, page): TranslatedPage => ({
+      page,
+      kind: range.includes(page)
+        ? MOCK_PAGE_KIND.TEXT_LAYER
+        : MOCK_PAGE_KIND.OUT_OF_RANGE,
+      paragraphs: [],
+      failCode: null
+    })
+  );
+  return {
+    recordId: `${MOCK_TRANSLATION.RECORD_ID_PREFIX}${jobId}`,
+    path,
+    language:
+      options.sourceLanguage === SOURCE_LANGUAGE_EN
+        ? MOCK_LANGUAGE.EN
+        : MOCK_LANGUAGE.ZH,
+    model: options.model,
+    pages,
+    usage: NO_TOKENS,
+    elapsedMs: 0,
+    glossaryUsed: []
+  };
+}
+
+/** 기억한 결과의 문단 하나와 처음 받은 번역(직접 고친 글을 지우면 돌아갈 글) */
+interface RememberedParagraph {
+  paragraph: TranslatedParagraph;
+  translated: string | null;
+}
 
 /** Rust `notices::THIRD_PARTY_NOTICES_FILE`(실패 메시지용) */
 const THIRD_PARTY_NOTICES_FILE = "THIRD_PARTY_NOTICES.md";
@@ -362,7 +495,8 @@ export function createMockPlatform({
   mergeOutput,
   thirdPartyNotices,
   directoryPicks = [],
-  update
+  update,
+  apiKey
 }: MockPlatformOptions = {}): MockPlatform {
   const filesByPath = new Map(files.map((file) => [file.path, file]));
   const convertedFiles = new Map(
@@ -382,6 +516,48 @@ export function createMockPlatform({
   const saveDirectories = new Set<string>();
   /** 내보낸 파일 경로(같은 이름이면 Rust처럼 번호를 붙인다) */
   const exportedPaths = new Set<string>();
+  let apiKeyStatus: ApiKeyStatus = apiKey ?? { registered: false, hint: null };
+  /** 기록 키 → 문단 키 → 기억한 문단(Rust 이어하기 기록 대신) */
+  const translations = new Map<string, Map<string, RememberedParagraph>>();
+
+  const rememberTranslation = (result: TranslationResult): void => {
+    const paragraphs = new Map(
+      result.pages
+        .flatMap((page) => page.paragraphs)
+        .map((paragraph): [string, RememberedParagraph] => [
+          paragraph.key,
+          {
+            paragraph,
+            translated:
+              paragraph.status === MOCK_PARAGRAPH_STATUS.TRANSLATED
+                ? paragraph.target
+                : null
+          }
+        ])
+    );
+    translations.set(result.recordId, paragraphs);
+  };
+
+  const findParagraph = (
+    recordId: string,
+    key: string
+  ): RememberedParagraph => {
+    const remembered = translations.get(recordId)?.get(key);
+    if (!remembered) {
+      throw recordNotFound();
+    }
+    return remembered;
+  };
+
+  const ensureKeyRegistered = (): void => {
+    if (!apiKeyStatus.registered) {
+      throw new PlatformError({
+        code: MOCK_ERROR_CODE.API_KEY_MISSING,
+        message: "API key is not in the keychain",
+        path: null
+      });
+    }
+  };
 
   const ensureReadable = (path: string): void => {
     if (
@@ -690,6 +866,102 @@ export function createMockPlatform({
     },
     checkForUpdate: async () =>
       update === undefined ? null : createMockUpdate(update),
+    getApiKeyStatus: async () => apiKeyStatus,
+    verifyApiKey: async (key) => {
+      if (!isWellFormedKey(key)) {
+        throw invalidKey();
+      }
+    },
+    saveApiKey: async (key) => {
+      if (!isWellFormedKey(key)) {
+        throw invalidKey();
+      }
+      apiKeyStatus = {
+        registered: true,
+        hint: key.trim().slice(-MOCK_TRANSLATION.KEY_HINT_LENGTH)
+      };
+      settings.set(MOCK_TRANSLATION.TRANSFER_CONFIRMED_ONCE_SETTING, false);
+      return apiKeyStatus;
+    },
+    deleteApiKey: async () => {
+      apiKeyStatus = { registered: false, hint: null };
+      return apiKeyStatus;
+    },
+    // Rust처럼 파일을 연 뒤 쪽 범위를 검사한다. 글을 모르므로 문단·예상치는 0이고 언어는 모름이다.
+    prepareTranslation: async ({ path, options }): Promise<TranslationPlan> => {
+      const { file, range } = openCompareSide({ path, range: options.range });
+      return {
+        pageCount: file.pages.length,
+        textPages: file.pages.length,
+        scanPages: 0,
+        rangePages: range.length,
+        detectedLanguage: MOCK_LANGUAGE.UNKNOWN,
+        paragraphCount: 0,
+        chunkCount: 0,
+        estimatedInputTokens: 0,
+        estimatedOutputTokens: 0,
+        estimatedCostMicroUsd: 0,
+        pricingDate: MOCK_TRANSLATION.PRICING_DATE,
+        resumable: null
+      };
+    },
+    translatePdf: async ({ request }) => {
+      const { file, range } = openCompareSide({
+        path: request.path,
+        range: request.options.range
+      });
+      ensureKeyRegistered();
+      const result = emptyTranslationResult({
+        jobId: request.jobId,
+        path: request.path,
+        options: request.options,
+        file,
+        range
+      });
+      rememberTranslation(result);
+      return result;
+    },
+    retranslateParagraph: async (request) => {
+      ensureMergeSource(request.path);
+      const { paragraph } = findParagraph(request.recordId, request.key);
+      ensureKeyRegistered();
+      return { paragraph, usage: NO_TOKENS };
+    },
+    // Rust처럼 앞뒤 공백을 지워 고친 글로 두고, 빈 글이면 처음 번역(없으면 실패)으로 돌린다.
+    editTranslatedParagraph: async (request) => {
+      ensureMergeSource(request.path);
+      const remembered = findParagraph(request.recordId, request.key);
+      const text = request.text.trim();
+      const edited: TranslatedParagraph =
+        text === ""
+          ? {
+              ...remembered.paragraph,
+              target: remembered.translated,
+              status:
+                remembered.translated === null
+                  ? MOCK_PARAGRAPH_STATUS.FAILED
+                  : MOCK_PARAGRAPH_STATUS.TRANSLATED,
+              failCode:
+                remembered.translated === null
+                  ? MOCK_ERROR_CODE.TRANSLATION_MISMATCH
+                  : null
+            }
+          : {
+              ...remembered.paragraph,
+              target: text,
+              status: MOCK_PARAGRAPH_STATUS.EDITED,
+              failCode: null
+            };
+      translations
+        .get(request.recordId)
+        ?.set(request.key, { ...remembered, paragraph: edited });
+      return edited;
+    },
+    deleteTranslationRecords: async () => {
+      translations.clear();
+    },
+    copyText: async () => {},
+    rememberTranslation,
     simulateFileDrop: (event) => {
       if (event.type === FILE_DROP_EVENT_TYPE.DROP) {
         for (const path of event.paths) {

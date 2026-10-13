@@ -198,7 +198,7 @@ impl Drop for DropFlag {
     }
 }
 
-impl Transport for &Script {
+impl Transport for Script {
     fn post_messages(
         &self,
         _key: &ApiKey,
@@ -230,6 +230,10 @@ impl Transport for &Script {
                 }
             }
         }
+    }
+
+    async fn get_models(&self, _key: &ApiKey) -> Result<HttpResponse, TransportError> {
+        panic!("실행기는 모델 목록을 받지 않는다")
     }
 }
 

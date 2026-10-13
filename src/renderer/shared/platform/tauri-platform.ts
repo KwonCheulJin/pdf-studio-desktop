@@ -6,7 +6,9 @@ import {
   info as writeInfoLog,
   warn as writeWarnLog
 } from "@tauri-apps/plugin-log";
+import { relaunch } from "@tauri-apps/plugin-process";
 import { LazyStore } from "@tauri-apps/plugin-store";
+import { check, type Update } from "@tauri-apps/plugin-updater";
 import {
   commands,
   type AppError,
@@ -15,6 +17,7 @@ import {
 } from "@/renderer/shared/api/bindings";
 import {
   LOG_LEVEL,
+  type AppUpdate,
   type DesktopPlatform,
   type LogLevel
 } from "./desktop-platform";
@@ -99,6 +102,36 @@ function dropPositionPixelRatio(): number {
     : 1;
 }
 
+/**
+ * 업데이터 플러그인의 `Update`를 플랫폼 계약으로 바꾼다. 받기 이벤트(시작·조각·끝)는
+ * 받은 양 누계로 모아 넘긴다. 끝 이벤트는 `download`가 끝나는 것으로 알 수 있어 넘기지 않는다.
+ */
+function toAppUpdate(update: Update): AppUpdate {
+  return {
+    version: update.version,
+    download: (onProgress) => {
+      let downloadedBytes = 0;
+      let totalBytes: number | null = null;
+      return settle(
+        update.download((event) => {
+          if (event.event === "Started") {
+            totalBytes = event.data.contentLength ?? null;
+          } else if (event.event === "Progress") {
+            downloadedBytes += event.data.chunkLength;
+          } else {
+            return;
+          }
+          onProgress({ downloadedBytes, totalBytes });
+        })
+      );
+    },
+    installAndRestart: async () => {
+      await settle(update.install());
+      await settle(relaunch());
+    }
+  };
+}
+
 /** Tauri 웹뷰는 초기화 스크립트로 `isTauri` 전역을 넣는다. 브라우저·테스트에서는 false */
 export function isTauriRuntime(): boolean {
   return isTauri();
@@ -180,6 +213,10 @@ export function createTauriPlatform(): DesktopPlatform {
       await settle(settings.set(key, value));
       await settle(settings.save());
     },
-    readThirdPartyNotices: () => unwrap(commands.readThirdPartyNotices())
+    readThirdPartyNotices: () => unwrap(commands.readThirdPartyNotices()),
+    checkForUpdate: async () => {
+      const update = await settle(check());
+      return update === null ? null : toAppUpdate(update);
+    }
   };
 }

@@ -117,6 +117,29 @@ export interface SetSettingParams {
 /** 구독을 끊는다. 여러 번 불러도 된다. */
 export type Unsubscribe = () => void;
 
+/** 업데이트를 받은 양. 서버가 전체 크기를 알려 주지 않으면 `totalBytes`는 `null` */
+export interface UpdateDownloadProgress {
+  downloadedBytes: number;
+  totalBytes: number | null;
+}
+
+export type UpdateDownloadProgressHandler = (
+  progress: UpdateDownloadProgress
+) => void;
+
+/** 업데이트 서버가 알린 새 버전. 받은(`download`) 뒤에 설치한다. */
+export interface AppUpdate {
+  /** 새 버전(예: `1.4.0`) */
+  version: string;
+  /** 업데이트 파일을 받고 서명을 확인한다. 설치하지는 않는다. */
+  download(onProgress: UpdateDownloadProgressHandler): Promise<void>;
+  /**
+   * 받은 업데이트를 설치하고 앱을 다시 시작한다. Windows는 설치 프로그램이 앱을 끝내고
+   * 설치가 끝나면 다시 띄운다.
+   */
+  installAndRestart(): Promise<void>;
+}
+
 /**
  * 프론트가 의존하는 데스크톱 기능. 파일 경로를 넘기고 결과(JSON)를 받는다.
  * 실패하면 `PlatformError`(`{ code, message, path }`)를 던진다.
@@ -170,4 +193,6 @@ export interface DesktopPlatform {
   setSetting(params: SetSettingParams): Promise<void>;
   /** 앱과 함께 번들한 제3자 고지(`THIRD_PARTY_NOTICES.md` 마크다운 원문) */
   readThirdPartyNotices(): Promise<string>;
+  /** 업데이트 서버에서 지금보다 새 버전을 찾는다. 없으면 `null` */
+  checkForUpdate(): Promise<AppUpdate | null>;
 }

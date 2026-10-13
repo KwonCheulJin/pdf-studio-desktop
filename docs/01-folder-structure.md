@@ -61,7 +61,7 @@ project-root/
 │  │  ├─ pdf_engine.rs         # 번들 pdfium 바인딩, 엔진을 앱 상태로
 │  │  ├─ notices.rs            # 번들한 제3자 고지 읽기(리소스 폴더 고정 파일)
 │  │  └─ error.rs              # 커맨드 에러 → { code, message, path }
-│  ├─ capabilities/            # main 창 권한
+│  ├─ capabilities/            # main 창 권한(default.json, 데스크톱 전용 updater·process는 desktop.json)
 │  ├─ icons/
 │  ├─ Entitlements.plist
 │  ├─ windows-app-manifest.xml # Windows 앱·테스트 exe 매니페스트 (build.rs가 링커로 넣는다)
@@ -88,13 +88,14 @@ project-root/
    │  ├─ pdf-preview/          # 미리보기 모달
    │  ├─ theme-toggle/         # 테마 system|light|dark 선택·저장
    │  ├─ error-reporting/      # 오류 보고 켜기·끄기, 첫 실행 안내
+   │  ├─ app-update/           # 시작 후 업데이트 확인, 토스트(업데이트 → 받기 % → 진행 중인 작업이 없을 때 설치·재시작)
    │  └─ third-party-notices/  # 앱 정보: 상태 바에서 제3자 고지 대화상자 열기
    ├─ entities/                # 읽기·표시
    │  ├─ merge-plan/           # 병합 대상 문서·페이지 상태(merge-store), 진행 오버레이
    │  └─ comparison/           # 비교 결과 타입(바인딩 재수출)·선택자(필터·개수·쪽별 묶기·이동·안내 문구), 연결선 끝·모양(connector-ends, Rust connectors.rs의 거울), 하이라이트 상자·견본·배지
    └─ shared/                  # 도메인을 모른다
       ├─ api/bindings.ts       # tauri-specta 생성물 (손으로 고치지 않는다)
-      ├─ platform/             # DesktopPlatform 인터페이스, tauri·mock 구현
+      ├─ platform/             # DesktopPlatform 인터페이스, tauri·mock 구현, 진행 중인 작업 세기(running-work)
       ├─ lib/                  # 순수 함수, pdf.js 썸네일, 오류 보고(error-report: 경로 마스킹·전송)
       ├─ ui/                   # 공용 UI (토큰 클래스만)
       ├─ constants/

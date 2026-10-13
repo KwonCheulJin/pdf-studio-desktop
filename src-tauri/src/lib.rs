@@ -30,6 +30,8 @@ const CONVERTED_DIRECTORY: &str = "converted";
 pub fn run() {
     let specta = commands::specta_builder();
     tauri::Builder::default()
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         // 창 크기·위치·최대화만 기억한다. 표시 여부는 저장된 값이 아니라 창 설정(`visible`)을 따른다.
         .plugin(
             tauri_plugin_window_state::Builder::new()

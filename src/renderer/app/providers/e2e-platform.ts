@@ -21,10 +21,13 @@ import {
   type DesktopPlatform,
   type MockMergeOutput,
   type MockPdfFile,
+  type MockUpdate,
   type NativeFileDropEvent,
   type PickSavePathOptions,
-  type PlatformError
+  type PlatformError,
+  type PlatformErrorCode
 } from "@/renderer/shared/platform";
+import type { ValueOf } from "@/renderer/shared/types/common";
 
 /**
  * 브라우저 E2E(Playwright)용 가짜 플랫폼.
@@ -43,6 +46,10 @@ export interface E2eMockFailures {
   openFiles?: Record<string, ErrorCode>;
   /** 있으면 `copyFile`이 이 코드로 실패한다. */
   copyFile?: ErrorCode;
+  /** 있으면 `checkForUpdate`가 이 코드로 실패한다(업데이터 플러그인 실패는 `IPC_FAILED`). */
+  checkForUpdate?: PlatformErrorCode;
+  /** 있으면 업데이트 `download`가 진행률을 보낸 뒤 이 코드로 실패한다. */
+  downloadUpdate?: PlatformErrorCode;
 }
 
 /** `mergePdfs` 한 번의 흉내. 진행률을 차례로 보낸 뒤 `failCode`가 있으면 그 코드로 실패한다. */
@@ -83,6 +90,8 @@ export interface E2eMockSeed {
   thirdPartyNotices?: string;
   /** 폴더 다이얼로그를 열 때마다 앞에서부터 하나씩 고를 폴더(`null`은 취소). 다 쓰면 `/mock/exports` */
   directoryPicks?: (string | null)[];
+  /** 있으면 `checkForUpdate`가 이 새 버전을 알린다. 없으면 최신 버전일 때처럼 알리지 않는다. */
+  update?: MockUpdate;
 }
 
 /** 작업 취소를 Rust처럼 알리는 코드 */
@@ -126,6 +135,15 @@ interface ExportAnnotatedPdfCall {
   method: typeof E2E_WRITE_METHOD.EXPORT_ANNOTATED_PDF;
   request: ExportAnnotatedPdfRequest;
 }
+
+/** 업데이트 호출(확인·받기·설치와 재시작) */
+export const E2E_UPDATE_METHOD = {
+  CHECK: "checkForUpdate",
+  DOWNLOAD: "download",
+  INSTALL_AND_RESTART: "installAndRestart"
+} as const;
+
+export type E2eUpdateCall = ValueOf<typeof E2E_UPDATE_METHOD>;
 
 export type E2eWriteCall =
   | MergePdfsCall
@@ -188,6 +206,15 @@ declare global {
      * 붙잡힌 동안 같은 작업 ID로 `cancelJob`이 오면 바로 `CANCELLED`로 실패한다.
      */
     __E2E_HOLD_EXPORT__?: Promise<void>;
+    /** 앱이 부른 업데이트 호출을 부른 순서대로 기록하는 곳 */
+    __E2E_MOCK_UPDATES__?: E2eUpdateCall[];
+    /**
+     * 테스트가 넣으면 업데이트 `download`가 진행률을 보낸 뒤 이 Promise가 풀릴 때까지 끝나지 않는다
+     * (받는 중 화면 확인용).
+     */
+    __E2E_HOLD_UPDATE_DOWNLOAD__?: Promise<void>;
+    /** `__E2E_HOLD_UPDATE_DOWNLOAD__`를 푸는 함수. 테스트가 함께 넣는다. */
+    __E2E_RELEASE_UPDATE_DOWNLOAD__?: () => void;
   }
 }
 
@@ -455,6 +482,55 @@ function recordSaveDialogs({
   };
 }
 
+interface SeedUpdatesParams {
+  platform: DesktopPlatform;
+  failures: E2eMockFailures;
+  calls: E2eUpdateCall[];
+}
+
+/**
+ * 업데이트 호출을 위임 전에 기록하고 시드대로 실패시킨다. 받기는 진행률을 보낸 뒤
+ * `__E2E_HOLD_UPDATE_DOWNLOAD__`를 기다린다.
+ */
+function seedUpdates({
+  platform,
+  failures,
+  calls
+}: SeedUpdatesParams): DesktopPlatform {
+  return {
+    ...platform,
+    checkForUpdate: async () => {
+      calls.push(E2E_UPDATE_METHOD.CHECK);
+      if (failures.checkForUpdate !== undefined) {
+        throw seededError({
+          code: failures.checkForUpdate,
+          detail: E2E_UPDATE_METHOD.CHECK
+        });
+      }
+      const update = await platform.checkForUpdate();
+      if (update === null) return null;
+      return {
+        version: update.version,
+        download: async (onProgress) => {
+          calls.push(E2E_UPDATE_METHOD.DOWNLOAD);
+          await update.download(onProgress);
+          await window.__E2E_HOLD_UPDATE_DOWNLOAD__;
+          if (failures.downloadUpdate !== undefined) {
+            throw seededError({
+              code: failures.downloadUpdate,
+              detail: E2E_UPDATE_METHOD.DOWNLOAD
+            });
+          }
+        },
+        installAndRestart: async () => {
+          calls.push(E2E_UPDATE_METHOD.INSTALL_AND_RESTART);
+          await update.installAndRestart();
+        }
+      };
+    }
+  };
+}
+
 /** 설정을 페이지 저장소에 두는 키 앞부분. 새로고침해도 남아 재시작처럼 확인할 수 있다. */
 const SETTING_STORAGE_PREFIX = "e2e-setting:";
 
@@ -489,7 +565,9 @@ export function createE2ePlatform(): DesktopPlatform {
   const saveDialogs: PickSavePathOptions[] = [];
   const compares: CompareRequest[] = [];
   const previews: PreviewCompareReportRequest[] = [];
+  const updateCalls: E2eUpdateCall[] = [];
   window.__E2E_MOCK_WRITES__ = writes;
+  window.__E2E_MOCK_UPDATES__ = updateCalls;
   window.__E2E_MOCK_PREVIEWS__ = previews;
   window.__E2E_MOCK_COMPARES__ = compares;
   window.__E2E_MOCK_READS__ = reads;
@@ -500,7 +578,8 @@ export function createE2ePlatform(): DesktopPlatform {
     dialogPicks: seed.dialogPicks,
     mergeOutput: seed.mergeOutput,
     thirdPartyNotices: seed.thirdPartyNotices,
-    directoryPicks: seed.directoryPicks
+    directoryPicks: seed.directoryPicks,
+    update: seed.update
   });
   window.__E2E_FILE_DROP__ = mockPlatform.simulateFileDrop;
   const seededPlatform = injectFailures({
@@ -510,18 +589,22 @@ export function createE2ePlatform(): DesktopPlatform {
     compareScripts: [...(seed.compareScripts ?? [])]
   });
   return persistSettings(
-    recordSaveDialogs({
-      platform: recordPreviews({
-        platform: recordCompares({
-          platform: recordReads({
-            platform: recordWrites(seededPlatform, writes),
-            reads
+    seedUpdates({
+      platform: recordSaveDialogs({
+        platform: recordPreviews({
+          platform: recordCompares({
+            platform: recordReads({
+              platform: recordWrites(seededPlatform, writes),
+              reads
+            }),
+            compares
           }),
-          compares
+          previews
         }),
-        previews
+        saveDialogs
       }),
-      saveDialogs
+      failures: seed.failures ?? {},
+      calls: updateCalls
     })
   );
 }

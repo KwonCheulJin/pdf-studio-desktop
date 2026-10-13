@@ -2,6 +2,7 @@ export {
   FILE_DROP_EVENT_TYPE,
   LOG_LEVEL,
   MERGE_OUTPUT_KIND,
+  type AppUpdate,
   type ClientPoint,
   type ComparePdfsParams,
   type CompareProgressHandler,
@@ -18,9 +19,12 @@ export {
   type PickSavePathOptions,
   type SetSettingParams,
   type SettingValue,
-  type Unsubscribe
+  type Unsubscribe,
+  type UpdateDownloadProgress,
+  type UpdateDownloadProgressHandler
 } from "./desktop-platform";
 export { getPlatform, setPlatform } from "./current-platform";
+export { hasRunningWork, trackRunningWork } from "./running-work";
 export {
   PLATFORM_ERROR_CODE,
   type PlatformErrorCode,
@@ -33,6 +37,7 @@ export {
   type MockMergeOutput,
   type MockPdfFile,
   type MockPlatform,
-  type MockPlatformOptions
+  type MockPlatformOptions,
+  type MockUpdate
 } from "./mock-platform";
 export type { NativeFileDropEvent } from "./native-file-drop";

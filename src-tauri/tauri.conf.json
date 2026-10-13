@@ -53,5 +53,14 @@
       "signingIdentity": "-",
       "entitlements": "./Entitlements.plist"
     }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDU5Q0VFOUE4NTUyM0U1NEUKUldSTzVTTlZxT25PV2I4enBqcWdZSFMvS01SV0lxemh1VE81WDdYMXNBQ3V0WWRIc1pPM0drMHUK",
+      "endpoints": [
+        "https://github.com/KwonCheulJin/pdf-studio-desktop/releases/latest/download/latest.json"
+      ],
+      "requireSignedVersion": true
+    }
   }
 }

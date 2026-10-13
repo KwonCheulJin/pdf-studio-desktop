@@ -944,7 +944,7 @@ Step 28(PR #47)은 행(페이지 쌍) 안에서 `Replace`만 잇고 가까운 �
 정한 것(Step 31, 2026-10-13):
 - `pnpm release:patch|minor|major`(`scripts/release.mjs`)는 `main`·깨끗한 작업 트리에서만 돈다. `pnpm version <단계> --no-git-tag-version`으로 `package.json`을 올리고(앱 버전의 단일 소스) `chore: release v<버전>` 커밋과 annotated 태그 `v<버전>`을 만든 뒤 멈춘다. **푸시는 사용자가 한다**(`git push origin main --follow-tags`. `--follow-tags`가 annotated 태그만 올리므로 `-a`로 만든다). 이전 스크립트는 경량 태그라 태그가 올라가지 않았다.
 - `.github/workflows/release.yml`: `v*` 태그 푸시와 `workflow_dispatch`(입력 없음)로 돈다. 매트릭스는 `macos-latest`(aarch64, `--bundles app,dmg`)와 `windows-latest`(`--bundles nsis`, `pdfium.dll`·`onnxruntime.dll`은 ci.yml과 같은 `--config` 파일). 설치·캐시·`fetch:pdfium`·`fetch:ocr`·`NODE_AUTH_TOKEN`은 ci.yml과 같고, lint·테스트는 CI 몫이라 돌지 않는다.
-- `tauri-apps/tauri-action`은 v1.0.0 커밋 SHA로 고정한다. 태그 푸시면 그 태그의 Draft Release(`releaseDraft: true`)를 만들거나 찾아 올리고, `workflow_dispatch`면 `tagName`이 비어 릴리스를 건너뛰고 `uploadWorkflowArtifacts`로 워크플로 아티팩트만 올린다. 자동 업데이트(P4-4)가 없으므로 `uploadUpdaterJson: false`.
+- `tauri-apps/tauri-action`은 v1.0.0 커밋 SHA로 고정한다. 태그 푸시면 그 태그의 Draft Release(`releaseDraft: true`)를 만들거나 찾아 올리고, `workflow_dispatch`면 `tagName`이 비어 릴리스를 건너뛰고 `uploadWorkflowArtifacts`로 워크플로 아티팩트만 올린다. 처음에는 `uploadUpdaterJson: false`였고 Step 33(P4-4)에서 `true`로 바꿨다.
 - 태그 푸시면 먼저 태그와 `package.json` 버전이 같은지 보고 다르면 실패한다.
 - macOS 잡은 빌드 뒤 `node scripts/verify-macos-signature.mjs`로 서명을 검사한다(P4-3). tauri-action은 빌드와 업로드가 한 단계라 태그 빌드에서는 이 검사가 업로드 뒤에 돈다. 실패하면 Draft를 공개하지 않고 지운다.
 
@@ -964,6 +964,17 @@ Step 28(PR #47)은 행(페이지 쌍) 안에서 `Replace`만 잇고 가까운 �
 
 ### P4-4 (선택) 자동 업데이트
 - `pnpm tauri add updater`로 플러그인을 넣고, 서명 키는 `pnpm tauri signer generate -w ~/.tauri/pdfstudio.key`로 만든다(개인 키는 레포에 넣지 않고 GitHub 시크릿 `TAURI_SIGNING_PRIVATE_KEY`로만 둔다). tauri-action이 GitHub Releases에 `latest.json`을 생성한다.
+
+정한 것(Step 33, 2026-10-13):
+- 플러그인: `pnpm tauri add updater`, `pnpm tauri add process`(재시작). 권한은 데스크톱 전용 capability `src-tauri/capabilities/desktop.json`(main 창)에 `updater:allow-check`·`allow-download`·`allow-install`과 `process:allow-restart`만 둔다(`updater:default`의 `allow-download-and-install`, `process:allow-exit`는 쓰지 않는다).
+- updater는 `default-features = false, features = ["native-tls", "zip", "system-proxy"]`(`cargo add`)로 쓴다. 기본 `rustls-tls`는 reqwest를 거쳐 `webpki-root-certs`(CDLA-Permissive-2.0, §1.2 허용 목록 밖)를 끌어온다. OS TLS(macOS Security.framework, Windows SChannel)로 바꿔 §1.2 예외를 늘리지 않았다.
+- 서명 키: `~/.tauri/pdfstudio.key`(+ `.pub`). 비밀번호는 무작위로 만들어 로컬 `~/.secrets/tauri-pdfstudio.env`(권한 600)에만 둔다. 리포 시크릿 `TAURI_SIGNING_PRIVATE_KEY`(키 파일 내용)·`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`에 등록했다. 공개 키만 `tauri.conf.json > plugins.updater.pubkey`에 있다. 키를 잃으면 이미 설치된 앱은 새 키로 서명한 업데이트를 받지 못한다(새 버전을 직접 설치해야 한다) — 두 파일을 따로 백업한다.
+- `plugins.updater`: `endpoints`는 `https://github.com/KwonCheulJin/pdf-studio-desktop/releases/latest/download/latest.json` 하나, `requireSignedVersion: true`(키트가 넣은 값. 서명의 trusted comment에 적힌 버전이 `latest.json`의 버전과 다르면 거부해, 옛 릴리스 파일·서명을 높은 버전 번호로 속여 되돌리는 공격을 막는다. CLI 2.12.2가 업데이트 파일을 서명할 때 버전을 적는 것을 로컬 빌드의 `.app.tar.gz.sig`로 확인했다).
+- 업데이트 파일: `bundle.createUpdaterArtifacts: true`는 release.yml이 OS마다 쓰는 `target/release-bundle.conf.json`(`--config`)에만 둔다. `tauri.conf.json`에 두면 서명 키가 없는 로컬·ci.yml 빌드가 실패한다. tauri-action은 `args`의 `--config` 파일을 읽어 서명 파일 이름(`.app.tar.gz.sig`, `-setup.exe.sig`)을 안다. release.yml은 두 시크릿을 tauri-action `env`로 넘기고 `uploadUpdaterJson: true`로 태그 빌드의 Draft에 `latest.json`을 올린다. Draft를 공개해야 `releases/latest`가 그 릴리스를 가리킨다.
+- 앱 흐름(`features/app-update`): 첫 화면이 붙은 뒤(`AppToaster`) 한 번 `DesktopPlatform.checkForUpdate()`. 실패는 경고 로그만 남기고 화면에 보이지 않는다. 새 버전이 있으면 닫힐 때까지 남는 토스트("새 버전이 나왔어요", 버전과 "앱이 다시 시작되고 열어 둔 파일과 결과는 닫혀요")와 '업데이트' 행동. 누르면 같은 토스트가 받는 중 %(정수 내림, 받기가 끝나기 전에는 99까지)로 바뀌고, 다 받으면 진행 중인 작업이 없을 때만 설치·재시작한다(macOS: 앱 교체 후 `relaunch`, Windows: NSIS 설치 프로그램이 앱을 끝내고 다시 띄운다). 진행 중인 작업이 있으면 "작업이 끝나면 다시 시작해 주세요"와 '다시 시작' 행동으로 바꾸고, 누를 때 다시 확인한다. 받기·설치 실패는 토스트로 알리고(받기는 '다시 시도') 로그를 남긴다.
+- 진행 중인 작업: 플랫폼을 주입할 때 `trackRunningWork`가 `mergePdfs`·`comparePdfs`·`exportComparePdf`·`exportAnnotatedPdf`·`copyFile` 호출이 끝날 때까지 센다(`hasRunningWork`). 기능 슬라이스마다 실행 상태를 모으지 않아도 선택 병합·저장까지 함께 막는다.
+- 재시작은 `process` 플러그인의 `relaunch`(Rust `request_restart`)라 종료 이벤트(`RunEvent::Exit`)가 돌아 병합 임시 세션 폴더를 지운다.
+- 확인: E2E(`e2e/app-update.spec.ts`, mock). 실제 업데이트(서명 확인·설치·재시작)는 이 기능이 들어간 릴리스 다음 릴리스에서 사용자가 확인한다.
 
 ### P4-5 라이선스와 고지 (S, L1)
 - 루트에 `LICENSE`(MIT) 파일을 둔다.

@@ -257,6 +257,7 @@ export function CompareViewer({ completed }: CompareViewerProps) {
                 virtuosoRef={handles[side]}
                 onScroller={handleScroller}
                 renderRow={renderRows[side]}
+                hideScrollbar={isSplit && side === COMPARE_SIDE.BEFORE}
               />
             </Fragment>
           ))}

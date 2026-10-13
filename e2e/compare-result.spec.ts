@@ -517,6 +517,46 @@ test("보기 방식 A만·B만은 반대편과 거터를 숨기고, 확대·축�
     .toBeCloseTo(fitWidth, 0);
 });
 
+/** 패널 스크롤 컨테이너(Virtuoso) */
+function paneScroller(page: Page, badge: string): Locator {
+  return pane(page, badge).locator("[data-virtuoso-scroller]");
+}
+
+async function scrollbarWidthOf(scroller: Locator): Promise<string> {
+  return scroller.evaluate((element) => getComputedStyle(element).scrollbarWidth);
+}
+
+test("나란히 보기는 A 패널 스크롤바를 숨기고 B 것만 남기며, A는 휠로 스크롤되고 A만 보기는 스크롤바를 보인다", async ({
+  page
+}) => {
+  await openResult(page, {
+    files: [DIFF_BASE, DIFF_EDIT],
+    result: diffResult()
+  });
+  const scrollerA = paneScroller(page, "A");
+  const scrollerB = paneScroller(page, "B");
+  await expect(pageImage(page, "A 1쪽")).toBeVisible();
+  expect(await scrollbarWidthOf(scrollerA)).toBe("none");
+  expect(await scrollbarWidthOf(scrollerB)).not.toBe("none");
+
+  // 스크롤바만 숨겼다: 동기 스크롤을 끄고 A 위에서 휠을 굴리면 A만 움직인다.
+  await page.getByRole("checkbox", { name: "동기 스크롤" }).uncheck();
+  const box = await scrollerA.boundingBox();
+  if (!box) {
+    throw new Error("A 패널이 화면에 없습니다.");
+  }
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.wheel(0, 300);
+  await expect
+    .poll(() => scrollerA.evaluate((element) => element.scrollTop))
+    .toBeGreaterThan(0);
+
+  const viewMode = page.getByRole("group", { name: "보기 방식" });
+  await viewMode.getByRole("button", { name: "A만" }).click();
+  await expect(pageImage(page, "A 1쪽")).toBeVisible();
+  expect(await scrollbarWidthOf(paneScroller(page, "A"))).not.toBe("none");
+});
+
 const PAGES_INSERT_PAIRS = readGolden<CompareResult["pagePairs"]>(
   "pages-insert.page-pairs.json"
 );

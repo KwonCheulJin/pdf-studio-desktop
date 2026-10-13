@@ -11,3 +11,11 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/* 스크롤은 되지만 스크롤바는 보이지 않는다(비교 나란히 보기의 A 패널). */
+.scrollbar-hidden {
+  scrollbar-width: none;
+}
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+}

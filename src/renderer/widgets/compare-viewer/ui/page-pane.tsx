@@ -39,6 +39,13 @@ const VIRTUOSO_COMPONENTS = { ScrollSeekPlaceholder: RowSeekPlaceholder };
  */
 const SCROLLER_STYLE = { height: "100%", scrollbarGutter: "stable" } as const;
 
+/** 스크롤바를 숨기는 클래스(`app/styles/base.css`). 거터 자리는 인라인 스타일이 비운다(인라인이 클래스를 이긴다). */
+const SCROLLBAR_HIDDEN_CLASS = "scrollbar-hidden";
+const HIDDEN_SCROLLER_STYLE = {
+  height: "100%",
+  scrollbarGutter: "auto"
+} as const;
+
 /** 패널 스크롤 컨테이너의 변화. 배율을 바꿔 패널을 새로 만들 때 새 요소가 옛 요소의 정리보다 먼저 올 수 있어 사라진 요소를 함께 알린다. */
 export interface ScrollerChange {
   side: Side;
@@ -55,6 +62,8 @@ interface PagePaneProps {
   /** 스크롤 컨테이너가 생기면 그 요소, 사라지면 `null`과 사라진 요소를 알린다. */
   onScroller: (change: ScrollerChange) => void;
   renderRow: (index: number, row: ViewerRow) => ReactNode;
+  /** 세로 스크롤바를 숨긴다(휠·키보드·동기 스크롤로는 그대로 스크롤된다). 나란히 보기에서 B 패널 스크롤바만 남긴다. */
+  hideScrollbar?: boolean;
 }
 
 /**
@@ -68,7 +77,8 @@ export function PagePane({
   rows,
   virtuosoRef,
   onScroller,
-  renderRow
+  renderRow,
+  hideScrollbar = false
 }: PagePaneProps) {
   const [initialIndex] = useState(() =>
     Math.min(
@@ -107,7 +117,8 @@ export function PagePane({
         scrollerRef={handleScrollerRef}
         components={VIRTUOSO_COMPONENTS}
         itemContent={renderRow}
-        style={SCROLLER_STYLE}
+        className={hideScrollbar ? SCROLLBAR_HIDDEN_CLASS : undefined}
+        style={hideScrollbar ? HIDDEN_SCROLLER_STYLE : SCROLLER_STYLE}
       />
     </div>
   );

@@ -1,7 +1,7 @@
 {
   "name": "pdf-studio-desktop",
   "productName": "pdf-studio-desktop",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "PDF 병합·편집·TIFF 변환 데스크톱 앱 (Tauri v2)",
   "scripts": {
     "lint": "eslint src",

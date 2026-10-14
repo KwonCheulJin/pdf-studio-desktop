@@ -4,6 +4,7 @@ import { useAddDroppedFiles, useAddFiles } from "@/renderer/features/pdf-merge";
 import { useCompareIntake } from "@/renderer/features/pdf-compare";
 import { useTranslateIntake } from "@/renderer/features/pdf-translate";
 import { HOME_CARD } from "../config/home-card";
+import { HOME_LAYOUT, HOME_TEST_ID } from "../config/home-layout";
 import {
   useCardFileDrop,
   type CardFileDrop
@@ -86,8 +87,15 @@ export function HomePage({
   });
 
   return (
-    <div className="bg-canvas flex flex-1 justify-center overflow-auto px-6 py-12 text-sm/5.25">
-      <div className="flex w-full max-w-240 flex-col gap-8">
+    <div
+      data-testid={HOME_TEST_ID.PAGE}
+      className="bg-canvas flex flex-1 overflow-auto px-6 py-12 text-sm/5.25"
+    >
+      {/* m-auto: 남는 공간의 가로·세로 가운데. 넘치면 위에서부터 스크롤(잘림 없음). */}
+      <div
+        data-testid={HOME_TEST_ID.CONTENT}
+        className={`m-auto flex w-full flex-col gap-8 ${HOME_LAYOUT.CONTENT_WIDTH}`}
+      >
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-semibold">어떤 작업을 할까요?</h1>
           <p className="text-muted-foreground">

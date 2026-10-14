@@ -13,7 +13,7 @@ const EMPTY_ICON_SIZE = 20;
  * 패딩 32px·테두리 2px가 더해져 202px로 그려진다. 앱은 border-box라 그 높이(202px)를 그대로 쓴다.
  */
 const SLOT_BODY_CLASS =
-  "flex min-h-50.5 w-full flex-col items-center justify-center gap-2 rounded-lg border p-4 text-center transition-colors";
+  "flex min-h-50.5 w-full flex-1 flex-col items-center justify-center gap-2 rounded-lg border p-4 text-center transition-colors";
 /** 끌어온 파일이 슬롯 위에 있을 때의 테두리·바탕. 평상시 테두리·바탕과 함께 붙이지 않는다. */
 const DROP_TARGET_SURFACE_CLASS = "border-primary bg-accent";
 const FILLED_SURFACE_CLASS = "border-border bg-card-inset";

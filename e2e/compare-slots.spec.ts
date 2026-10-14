@@ -26,6 +26,15 @@ const VIEWPORT = { width: 1280, height: 800 };
 
 test.use({ viewport: VIEWPORT, deviceScaleFactor: DEVICE_PIXEL_RATIO });
 
+/** 큰 창(드롭존이 남는 높이를 채우는지 볼 때) */
+const TALL_VIEWPORT = { width: 1280, height: 1100 };
+/** 슬롯 몸통의 기본 최소 높이(`min-h-50.5` = 202px) */
+const SLOT_MIN_HEIGHT_PX = 202;
+/** 레이아웃 반올림 허용 오차 */
+const LAYOUT_TOLERANCE_PX = 2;
+/** 옵션 화면 아래 여백(`py-5` = 20px) */
+const BOTTOM_PADDING_PX = 20;
+
 const A4_PAGE: PageInfo = {
   widthPt: 595,
   heightPt: 842,
@@ -407,4 +416,30 @@ test("PDF가 아닌 파일·열 수 없는 파일·3개 이상은 알리고 슬�
   await dropOn(page, slot(page, AFTER), [FILE_TIFF.path, FILE_V3.path]);
   await expect(slot(page, AFTER)).toContainText(FILE_V3.displayName);
   await expect(slot(page, BEFORE)).toContainText(FILE_V1.displayName);
+});
+
+test("빈 슬롯이면 옵션 카드가 열 바닥에 붙고 A·B 드롭존이 같은 높이로 남는 높이를 채운다", async ({
+  page
+}) => {
+  await page.setViewportSize(TALL_VIEWPORT);
+  await openEmptyCompare(page, []);
+
+  const card = page.getByRole("region", { name: "실행 전 옵션" });
+  const column = card.locator("xpath=..");
+  const cardBox = await card.boundingBox();
+  const columnBox = await column.boundingBox();
+  const beforeBox = await emptySlotButton(page, BEFORE).boundingBox();
+  const afterBox = await emptySlotButton(page, AFTER).boundingBox();
+  if (!cardBox || !columnBox || !beforeBox || !afterBox) {
+    throw new Error("상자를 잴 수 없다");
+  }
+
+  const columnBottom = columnBox.y + columnBox.height - BOTTOM_PADDING_PX;
+  expect(
+    Math.abs(cardBox.y + cardBox.height - columnBottom)
+  ).toBeLessThanOrEqual(LAYOUT_TOLERANCE_PX);
+  expect(beforeBox.height).toBeGreaterThan(SLOT_MIN_HEIGHT_PX);
+  expect(Math.abs(beforeBox.height - afterBox.height)).toBeLessThanOrEqual(
+    LAYOUT_TOLERANCE_PX
+  );
 });

@@ -1,6 +1,5 @@
 import { useRef } from "react";
 import { ArrowLeftRight } from "lucide-react";
-import { cn } from "@/renderer/shared/lib/utils";
 import { COMPARE_SLOT } from "../config/compare-files";
 import {
   useCompareSessionStore,
@@ -16,6 +15,7 @@ const SWAP_ICON_SIZE = 18;
  * 비교할 두 문서(시안 3 위쪽): A(이전) 슬롯 · 맞바꾸기 · B(이후) 슬롯.
  * 슬롯을 누르면 열기 다이얼로그, 창 밖에서 끌어온 파일은 놓은 슬롯에 들어간다.
  * 슬롯 밖에 놓으면 빈 슬롯을 A → B 순서로 채운다(`planSlotPlacement`).
+ * 파일 상태와 관계없이 남는 높이를 채우고, 옵션 카드는 그 아래 바닥에 붙는다.
  */
 export function FileSlots() {
   const beforeRef = useRef<HTMLDivElement>(null);
@@ -33,16 +33,10 @@ export function FileSlots() {
     onDrop: (drop) => void placeCompareFiles(drop)
   });
 
-  /** 드롭존이 하나라도 남아 있으면 남는 높이를 채운다. 둘 다 채우면 파일 카드는 제 높이로 위에 쌓는다. */
-  const isFillingHeight = !before || !after;
-
   return (
     <section
       aria-label="비교할 문서"
-      className={cn(
-        "bg-card border-border flex gap-4 rounded-xl border px-6 py-5",
-        isFillingHeight && "flex-1"
-      )}
+      className="bg-card border-border flex flex-1 gap-4 rounded-xl border px-6 py-5"
     >
       <FileSlot
         ref={beforeRef}

@@ -195,6 +195,7 @@ test("회전·삭제·병합·저장 후에도 원본에 쓰기를 요청하지 
   await page.goto("/");
 
   // 파일 2개 추가 → 둘 다 펼쳐서 페이지 카드로
+  await page.getByRole("button", { name: "PDF 병합", exact: true }).click();
   await page.getByRole("button", { name: "파일 선택", exact: true }).click();
   const documentCards = page.getByTestId("document-card");
   await expect(documentCards).toHaveCount(SEED_FILES.length);

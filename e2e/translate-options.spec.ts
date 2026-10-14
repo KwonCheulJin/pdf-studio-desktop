@@ -175,9 +175,9 @@ async function openTranslate(
 ): Promise<void> {
   await openHome(page, params);
   await page
-    .getByRole("region", { name: "PDF 번역", exact: true })
-    .getByRole("button", { name: "번역할 파일 선택" })
+    .getByRole("button", { name: "PDF 번역", exact: true })
     .click();
+  await page.getByRole("button", { name: /^PDF 고르기/ }).click();
   await expect(page.getByRole("heading", { name: "새 번역" })).toBeVisible();
 }
 
@@ -530,6 +530,7 @@ test("막힘 이유는 파일 → 범위 → 언어 → 번역할 것 → 키 �
       ]
     }
   });
+  await page.getByRole("button", { name: "PDF 병합", exact: true }).click();
   await page.getByRole("button", { name: "파일 선택", exact: true }).click();
   await page
     .getByRole("tablist", { name: "작업 모드" })

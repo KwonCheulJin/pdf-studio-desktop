@@ -54,7 +54,7 @@ async function openHome(page: Page, files: E2eMockFile[]): Promise<void> {
 }
 
 function homeCard(page: Page, title: string): Locator {
-  return page.getByRole("region", { name: title, exact: true });
+  return page.getByRole("button", { name: title, exact: true });
 }
 
 function modeTab(page: Page, label: string): Locator {
@@ -147,25 +147,12 @@ test("첫 화면은 홈이고 병합·비교·번역 카드 세 장이 있다", 
   await expect(
     page.getByRole("heading", { name: "어떤 작업을 할까요?" })
   ).toBeVisible();
-  await expect(page.getByRole("main").getByRole("region")).toHaveCount(3);
-  await expect(
-    homeCard(page, "PDF 병합").getByRole("button", {
-      name: "파일 선택",
-      exact: true
-    })
-  ).toBeVisible();
-  await expect(
-    homeCard(page, "PDF 비교").getByRole("button", {
-      name: "두 파일 선택",
-      exact: true
-    })
-  ).toBeVisible();
-  await expect(
-    homeCard(page, "PDF 번역").getByRole("button", {
-      name: "번역할 파일 선택",
-      exact: true
-    })
-  ).toBeVisible();
+  await expect(page.getByRole("main").getByRole("button")).toHaveCount(3);
+  // 카드 안에는 파일을 고르는 버튼이 없다(누르면 대화상자 없이 그 작업 화면으로 간다).
+  await expect(page.getByRole("button", { name: "파일 선택" })).toHaveCount(0);
+  await expect(page.getByText("PDF, TIFF · 여러 개")).toBeVisible();
+  await expect(page.getByText("PDF · 이전과 이후 2개")).toBeVisible();
+  await expect(page.getByText("PDF 1개 · 인터넷 연결 필요")).toBeVisible();
   await expect(
     page.getByText(
       "원본 파일은 바뀌지 않아요. 결과는 저장할 곳을 골라 새 파일로 만들어요."
@@ -175,32 +162,57 @@ test("첫 화면은 홈이고 병합·비교·번역 카드 세 장이 있다", 
   await expect(page.getByRole("tablist")).toHaveCount(0);
 });
 
-test("병합 카드 버튼으로 파일을 고르면 병합 모드로 들어가고 툴바에 병합 탭이 골라져 있다", async ({
+test("병합 카드를 누르면 파일 선택 없이 빈 병합 화면으로 가고, 거기서 고르면 파일이 들어간다", async ({
   page
 }) => {
   await openHome(page, [FILE_A, FILE_B]);
 
-  await homeCard(page, "PDF 병합")
-    .getByRole("button", { name: "파일 선택", exact: true })
-    .click();
+  await homeCard(page, "PDF 병합").click();
 
-  await expect(documentCards(page)).toHaveCount(2);
+  // 시드 파일이 이미 열려 있다면 대화상자가 불린 것이다.
   await expect(modeTab(page, "병합")).toHaveAttribute("aria-selected", "true");
   await expect(modeTab(page, "비교")).toHaveAttribute("aria-selected", "false");
+  await expect(
+    page.getByText("PDF 또는 TIFF 파일을 드래그 앤 드롭하세요")
+  ).toBeVisible();
+  await expect(documentCards(page)).toHaveCount(0);
+
+  await page.getByRole("button", { name: "파일 선택", exact: true }).click();
+  await expect(documentCards(page)).toHaveCount(2);
 });
 
-test("비교 카드 버튼으로 두 파일을 고르면 A·B에 넣고 비교 모드로 들어간다", async ({
+test("비교 카드를 누르면 파일 선택 없이 빈 비교 화면으로 간다", async ({
   page
 }) => {
   await openHome(page, [FILE_A, FILE_B]);
 
-  await homeCard(page, "PDF 비교")
-    .getByRole("button", { name: "두 파일 선택", exact: true })
-    .click();
+  await homeCard(page, "PDF 비교").click();
 
   await expect(page.getByRole("heading", { name: "새 비교" })).toBeVisible();
   await expect(modeTab(page, "비교")).toHaveAttribute("aria-selected", "true");
-  await expectCompareSlots(page, [FILE_A.displayName, FILE_B.displayName]);
+  await expect(
+    page.getByRole("button", { name: FILE_A.displayName })
+  ).toHaveCount(0);
+  await expect(page.getByText(FILE_A.displayName)).toHaveCount(0);
+});
+
+test("키보드로 카드에 포커스를 두고 Enter·Space를 누르면 해당 화면으로 간다", async ({
+  page
+}) => {
+  await openHome(page, [FILE_A]);
+
+  const mergeCard = homeCard(page, "PDF 병합");
+  await mergeCard.focus();
+  await expect(mergeCard).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(modeTab(page, "병합")).toHaveAttribute("aria-selected", "true");
+  await expect(documentCards(page)).toHaveCount(0);
+
+  await page.reload();
+  const compareCard = homeCard(page, "PDF 비교");
+  await compareCard.focus();
+  await page.keyboard.press("Space");
+  await expect(page.getByRole("heading", { name: "새 비교" })).toBeVisible();
 });
 
 test("비교 카드에는 2개까지 놓을 수 있고, 카드 밖이나 3개 이상이면 홈에 남는다", async ({
@@ -265,6 +277,7 @@ test("전체 삭제한 빈 병합 화면에도 모드 탭이 있고 놓은 파�
   page
 }) => {
   await openHome(page, [FILE_A]);
+  await page.getByRole("button", { name: "PDF 병합", exact: true }).click();
   await page.getByRole("button", { name: "파일 선택", exact: true }).click();
   await expect(documentCards(page)).toHaveCount(1);
 
@@ -287,6 +300,7 @@ test("병합 결과 미리보기에 임시 결과가 있으면 비교로 넘어�
   page
 }) => {
   await openHome(page, [FILE_A, FILE_B]);
+  await page.getByRole("button", { name: "PDF 병합", exact: true }).click();
   await page.getByRole("button", { name: "파일 선택", exact: true }).click();
   await expect(documentCards(page)).toHaveCount(2);
   await page.getByRole("button", { name: "병합", exact: true }).click();

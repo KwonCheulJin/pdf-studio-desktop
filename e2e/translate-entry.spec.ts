@@ -107,7 +107,7 @@ async function openHome(
 }
 
 function homeCard(page: Page, title: string): Locator {
-  return page.getByRole("region", { name: title, exact: true });
+  return page.getByRole("button", { name: title, exact: true });
 }
 
 function modeTab(page: Page, label: string): Locator {
@@ -197,11 +197,11 @@ async function openTranslateWith(
   await expect(translateHeading(page)).toBeVisible();
 }
 
-test("홈에 번역 카드가 세 번째로 있고 버튼으로 PDF를 고르면 번역 화면에 이름·크기·쪽수가 보인다", async ({
+test("홈에 번역 카드가 세 번째로 있고 누르면 빈 번역 화면에서 PDF를 골라 이름·크기·쪽수가 보인다", async ({
   page
 }) => {
   await openHome(page, { dialogPicks: [[FILE_SPEC.path]] });
-  const cards = page.getByRole("main").getByRole("region");
+  const cards = page.getByRole("main").getByRole("button");
   await expect(cards).toHaveCount(3);
   await expect(cards.nth(2)).toHaveAccessibleName("PDF 번역");
   const card = homeCard(page, "PDF 번역");
@@ -210,7 +210,8 @@ test("홈에 번역 카드가 세 번째로 있고 버튼으로 PDF를 고르면
   );
   await expect(card).toContainText("PDF 1개 · 인터넷 연결 필요");
 
-  await card.getByRole("button", { name: "번역할 파일 선택" }).click();
+  await card.click();
+  await page.getByRole("button", { name: /^PDF 고르기/ }).click();
 
   await expect(translateHeading(page)).toBeVisible();
   await expect(page.getByText("중국어·영어 PDF를 한국어로")).toBeVisible();
@@ -221,6 +222,21 @@ test("홈에 번역 카드가 세 번째로 있고 버튼으로 PDF를 고르면
   });
   await expect(statusBar(page)).toContainText("24쪽");
   await expect(statusBar(page)).toContainText("상태: 준비");
+});
+
+test("번역 카드를 누르면 파일 선택 없이 빈 번역 화면으로 간다", async ({
+  page
+}) => {
+  await openHome(page, { dialogPicks: [[FILE_SPEC.path]] });
+
+  await homeCard(page, "PDF 번역").click();
+
+  await expect(translateHeading(page)).toBeVisible();
+  await expect(modeTab(page, "번역")).toHaveAttribute("aria-selected", "true");
+  await expect(fileCard(page).getByText("교체")).toHaveCount(0);
+  await expect(
+    fileCard(page).getByRole("button", { name: /^PDF 고르기/ })
+  ).toBeVisible();
 });
 
 test("모드 탭은 병합·비교·번역 순서이고, 다른 탭을 고르면 번역 탭이 풀린다", async ({
@@ -285,19 +301,18 @@ test("번역 카드에는 PDF 1개만 놓을 수 있고, 카드 밖·2개 이상
   });
 });
 
-test("열기 다이얼로그에서 2개 이상 고르면 알리고 홈에 남는다", async ({
+test("번역 화면에서 열기 다이얼로그로 2개 이상 고르면 알리고 파일을 넣지 않는다", async ({
   page
 }) => {
   await openHome(page, { dialogPicks: [[FILE_SPEC.path, FILE_MANUAL.path]] });
 
-  await homeCard(page, "PDF 번역")
-    .getByRole("button", { name: "번역할 파일 선택" })
-    .click();
+  await homeCard(page, "PDF 번역").click();
+  await page.getByRole("button", { name: /^PDF 고르기/ }).click();
 
   await expect(
     toast(page, "번역할 파일은 1개까지 넣을 수 있어요.")
   ).toBeVisible();
-  await expect(page.getByRole("tablist")).toHaveCount(0);
+  await expect(fileCard(page).getByText("교체")).toHaveCount(0);
 });
 
 test("파일 없이 들어간 번역 화면은 빈 점선 영역이고, 누르거나 놓은 PDF가 들어가며 교체할 수 있다", async ({
@@ -307,9 +322,8 @@ test("파일 없이 들어간 번역 화면은 빈 점선 영역이고, 누르�
   await openHome(page, {
     dialogPicks: [[FILE_MANUAL.path], [FILE_SPEC.path], [FILE_MANUAL.path]]
   });
-  await homeCard(page, "PDF 병합")
-    .getByRole("button", { name: "파일 선택", exact: true })
-    .click();
+  await homeCard(page, "PDF 병합").click();
+  await page.getByRole("button", { name: "파일 선택", exact: true }).click();
   await modeTab(page, "번역").click();
 
   await expect(translateHeading(page)).toBeVisible();
@@ -352,9 +366,8 @@ test("파일 없는 번역 화면은 번역 옵션 카드를 열 아래에 붙�
 }) => {
   await page.setViewportSize(TALL_VIEWPORT);
   await openHome(page, { dialogPicks: [[FILE_MANUAL.path]] });
-  await homeCard(page, "PDF 병합")
-    .getByRole("button", { name: "파일 선택", exact: true })
-    .click();
+  await homeCard(page, "PDF 병합").click();
+  await page.getByRole("button", { name: "파일 선택", exact: true }).click();
   await modeTab(page, "번역").click();
   await expect(translateHeading(page)).toBeVisible();
 
@@ -414,9 +427,8 @@ test("병합 결과 미리보기에 임시 결과가 있으면 번역으로 넘�
   await openHome(page, {
     dialogPicks: [[FILE_SPEC.path, FILE_MANUAL.path]]
   });
-  await homeCard(page, "PDF 병합")
-    .getByRole("button", { name: "파일 선택", exact: true })
-    .click();
+  await homeCard(page, "PDF 병합").click();
+  await page.getByRole("button", { name: "파일 선택", exact: true }).click();
   await page.getByRole("button", { name: "병합", exact: true }).click();
   const downloadButton = page.getByRole("button", { name: "다운로드" });
   await expect(downloadButton).toBeVisible();

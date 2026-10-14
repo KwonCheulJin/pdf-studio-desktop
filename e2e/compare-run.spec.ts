@@ -215,7 +215,7 @@ async function openComparePair(
   seed: Omit<E2eMockSeed, "files"> = {}
 ): Promise<void> {
   await openHome(page, seed);
-  const card = page.getByRole("region", { name: "PDF 비교", exact: true });
+  const card = page.getByRole("button", { name: "PDF 비교", exact: true });
   const box = await card.boundingBox();
   if (!box) {
     throw new Error("홈 비교 카드가 화면에 없습니다.");
@@ -316,10 +316,8 @@ test("문서를 다 넣어야 실행할 수 있고, 바닥 줄이 빠진 문서�
   page
 }) => {
   await openHome(page, { dialogPicks: [[FILE_V3.path], [FILE_V1.path]] });
-  await page
-    .getByRole("region", { name: "PDF 병합", exact: true })
-    .getByRole("button", { name: "파일 선택", exact: true })
-    .click();
+  await page.getByRole("button", { name: "PDF 병합", exact: true }).click();
+  await page.getByRole("button", { name: "파일 선택", exact: true }).click();
   await modeTab(page, "비교").click();
 
   await expect(

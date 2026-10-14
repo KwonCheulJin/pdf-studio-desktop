@@ -76,8 +76,8 @@ export function TranslatePage({ onOpenTranslateSettings }: TranslatePageProps) {
         return <TranslationViewer />;
       default:
         return (
-          <div className="bg-canvas flex-1 overflow-auto px-6 py-5 text-sm/5.25">
-            <div className="grid grid-cols-[minmax(0,1fr)_minmax(280px,340px)] items-start gap-4">
+          <div className="bg-canvas flex flex-1 flex-col overflow-auto px-6 py-5 text-sm/5.25">
+            <div className="grid flex-1 grid-cols-[minmax(0,1fr)_minmax(280px,340px)] gap-4">
               <div className="flex min-w-0 flex-col gap-4">
                 <TranslateFileCard />
                 <TranslateOptionsCard
@@ -85,20 +85,22 @@ export function TranslatePage({ onOpenTranslateSettings }: TranslatePageProps) {
                   sharedGlossaryRows={sharedGlossaryRows}
                 />
               </div>
-              <TranslateRunSummaryCard
-                options={options}
-                planState={planState}
-                apiKeyStatus={apiKeyStatus}
-                apiKeyRow={
-                  <ApiKeyStatusRow
-                    status={apiKeyStatus}
-                    onOpenDialog={openApiKeyDialog}
-                  />
-                }
-                confirmExternalTransfer={confirmExternalTransfer}
-                onRequestApiKey={openApiKeyDialog}
-                onOpenTranslateSettings={onOpenTranslateSettings}
-              />
+              <div className="self-start">
+                <TranslateRunSummaryCard
+                  options={options}
+                  planState={planState}
+                  apiKeyStatus={apiKeyStatus}
+                  apiKeyRow={
+                    <ApiKeyStatusRow
+                      status={apiKeyStatus}
+                      onOpenDialog={openApiKeyDialog}
+                    />
+                  }
+                  confirmExternalTransfer={confirmExternalTransfer}
+                  onRequestApiKey={openApiKeyDialog}
+                  onOpenTranslateSettings={onOpenTranslateSettings}
+                />
+              </div>
             </div>
           </div>
         );

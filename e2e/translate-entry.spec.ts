@@ -23,6 +23,13 @@ const FIXTURE_BYTES = readFileSync(
 /** WebView2(Windows)처럼 물리 픽셀 좌표를 주는 환경. mock 드롭은 이 값으로 나눈다. */
 const DEVICE_PIXEL_RATIO = 2;
 const VIEWPORT = { width: 1280, height: 800 };
+/** 빈 번역 화면의 드롭존이 늘어나는지 보려고 쓰는 큰 창 */
+const TALL_VIEWPORT = { width: 1280, height: 1100 };
+/** 본문 아래 안쪽 여백(`py-5`)과 좌표 반올림을 받아들이는 오차(px) */
+const LAYOUT_TOLERANCE_PX = 2;
+const CONTENT_PADDING_BOTTOM_PX = 20;
+/** 드롭존의 기본 최소 높이(`min-h-32`) 위에 파일 카드 패딩·테두리가 더해진 값 아래로는 늘어나야 한다 */
+const DROPZONE_MIN_HEIGHT_PX = 128;
 
 test.use({ viewport: VIEWPORT, deviceScaleFactor: DEVICE_PIXEL_RATIO });
 
@@ -338,6 +345,38 @@ test("파일 없이 들어간 번역 화면은 빈 점선 영역이고, 누르�
     toast(page, "번역할 파일은 1개까지 넣을 수 있어요.")
   ).toBeVisible();
   await expect(fileCard(page)).toContainText(FILE_SPEC.displayName);
+});
+
+test("파일 없는 번역 화면은 번역 옵션 카드를 열 아래에 붙이고 남는 높이를 드롭존이 채운다", async ({
+  page
+}) => {
+  await page.setViewportSize(TALL_VIEWPORT);
+  await openHome(page, { dialogPicks: [[FILE_MANUAL.path]] });
+  await homeCard(page, "PDF 병합")
+    .getByRole("button", { name: "파일 선택", exact: true })
+    .click();
+  await modeTab(page, "번역").click();
+  await expect(translateHeading(page)).toBeVisible();
+
+  const options = page.getByRole("region", { name: "번역 옵션" });
+  const container = fileCard(page).locator(
+    "xpath=ancestor::div[contains(@class,'overflow-auto')][1]"
+  );
+  await expect(options).toBeVisible();
+  const optionsBox = await options.boundingBox();
+  const containerBox = await container.boundingBox();
+  const zoneBox = await fileCard(page)
+    .getByRole("button", { name: /^PDF 고르기/ })
+    .boundingBox();
+  if (!optionsBox || !containerBox || !zoneBox) {
+    throw new Error("상자를 잴 수 없어요");
+  }
+  const optionsBottom = optionsBox.y + optionsBox.height;
+  const containerBottom = containerBox.y + containerBox.height;
+  expect(
+    Math.abs(containerBottom - CONTENT_PADDING_BOTTOM_PX - optionsBottom)
+  ).toBeLessThanOrEqual(LAYOUT_TOLERANCE_PX);
+  expect(zoneBox.height).toBeGreaterThan(DROPZONE_MIN_HEIGHT_PX * 2);
 });
 
 test("모드를 오가도 번역 문서가 그대로이고 다시 읽지 않는다", async ({

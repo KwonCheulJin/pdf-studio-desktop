@@ -198,7 +198,7 @@ test.describe("열기·닫기", () => {
     await expect(dialog).toBeHidden();
 
     // 번역 화면 머리 톱니
-    await page.getByRole("button", { name: "번역할 파일 선택" }).click();
+    await page.getByRole("button", { name: "PDF 번역", exact: true }).click();
     await expect(page.getByRole("heading", { name: "새 번역" })).toBeVisible();
     await gearButton(page).click();
     await expect(dialog).toBeVisible();
@@ -325,6 +325,7 @@ test.describe("탭", () => {
     await page.reload();
     expect(await hasDarkClass(page)).toBe(true);
     // 병합 작업 공간 아래 도구 막대의 버튼이 같은 값을 보인다.
+    await page.getByRole("button", { name: "PDF 병합", exact: true }).click();
     await page.getByRole("button", { name: "파일 선택", exact: true }).click();
     await expect(page.getByTestId("document-card")).toHaveCount(1);
     await expect(

@@ -35,7 +35,7 @@ async function boxOf(locator: Locator) {
 }
 
 async function firstCardWidth(page: Page): Promise<number> {
-  return (await boxOf(page.getByRole("region").first())).width;
+  return (await boxOf(page.getByRole("button", { name: "PDF 병합", exact: true }))).width;
 }
 
 test("큰 창에서 홈 콘텐츠는 세로 가운데에 오고 카드가 기본 창보다 넓다", async ({

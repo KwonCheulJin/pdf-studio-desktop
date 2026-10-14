@@ -163,7 +163,7 @@ async function openResult(
     { initialSeed: seed, shouldHold: holdReadPdf }
   );
   await page.goto("/");
-  const card = page.getByRole("region", { name: "PDF 비교", exact: true });
+  const card = page.getByRole("button", { name: "PDF 비교", exact: true });
   const box = await card.boundingBox();
   if (!box) {
     throw new Error("홈 비교 카드가 화면에 없습니다.");

@@ -191,9 +191,9 @@ async function openResult(
   );
   await page.goto("/");
   await page
-    .getByRole("region", { name: "PDF 번역", exact: true })
-    .getByRole("button", { name: "번역할 파일 선택" })
+    .getByRole("button", { name: "PDF 번역", exact: true })
     .click();
+  await page.getByRole("button", { name: /^PDF 고르기/ }).click();
   const card = summaryCard(page);
   await card.getByRole("checkbox", { name: TEXT.CONSENT }).check();
   await card.getByRole("button", { name: "번역 시작", exact: true }).click();

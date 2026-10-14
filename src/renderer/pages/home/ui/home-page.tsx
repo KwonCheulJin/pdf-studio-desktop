@@ -1,6 +1,6 @@
 import { useCallback, useRef } from "react";
 import { Shield } from "lucide-react";
-import { useAddDroppedFiles, useAddFiles } from "@/renderer/features/pdf-merge";
+import { useAddDroppedFiles } from "@/renderer/features/pdf-merge";
 import { useCompareIntake } from "@/renderer/features/pdf-compare";
 import { useTranslateIntake } from "@/renderer/features/pdf-translate";
 import { HOME_CARD } from "../config/home-card";
@@ -17,17 +17,17 @@ import { TranslateIllustration } from "./translate-illustration";
 const NOTICE_ICON_SIZE = 14;
 
 interface HomePageProps {
-  /** 병합 작업 공간에 문서를 넣은 뒤 불린다. */
+  /** 병합 화면으로 간다(카드를 눌렀거나 문서를 넣은 뒤). */
   onEnterMerge: () => void;
-  /** 비교 세션에 문서를 넣은 뒤 불린다. */
+  /** 비교 화면으로 간다(카드를 눌렀거나 문서를 넣은 뒤). */
   onEnterCompare: () => void;
-  /** 번역할 문서를 넣은 뒤 불린다. */
+  /** 번역 화면으로 간다(카드를 눌렀거나 문서를 넣은 뒤). */
   onEnterTranslate: () => void;
 }
 
 /**
- * 첫 화면(시안 1): 작업 고르기 카드 3장. 카드의 버튼으로 파일을 고르거나 카드 위에 파일을 놓으면
- * 그 작업에 파일을 넣고 모드를 바꾼다. 고르기를 취소했거나 아무것도 넣지 못하면 홈에 남는다.
+ * 첫 화면(시안 1): 작업 고르기 카드 3장. 카드를 누르면 파일 없이 그 작업의 빈 화면으로 가고,
+ * 카드 위에 파일을 놓으면 그 파일을 넣고 간다. 아무것도 넣지 못하면 홈에 남는다.
  */
 export function HomePage({
   onEnterMerge,
@@ -37,22 +37,9 @@ export function HomePage({
   const mergeCardRef = useRef<HTMLElement>(null);
   const compareCardRef = useRef<HTMLElement>(null);
   const translateCardRef = useRef<HTMLElement>(null);
-  const { handleAddFiles } = useAddFiles();
   const addDroppedFiles = useAddDroppedFiles();
-  const { pickCompareFiles, placeCompareFiles } = useCompareIntake();
-  const { pickTranslateFile, placeTranslateFiles } = useTranslateIntake();
-
-  const handlePickMerge = useCallback(async () => {
-    if ((await handleAddFiles()) > 0) onEnterMerge();
-  }, [handleAddFiles, onEnterMerge]);
-
-  const handlePickCompare = useCallback(async () => {
-    if (await pickCompareFiles({ target: null })) onEnterCompare();
-  }, [pickCompareFiles, onEnterCompare]);
-
-  const handlePickTranslate = useCallback(async () => {
-    if (await pickTranslateFile()) onEnterTranslate();
-  }, [pickTranslateFile, onEnterTranslate]);
+  const { placeCompareFiles } = useCompareIntake();
+  const { placeTranslateFiles } = useTranslateIntake();
 
   const handleCardDrop = useCallback(
     async ({ card, paths }: CardFileDrop) => {
@@ -108,32 +95,28 @@ export function HomePage({
             ref={mergeCardRef}
             title="PDF 병합"
             description="여러 PDF와 TIFF를 한 파일로 합쳐요. 페이지 순서를 바꾸고, 돌리고, 뺄 수 있어요."
-            actionLabel="파일 선택"
             caption="PDF, TIFF · 여러 개"
             isDropTarget={activeCard === HOME_CARD.MERGE}
             illustration={<MergeIllustration />}
-            onAction={handlePickMerge}
+            onNavigate={onEnterMerge}
           />
           <TaskCard
             ref={compareCardRef}
             title="PDF 비교"
             description="두 PDF에서 달라진 글자를 찾아 나란히 보여 줘요. 추가, 삭제, 변경을 페이지 위에 표시해요."
-            actionLabel="두 파일 선택"
             caption="PDF · 이전과 이후 2개"
             isDropTarget={activeCard === HOME_CARD.COMPARE}
             illustration={<CompareIllustration />}
-            onAction={handlePickCompare}
+            onNavigate={onEnterCompare}
           />
           <TaskCard
             ref={translateCardRef}
             title="PDF 번역"
             description="중국어·영어 PDF를 한국어로 옮겨 원문과 나란히 보여 줘요. 내 Claude API 키로 실행해요."
-            actionLabel="파일 선택"
-            actionAriaLabel="번역할 파일 선택"
             caption="PDF 1개 · 인터넷 연결 필요"
             isDropTarget={activeCard === HOME_CARD.TRANSLATE}
             illustration={<TranslateIllustration />}
-            onAction={handlePickTranslate}
+            onNavigate={onEnterTranslate}
           />
         </div>
 

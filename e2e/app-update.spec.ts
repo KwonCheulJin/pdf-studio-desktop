@@ -198,6 +198,7 @@ test("병합 중이면 받은 뒤 재시작하지 않고, 병합이 끝난 뒤 '
     files: [seedFile("alpha.pdf"), seedFile("bravo.pdf")],
     update: HALF_RECEIVED_UPDATE
   });
+  await page.getByRole("button", { name: "PDF 병합", exact: true }).click();
   await page.getByRole("button", { name: "파일 선택", exact: true }).click();
   await expect(page.getByTestId("document-card")).toHaveCount(2);
   await page.evaluate(() => {
@@ -251,6 +252,7 @@ test("확인이 실패하면 알리지 않고 경고 로그만 남긴다", async
   );
   // 실패 처리 뒤에 띄운 토스트가 있었다면 다음 화면 갱신까지는 그려진다. 파일을 열어 갱신을 기다린 뒤
   // 한 번만 센다(`toHaveCount(0)`은 저절로 닫히는 토스트가 사라질 때까지 기다려 통과해 버린다).
+  await page.getByRole("button", { name: "PDF 병합", exact: true }).click();
   await page.getByRole("button", { name: "파일 선택", exact: true }).click();
   await expect(page.getByTestId("document-card")).toHaveCount(1);
   expect(await updateToast(page).count()).toBe(0);

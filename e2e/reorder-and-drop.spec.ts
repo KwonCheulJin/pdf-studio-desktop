@@ -65,6 +65,7 @@ async function openWorkspace(page: Page, files: E2eMockFile[]): Promise<void> {
 }
 
 async function pickAllFiles(page: Page, files: E2eMockFile[]): Promise<void> {
+  await page.getByRole("button", { name: "PDF 병합", exact: true }).click();
   await page.getByRole("button", { name: "파일 선택", exact: true }).click();
   await expect(page.getByTestId("document-card")).toHaveCount(files.length);
 }

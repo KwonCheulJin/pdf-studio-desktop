@@ -123,7 +123,7 @@ async function openHome(
 }
 
 function homeCard(page: Page, title: string): Locator {
-  return page.getByRole("region", { name: title, exact: true });
+  return page.getByRole("button", { name: title, exact: true });
 }
 
 function modeTab(page: Page, label: string): Locator {
@@ -228,9 +228,8 @@ async function openEmptyCompare(
   dialogPicks: string[][]
 ): Promise<void> {
   await openHome(page, { dialogPicks: [[FILE_V3.path], ...dialogPicks] });
-  await homeCard(page, "PDF 병합")
-    .getByRole("button", { name: "파일 선택", exact: true })
-    .click();
+  await homeCard(page, "PDF 병합").click();
+  await page.getByRole("button", { name: "파일 선택", exact: true }).click();
   await modeTab(page, "비교").click();
   await expect(page.getByRole("heading", { name: "새 비교" })).toBeVisible();
 }

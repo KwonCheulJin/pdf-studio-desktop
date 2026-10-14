@@ -1,41 +1,55 @@
-import { useId, type ReactNode, type RefObject } from "react";
+import {
+  useId,
+  type KeyboardEvent,
+  type ReactNode,
+  type RefObject
+} from "react";
+import { ArrowRight } from "lucide-react";
 import { HOME_LAYOUT } from "../config/home-layout";
-import { Button } from "@/renderer/shared/ui";
+
+const ARROW_ICON_SIZE = 14;
+const ACTIVATE_KEYS: readonly string[] = ["Enter", " "];
 
 interface TaskCardProps {
   ref: RefObject<HTMLElement | null>;
   title: string;
   description: string;
-  actionLabel: string;
-  /** 같은 화면에 이름이 같은 버튼이 여럿일 때 스크린 리더용으로 구분하는 이름(보이는 글자를 포함해야 한다). */
-  actionAriaLabel?: string;
-  /** 버튼 옆에 받는 파일을 적는다. */
+  /** 받는 파일을 적는다(고르는 버튼이 아니라 안내다). */
   caption: string;
   /** 끌어온 파일이 이 카드 위에 있다. */
   isDropTarget: boolean;
   illustration: ReactNode;
-  onAction: () => void;
+  /** 카드를 눌러 그 작업의 빈 화면으로 간다. */
+  onNavigate: () => void;
 }
 
-/** 홈의 작업 카드 하나(시안 1): 그림, 제목·설명, 파일 선택 버튼. */
+/** 홈의 작업 카드 하나(시안 1): 그림, 제목·설명, 형식 안내. 카드 전체가 그 작업으로 가는 버튼이다. */
 export function TaskCard({
   ref,
   title,
   description,
-  actionLabel,
-  actionAriaLabel,
   caption,
   isDropTarget,
   illustration,
-  onAction
+  onNavigate
 }: TaskCardProps) {
   const titleId = useId();
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (!ACTIVATE_KEYS.includes(event.key)) return;
+    event.preventDefault();
+    onNavigate();
+  };
 
   return (
     <section
       ref={ref}
+      role="button"
+      tabIndex={0}
       aria-labelledby={titleId}
-      className={`bg-card border-border flex flex-col gap-5 rounded-lg border p-6 shadow-sm transition-shadow ${
+      onClick={onNavigate}
+      onKeyDown={handleKeyDown}
+      className={`bg-card border-border hover:border-primary focus-visible:ring-ring flex cursor-pointer flex-col gap-5 rounded-lg border p-6 shadow-sm transition-shadow focus-visible:ring-2 focus-visible:outline-none ${
         isDropTarget ? "ring-primary ring-2" : ""
       }`}
     >
@@ -46,15 +60,15 @@ export function TaskCard({
         </h2>
         <p className={HOME_LAYOUT.CARD_DESCRIPTION}>{description}</p>
       </div>
-      <div className="flex flex-wrap items-center gap-3">
-        <Button
-          aria-label={actionAriaLabel}
-          className="h-9 rounded-md px-4 font-medium"
-          onClick={onAction}
-        >
-          {actionLabel}
-        </Button>
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <span className="text-muted-foreground text-xs/4.25">{caption}</span>
+        <span
+          aria-hidden="true"
+          className="text-primary flex items-center gap-1 font-medium"
+        >
+          시작하기
+          <ArrowRight size={ARROW_ICON_SIZE} />
+        </span>
       </div>
     </section>
   );

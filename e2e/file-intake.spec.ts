@@ -118,7 +118,7 @@ interface Point {
 /** 홈의 "PDF 병합" 카드 가운데(CSS 픽셀) */
 async function mergeCardCenter(page: Page): Promise<Point> {
   const box = await page
-    .getByRole("region", { name: "PDF 병합", exact: true })
+    .getByRole("button", { name: "PDF 병합", exact: true })
     .boundingBox();
   if (!box) {
     throw new Error("병합 카드가 화면에 없습니다.");

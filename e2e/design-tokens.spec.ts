@@ -32,7 +32,7 @@ async function openEmptyScreen(
   await page.emulateMedia({ colorScheme });
   await page.goto("/");
   await expect(
-    page.getByRole("button", { name: "파일 선택", exact: true })
+    page.getByRole("button", { name: "PDF 병합", exact: true })
   ).toBeVisible();
   await expect
     .poll(() =>
@@ -179,7 +179,7 @@ for (const colorScheme of COLOR_SCHEMES) {
         FOREGROUND_SOURCE.TEXT
       ),
       await measureContrast(
-        page.getByRole("button", { name: "파일 선택", exact: true }),
+        page.getByText("시작하기").first(),
         FOREGROUND_SOURCE.TEXT
       )
     ];
@@ -196,7 +196,7 @@ for (const colorScheme of COLOR_SCHEMES) {
     page
   }) => {
     await openEmptyScreen(page, colorScheme);
-    const button = page.getByRole("button", { name: "파일 선택", exact: true });
+    const button = page.getByRole("button", { name: "PDF 병합", exact: true });
     const unfocusedShadow = await boxShadowOf(button);
 
     for (let press = 0; press < MAX_TAB_PRESSES; press += 1) {

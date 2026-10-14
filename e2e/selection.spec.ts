@@ -95,6 +95,7 @@ async function openWorkspace(page: Page): Promise<void> {
     window.__E2E_MOCK_SEED__ = { files };
   }, SEED_FILES);
   await page.goto("/");
+  await page.getByRole("button", { name: "PDF 병합", exact: true }).click();
   await page.getByRole("button", { name: "파일 선택", exact: true }).click();
   await expect(page.getByTestId("document-card")).toHaveCount(
     SEED_FILES.length

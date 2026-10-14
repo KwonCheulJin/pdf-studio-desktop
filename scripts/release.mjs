@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 버전 범프 → 릴리스 커밋 → annotated 태그 `v<버전>`까지만 한다. 푸시는 사용자가 한다.
+// 버전 범프 → 릴리스 커밋 → annotated 태그 `v<버전>`까지만 한다. 푸시는 docs/rules/agent-workflow.md 릴리스 절대로 한다.
 // 태그 푸시를 받은 .github/workflows/release.yml이 Draft Release를 만든다(계획서 P4-2).
 // 사용: pnpm release:patch | release:minor | release:major
 
@@ -58,6 +58,6 @@ execFileSync("git", ["commit", "-m", `chore: release ${tag}`], {
 // --follow-tags는 annotated 태그만 올리므로 -a로 만든다.
 execFileSync("git", ["tag", "-a", tag, "-m", tag], { stdio: "inherit" });
 
-console.log(`\n${tag} 커밋과 태그를 만들었다. 확인한 뒤 직접 푸시한다:`);
+console.log(`\n${tag} 커밋과 태그를 만들었다. 푸시는 docs/rules/agent-workflow.md 릴리스 절대로 한다:`);
 console.log(`  git push origin ${RELEASE_BRANCH} --follow-tags`);
 console.log("태그 푸시를 받은 release 워크플로가 Draft Release를 만든다.");

@@ -20,7 +20,20 @@
 ## CI
 
 - `.github/workflows/ci.yml`이 PR과 `main` 푸시마다 macOS·Windows·Linux에서 `pnpm fetch:pdfium`·`pnpm fetch:ocr`(캐시) 뒤 `pnpm validate`, `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`(pdfium·OCR 테스트 포함)를 돌린다. E2E는 macOS 잡, NSIS 설치 파일(아티팩트 `pdf-studio-windows-nsis`)은 Windows 잡이 만든다.
-- `.github/workflows/release.yml`은 `v*` 태그 푸시로 macOS(.dmg·.app)·Windows(NSIS)를 빌드해 Draft Release에 올리고, macOS 서명을 `scripts/verify-macos-signature.mjs`로 검사한다. `workflow_dispatch`는 릴리스 없이 워크플로 아티팩트만 올린다(계획서 P4-2). 업데이트 파일(`createUpdaterArtifacts`)은 release.yml이 만드는 `--config`로만 켜고 리포 시크릿 `TAURI_SIGNING_PRIVATE_KEY`·`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`로 서명하며, 태그 빌드는 `latest.json`도 Draft에 올린다(계획서 P4-4). `pnpm release:*`는 커밋·태그까지만 하고 푸시는 사용자가 한다. 에이전트는 태그를 푸시하지 않는다.
+- `.github/workflows/release.yml`은 `v*` 태그 푸시로 macOS(.dmg·.app)·Windows(NSIS)를 빌드해 Draft Release에 올리고, macOS 서명을 `scripts/verify-macos-signature.mjs`로 검사한다. `workflow_dispatch`는 릴리스 없이 워크플로 아티팩트만 올린다(계획서 P4-2). 업데이트 파일(`createUpdaterArtifacts`)은 release.yml이 만드는 `--config`로만 켜고 리포 시크릿 `TAURI_SIGNING_PRIVATE_KEY`·`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`로 서명하며, 태그 빌드는 `latest.json`도 Draft에 올린다(계획서 P4-4). `pnpm release:*`는 커밋·태그까지만 하고 푸시하지 않는다. 푸시와 공개는 아래 릴리스 절 순서로 에이전트가 한다.
+
+## 릴리스
+
+- 작업(PR 묶음)이 main에 병합되면 에이전트가 묻지 않고 릴리스한다. 동시에 진행 중인 PR이 있으면 모두 병합된 뒤 한 번에 한다.
+- 순서: 합친 main에서 `pnpm validate`·`pnpm test:e2e` → `pnpm release:<major|minor|patch>` → `git push origin main --follow-tags` → release 워크플로가 끝나면 `gh release edit v<버전> --draft=false --latest` → `releases/latest/download/latest.json`의 version 확인.
+- 릴리스는 Step 작업 승인 규칙과 같은 조건(validate·E2E·cargo·CI 세 OS 통과)을 만족할 때만 한다.
+- 버전 단계는 작업 단위로 정한다. 여러 PR이 섞이면 가장 큰 단계를 따른다.
+
+| 단계 | 기준 | 예 |
+|---|---|---|
+| major | 앱 구조 전환, 호환 깨짐, 설정·데이터 마이그레이션 필요 | Electron → Tauri 2.0.0 |
+| minor | 새 기능, 사용자가 느끼는 동작 변경 | 홈 카드를 누르면 모드 화면으로 이동 |
+| patch | 버그 수정, 배치·스타일·문구 다듬기 | 드롭존 채우기 수정 |
 
 ## 품질 게이트
 

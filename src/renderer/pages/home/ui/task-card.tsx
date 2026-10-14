@@ -1,4 +1,5 @@
 import { useId, type ReactNode, type RefObject } from "react";
+import { HOME_LAYOUT } from "../config/home-layout";
 import { Button } from "@/renderer/shared/ui";
 
 interface TaskCardProps {
@@ -40,10 +41,10 @@ export function TaskCard({
     >
       {illustration}
       <div className="flex flex-col gap-1">
-        <h2 id={titleId} className="text-lg/6.5 font-semibold">
+        <h2 id={titleId} className={HOME_LAYOUT.CARD_TITLE}>
           {title}
         </h2>
-        <p className="text-muted-foreground">{description}</p>
+        <p className={HOME_LAYOUT.CARD_DESCRIPTION}>{description}</p>
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <Button

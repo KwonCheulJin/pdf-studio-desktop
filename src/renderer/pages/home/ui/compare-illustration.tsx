@@ -1,4 +1,5 @@
 import { ArrowLeftRight } from "lucide-react";
+import { HOME_ILLUSTRATION_TEST_ID, HOME_LAYOUT } from "../config/home-layout";
 
 const ARROW_SIZE = 20;
 const TEXT_LINE_CLASS = "bg-paper-line h-1.25 rounded-paper";
@@ -48,7 +49,7 @@ interface SheetProps {
 
 function Sheet({ lines }: SheetProps) {
   return (
-    <div className="bg-paper shadow-paper rounded-paper flex h-29.5 w-21 flex-col gap-1.75 px-2.5 py-3.5">
+    <div className="bg-paper shadow-paper rounded-paper flex h-29.5 w-21 shrink-0 flex-col gap-1.75 px-2.5 py-3.5">
       {lines.map((line) => (
         <div key={line.id} className={line.className} />
       ))}
@@ -61,11 +62,17 @@ export function CompareIllustration() {
   return (
     <div
       aria-hidden="true"
-      className="bg-canvas flex h-42 items-center justify-center gap-3 rounded-md"
+      data-testid={HOME_ILLUSTRATION_TEST_ID}
+      className={HOME_LAYOUT.ILLUSTRATION_FRAME}
     >
-      <Sheet lines={BEFORE_LINES} />
-      <ArrowLeftRight size={ARROW_SIZE} className="text-muted-foreground" />
-      <Sheet lines={AFTER_LINES} />
+      <div className={`${HOME_LAYOUT.ILLUSTRATION_SCALE} gap-3`}>
+        <Sheet lines={BEFORE_LINES} />
+        <ArrowLeftRight
+          size={ARROW_SIZE}
+          className="text-muted-foreground shrink-0"
+        />
+        <Sheet lines={AFTER_LINES} />
+      </div>
     </div>
   );
 }

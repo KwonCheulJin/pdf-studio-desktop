@@ -106,9 +106,9 @@ export function TranslateFileCard() {
       ref={cardRef}
       aria-label="번역할 문서"
       className={cn(
-        "bg-card border-border flex items-center gap-5 rounded-xl border px-6 py-5 transition-shadow",
-        // 비어 있으면 왼쪽 열의 남는 높이를 채운다(번역 옵션 카드는 열 아래에 붙는다)
-        !file && "grow items-stretch",
+        "bg-card border-border flex grow items-center gap-5 rounded-xl border px-6 py-5 transition-shadow",
+        // 파일 상태와 관계없이 왼쪽 열의 남는 높이를 채운다(번역 옵션 카드는 열 아래에 붙는다). 비었을 땐 드롭존이 카드를 채운다.
+        !file && "items-stretch",
         isDropTarget && "ring-primary ring-2"
       )}
     >

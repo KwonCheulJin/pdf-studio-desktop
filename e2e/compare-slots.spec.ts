@@ -34,6 +34,12 @@ const SLOT_MIN_HEIGHT_PX = 202;
 const LAYOUT_TOLERANCE_PX = 2;
 /** 옵션 화면 아래 여백(`py-5` = 20px) */
 const BOTTOM_PADDING_PX = 20;
+/** 슬롯 영역의 몸통 밖 높이(섹션 패딩 40 + 머리줄 약 30 + 간격 8)의 넉넉한 어림 */
+const SLOT_CHROME_PX = 80;
+/** 파일 슬롯이 제 높이보다 더 늘었다고 볼 최소 차이 */
+const FILL_MARGIN_PX = 40;
+/** 비교 화면 열의 카드 사이 간격(`gap-4`) */
+const SECTION_GAP_PX = 16;
 
 const A4_PAGE: PageInfo = {
   widthPt: 595,
@@ -441,5 +447,38 @@ test("빈 슬롯이면 옵션 카드가 열 바닥에 붙고 A·B 드롭존이 �
   expect(beforeBox.height).toBeGreaterThan(SLOT_MIN_HEIGHT_PX);
   expect(Math.abs(beforeBox.height - afterBox.height)).toBeLessThanOrEqual(
     LAYOUT_TOLERANCE_PX
+  );
+});
+
+test("A·B를 둘 다 채워도 옵션 카드가 열 바닥에 붙고 파일 슬롯 영역이 남는 높이를 채운다", async ({
+  page
+}) => {
+  await page.setViewportSize(TALL_VIEWPORT);
+  await openComparePair(page);
+  await expectFilledSlot(page, BEFORE, {
+    name: FILE_V1.displayName,
+    meta: "1.1 MB · 18쪽"
+  });
+
+  const card = page.getByRole("region", { name: "실행 전 옵션" });
+  const column = card.locator("xpath=..");
+  const slots = page.getByRole("region", { name: "비교할 문서" });
+  const cardBox = await card.boundingBox();
+  const columnBox = await column.boundingBox();
+  const slotsBox = await slots.boundingBox();
+  if (!cardBox || !columnBox || !slotsBox) {
+    throw new Error("상자를 잴 수 없다");
+  }
+
+  const columnBottom = columnBox.y + columnBox.height - BOTTOM_PADDING_PX;
+  expect(
+    Math.abs(cardBox.y + cardBox.height - columnBottom)
+  ).toBeLessThanOrEqual(LAYOUT_TOLERANCE_PX);
+  // 슬롯 영역과 옵션 카드 사이에는 gap(16px)만 있다 = 슬롯 영역이 남는 높이를 채웠다.
+  expect(
+    Math.abs(cardBox.y - (slotsBox.y + slotsBox.height) - SECTION_GAP_PX)
+  ).toBeLessThanOrEqual(LAYOUT_TOLERANCE_PX);
+  expect(slotsBox.height).toBeGreaterThan(
+    SLOT_MIN_HEIGHT_PX + SLOT_CHROME_PX + FILL_MARGIN_PX
   );
 });

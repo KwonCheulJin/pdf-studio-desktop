@@ -379,6 +379,31 @@ test("파일 없는 번역 화면은 번역 옵션 카드를 열 아래에 붙�
   expect(zoneBox.height).toBeGreaterThan(DROPZONE_MIN_HEIGHT_PX * 2);
 });
 
+test("파일을 고른 번역 화면도 번역 옵션 카드를 열 아래에 붙이고 남는 높이를 파일 카드가 채운다", async ({
+  page
+}) => {
+  await page.setViewportSize(TALL_VIEWPORT);
+  await openTranslateWith(page, FILE_MANUAL);
+
+  const options = page.getByRole("region", { name: "번역 옵션" });
+  const container = fileCard(page).locator(
+    "xpath=ancestor::div[contains(@class,'overflow-auto')][1]"
+  );
+  await expect(options).toBeVisible();
+  const optionsBox = await options.boundingBox();
+  const containerBox = await container.boundingBox();
+  const cardBox = await fileCard(page).boundingBox();
+  if (!optionsBox || !containerBox || !cardBox) {
+    throw new Error("상자를 잴 수 없어요");
+  }
+  const optionsBottom = optionsBox.y + optionsBox.height;
+  const containerBottom = containerBox.y + containerBox.height;
+  expect(
+    Math.abs(containerBottom - CONTENT_PADDING_BOTTOM_PX - optionsBottom)
+  ).toBeLessThanOrEqual(LAYOUT_TOLERANCE_PX);
+  expect(cardBox.height).toBeGreaterThan(DROPZONE_MIN_HEIGHT_PX * 2);
+});
+
 test("모드를 오가도 번역 문서가 그대로이고 다시 읽지 않는다", async ({
   page
 }) => {
